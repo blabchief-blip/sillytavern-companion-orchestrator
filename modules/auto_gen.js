@@ -17,6 +17,101 @@
 // =====================================================================
 // Action & Tag Extraction (Regex-based)
 // =====================================================================
+// SCENE_INTIMATE_PATTERNS (v0.6.3 — scene keyword → Pony/NSFW tag)
+// Triggers on intimate body parts / actions in scene text
+// Works WITHOUT LLM Tagger (regex fallback when LLM fails)
+// =====================================================================
+const SCENE_INTIMATE_PATTERNS = [
+  // ===== Oral / Mouth =====
+  { rx: /\b(kiss|kissing|kissed|kisses)\b/gi, tags: ['kiss', 'romantic', 'lips', 'love'] },
+  { rx: /\b(french\s*kiss|deep\s*kiss|passionate\s*kiss)\b/gi, tags: ['french_kiss', 'deep_kiss', 'tongue_out', 'saliva'] },
+  { rx: /\b(tongue\s+on|tongue\s+out|tongue\s+down)\b/gi, tags: ['tongue_out', 'licking', 'oral'] },
+  { rx: /\b(suck|sucking|sucks)\s*(on|off)?/gi, tags: ['sucking', 'oral', 'mouth'] },
+  { rx: /\b(blowjob|oral\s+sex|giving\s+head|deepthroat)\b/gi, tags: ['blowjob', 'oral', 'fellatio', 'deepthroat', 'penis', 'tongue_out'] },
+  { rx: /\b(cunnilingus|eating\s+out)\b/gi, tags: ['cunnilingus', 'oral', 'pussy', 'tongue_out'] },
+
+  // ===== Penetration / Sex =====
+  { rx: /\b(penetrat\w+|fucking|fucks|fucked)\b/gi, tags: ['penetration', 'sex', 'penis', 'pussy', 'nsfw', 'intense'] },
+  { rx: /\b(making\s+love|love\s+making)\b/gi, tags: ['sex', 'intimate', 'passionate', 'nsfw'] },
+  { rx: /\b(screwing|boning|humping|grinding)\b/gi, tags: ['sex', 'thrusting', 'intense'] },
+  { rx: /\b(inserting|sliding\s+in|pushing\s+in)\b/gi, tags: ['penetration', 'insertion'] },
+  { rx: /\b(pounding|pummeling|driving\s+into)\b/gi, tags: ['thrusting', 'intense', 'fast'] },
+  { rx: /\b(riding|bouncing\s+on|on\s+top)\b/gi, tags: ['riding', 'cowgirl_position', 'on_top', 'bouncing'] },
+  { rx: /\b(cowgirl|sitting\s+on\s+(his|her|my))\b/gi, tags: ['cowgirl_position', 'straddling', 'on_top', 'riding'] },
+  { rx: /\b(reverse\s+cowgirl)\b/gi, tags: ['reverse_cowgirl', 'straddling', 'riding'] },
+  { rx: /\b(missionary)\b/gi, tags: ['missionary', 'lying_on_back', 'legs_up'] },
+  { rx: /\b(doggystyle|from\s+behind|rear\s+entry)\b/gi, tags: ['doggystyle', 'from_behind', 'on_all_fours', 'kneeling'] },
+  { rx: /\b(spooning|side\s+by\s+side)\b/gi, tags: ['spooning', 'lying_on_side', 'cuddling'] },
+  { rx: /\b(against\s+the\s+wall|pinned|pressed\s+against\s+wall)\b/gi, tags: ['pinned_against_wall', 'standing', 'pressed_close'] },
+
+  // ===== Anal =====
+  { rx: /\b(anal|anus)\b/gi, tags: ['anal', 'anal_sex', 'nsfw'] },
+  { rx: /\b(rimming|analingus)\b/gi, tags: ['anal', 'oral', 'rimming'] },
+
+  // ===== Body parts (explicit) =====
+  { rx: /\b(breasts?|boobs?|tits?|bust)\b/gi, tags: ['breast', 'large_breasts', 'cleavage'] },
+  { rx: /\b(nipples?|areola)\b/gi, tags: ['nipple', 'areola', 'puffy_nipples', 'erect_nipples'] },
+  { rx: /\b(vagina|pussy|clit|clitoris)\b/gi, tags: ['pussy', 'vaginal', 'nsfw'] },
+  { rx: /\b(penis|cock|dick|phallus)\b/gi, tags: ['penis', 'nsfw'] },
+  { rx: /\b(testicles|balls|scrotum)\b/gi, tags: ['testicles', 'penis', 'nsfw'] },
+  { rx: /\b(butt|ass|rear|cheeks?)\b/gi, tags: ['ass', 'butt', 'naked'] },
+  { rx: /\b(thighs?)\b/gi, tags: ['thighs', 'legs', 'smooth_legs'] },
+  { rx: /\b(hips?|waist)\b/gi, tags: ['hips', 'curved_hips'] },
+  { rx: /\b(back|spine)\b/gi, tags: ['back', 'arched_back'] },
+  { rx: /\b(neck|throat)\b/gi, tags: ['neck', 'neck_kiss', 'bitemark_target'] },
+  { rx: /\b(lips?|mouth)\b/gi, tags: ['lips', 'parted_lips', 'mouth'] },
+  { rx: /\b(skin|flesh)\b/gi, tags: ['skin', 'smooth_skin', 'realistic_skin'] },
+
+  // ===== Foreplay / Touching =====
+  { rx: /\b(caress\w*|strok\w+|rubb\w+)\b/gi, tags: ['caressing', 'stroking', 'touching'] },
+  { rx: /\b(grabb\w+|gripp\w+|squeez\w+)\s+(\w+\s+)?(ass|breast|thigh|hip|hair)/gi, tags: ['grabbing', 'hands_gripping'] },
+  { rx: /\b(pull\w*\s+(\w+\s+)?hair)\b/gi, tags: ['hair_pull', 'dominant'] },
+  { rx: /\b(undress\w*|strip\w*|taking\s+off|remov\w+\s+clothes)\b/gi, tags: ['undressing', 'stripping', 'nude', 'removing_clothes'] },
+  { rx: /\b(unbutton\w*|unzip\w*|pull\w*\s+down)\b/gi, tags: ['undressing', 'clothing_removed', 'pulled_down'] },
+  { rx: /\b(bite\s+(\w+\s+)?lip)\b/gi, tags: ['lip_bite', 'seductive'] },
+  { rx: /\b(bite\s+(\w+\s+)?neck)\b/gi, tags: ['bitemark', 'hickey', 'love_bite', 'kiss_mark'] },
+  { rx: /\b(suck\s+(\w+\s+)?(neck|collarbone|finger))\b/gi, tags: ['hickey', 'kiss_mark', 'love_bite'] },
+  { rx: /\b(lick\w*|tast\w+)\b/gi, tags: ['licking', 'tongue', 'mouth'] },
+  { rx: /\b(tease|teasing|tantaliz\w+)\b/gi, tags: ['teasing', 'flirtatious', 'seductive'] },
+  { rx: /\b(moan\w*|groan\w*|whimper\w*|cry\s+out)\b/gi, tags: ['moaning', 'ahegao', 'pleasure', 'open_mouth'] },
+  { rx: /\b(scream\w*|gasping\s+out)\b/gi, tags: ['screaming', 'orgasm', 'pleasure', 'ahegao'] },
+
+  // ===== Climax / Orgasm =====
+  { rx: /\b(orgasm|climax|coming|cum\w*)\b/gi, tags: ['orgasm', 'climax', 'pleasure', 'cum', 'ecstasy'] },
+  { rx: /\b(creampie|cum\s+inside|fill\w+\s+me)\b/gi, tags: ['creampie', 'cum_inside', 'cum', 'pussy_juice'] },
+  { rx: /\b(cumshot|ejaculat\w+|shooting\s+cum)\b/gi, tags: ['cumshot', 'ejaculation', 'cum'] },
+  { rx: /\b(cum\s+on\s+(\w+\s+)?(face|breast|body|stomach|thigh))\b/gi, tags: ['cum_on_body', 'facial', 'cum_on_breasts'] },
+  { rx: /\b(pleasure|ecstasy|bliss)\b/gi, tags: ['pleasure', 'ecstasy', 'orgasm'] },
+  { rx: /\b(shudder\w*|trembl\w*|shiver\w*)\b/gi, tags: ['shivering', 'trembling', 'aroused'] },
+  { rx: /\b(arch\w*\s+(\w+\s+)?back)\b/gi, tags: ['arched_back', 'curved_back', 'pleasure'] },
+
+  // ===== Emotional / Foreplay =====
+  { rx: /\b(desire|lust|passion|longing)\b/gi, tags: ['desire', 'lustful_gaze', 'passionate'] },
+  { rx: /\b(arous\w+|turned\s+on|horny)\b/gi, tags: ['aroused', 'lust', 'penis_erection'] },
+  { rx: /\b(breath\w*|gasping|panting)\b/gi, tags: ['heavy_breathing', 'parted_lips', 'breathless'] },
+  { rx: /\b(whisper\w*\s+(\w+\s+)?(sweet|nothings|love))\b/gi, tags: ['whispering', 'intimate', 'romantic'] },
+  { rx: /\b(embrace\w*|cuddle\w*|snuggl\w+)\b/gi, tags: ['cuddling', 'embrace', 'intimate'] },
+  { rx: /\b(aftercare|holding\s+after|cuddle\s+after)\b/gi, tags: ['aftercare', 'cuddling', 'tender', 'loving'] },
+
+  // ===== Dominance / Sub =====
+  { rx: /\b(orders?|command\w*|tells?\s+me\s+to)\b/gi, tags: ['dominant', 'commanding', 'domination'] },
+  { rx: /\b(obey|submissive|surrender\w*|submit\w*)\b/gi, tags: ['submissive', 'surrender', 'domination'] },
+  { rx: /\b(blindfold\w*|tie\w*|bind\w*|restrain\w*|rope)\b/gi, tags: ['blindfold', 'bondage', 'bdsm', 'shibari'] },
+  { rx: /\b(spank\w*|slap\w*|paddl\w*)\b/gi, tags: ['spanking', 'bdsm', 'domination'] },
+  { rx: /\b(chok\w*|throat\s+(hold|grab)|breath\s+play)\b/gi, tags: ['choking', 'breath_play', 'domination'] },
+
+  // ===== Public / Risk =====
+  { rx: /\b(public\s+(sex|place)|outdoor|risky\s+place)\b/gi, tags: ['public_sex', 'exhibitionism', 'public'] },
+  { rx: /\b(sneak\w*\s+(\w+\s+)?(away|together|quick))\b/gi, tags: ['sneaking', 'public', 'risky'] },
+  { rx: /\b(secret\w*|hidden\s+place|closet|alley)\b/gi, tags: ['hidden', 'secret_place', 'sneaking'] },
+
+  // ===== Group / Multi =====
+  { rx: /\b(threesome|three\s+some|threeway|three-way)\b/gi, tags: ['threesome', 'group_sex', 'multiple_partners'] },
+  { rx: /\b(group\s+sex|orgy|gang\s+bang)\b/gi, tags: ['orgy', 'group_sex', 'multiple_partners'] },
+  { rx: /\b(double\s+penetration|DP)\b/gi, tags: ['double_penetration', 'group_sex'] },
+];
+
+// =====================================================================
 
 const ACTION_PATTERNS = [
   // Hareket
@@ -24,31 +119,12 @@ const ACTION_PATTERNS = [
   { rx: /\b(walks?|walking)\s+(over|across|away)/gi, tags: ['walking'] },
   { rx: /\b(sits?|sitting)\s+(down|on|beside|next|at)/gi, tags: ['sitting'] },
   { rx: /\b(stands?|standing)\s+(up|near|by|beside|behind|in front)/gi, tags: ['standing'] },
-  { rx: /\b(leans?|leaning)\s+(against|in|on|forward|back)/gi, tags: ['leaning'] },
-  { rx: /\b(lying|lies|lay|reclines?|reclining)\s+(on|in|down|back)/gi, tags: ['lying', 'reclining'] },
-  { rx: /\b(kneels?|kneeling)\s+(down|before|before)/gi, tags: ['kneeling'] },
-  { rx: /\b(runs?|running)\s+(to|toward|away|into|out)/gi, tags: ['running'] },
-  { rx: /\b(jumps?|jumping|leaps?|leaping)\s+(on|onto|up)/gi, tags: ['jumping'] },
 
-  // Yüz ifadeleri
-  { rx: /\b(smiles?|smiling|grins?|grinning)\b/gi, tags: ['smiling'] },
-  { rx: /\b(laughs?|laughing|giggles?|giggling|chuckles?)\b/gi, tags: ['laughing', 'open_mouth'] },
-  { rx: /\b(blushes?|blushing)\b/gi, tags: ['blushing', 'shy'] },
-  { rx: /\b(looks?|looking|gazes?|gazing)\s+(at|into|out|toward|away|back|up|down)\b/gi, tags: ['eye_contact'] },
-  { rx: /\b(looks?|looking)\s+away/gi, tags: ['looking_away', 'shy'] },
-  { rx: /\b(smirks?|smirking)\b/gi, tags: ['smirk', 'confident'] },
-  { rx: /\b(frowns?|frowning)\b/gi, tags: ['frowning'] },
-  { rx: /\b(cries?|crying|tears?|teary)\b/gi, tags: ['crying', 'teary_eyes'] },
-
-  // Fiziksel etkileşim
-  { rx: /\b(touches?|touching)\s+\w+/gi, tags: ['touching'] },
-  { rx: /\b(holds?|holding)\s+\w+/gi, tags: ['holding'] },
-  { rx: /\b(hugs?|hugging|embraces?|embracing)\b/gi, tags: ['hug', 'embrace'] },
-  { rx: /\b(kisses?|kissing)\b/gi, tags: ['kiss'] },
-  { rx: /\b(embraces?|embracing)\b/gi, tags: ['embrace'] },
-  { rx: /\b(strokes?|stroking|rubs?|rubbing)\s+\w+/gi, tags: ['stroking'] },
-  { rx: /\b(caresses?|caressing)\s+\w+/gi, tags: ['caressing', 'gentle'] },
-
+// =====================================================================
+// SCENE_INTIMATE_PATTERNS (v0.6.3 — scene keyword → Pony/NSFW tag)
+// Triggers on intimate body parts / actions in scene text
+// Works WITHOUT LLM Tagger (regex fallback when LLM fails)
+// =====================================================================
   // Duruş
   { rx: /\b(arms? wrapped|wraps? arms?)\b/gi, tags: ['arms_wrapped'] },
   { rx: /\b(hand on|places? hand on)\b/gi, tags: ['hand_on'] },
@@ -233,6 +309,7 @@ class AutoGen {
         useScenario: true,
         usePosePresets: true,    // v0.6.1: built-in pose presets (B senaryosu)
         useCustomTags: true,     // v0.6.1: custom tag presets (E senaryosu)
+        useSceneIntimate: true,  // v0.6.3: scene text → NSFW tag extraction (regex fallback when LLM fails)
         explicitMode: false,     // v0.6.1 GUARD: explicit (spice 4) için kullanıcı onayı
         maxAllowedSpice: 3,      // v0.6.1 GUARD: max spice level (0-4), explicitMode on olsa 4'e çıkabilir
         history: [],
@@ -434,6 +511,16 @@ class AutoGen {
       spiceTags.forEach(t => tags.add(t));
     }
 
+    // v0.6.3: SCENE-INTIMATE patterns (sahne metnindeki gerçek aksiyon/beden kelimeleri)
+    // LLM Tagger fail olduğunda bile doğru tag'ler üretir
+    if (this.settings.useSceneIntimate !== false) {
+      const sceneTags = this._extractSceneIntimateTags(text);
+      sceneTags.forEach(t => tags.add(t));
+      if (this.settings.debug && sceneTags.length) {
+        console.log('[Companion AutoGen] 🔥 Scene intimate tags:', sceneTags);
+      }
+    }
+
     // Scenario
     if (this.settings.useScenario) {
       const scenarioTags = this._getScenarioTags();
@@ -548,6 +635,30 @@ class AutoGen {
     const mood = m[charId]?.current || m.current || 'neutral';
 
     return MOOD_TAGS[mood] || MOOD_TAGS.neutral;
+  }
+
+  /**
+   * v0.6.3: Extract scene-intimate tags from the actual scene text
+   * This ensures real scene keywords (kiss, oral, penetration, etc.)
+   * produce relevant Pony/NSFW tags even when LLM Tagger is unavailable
+   */
+  _extractSceneIntimateTags(text) {
+    if (!text) return [];
+    const tags = new Set();
+    for (const pattern of SCENE_INTIMATE_PATTERNS) {
+      pattern.rx.lastIndex = 0; // reset global regex state
+      if (pattern.rx.test(text)) {
+        for (const t of pattern.tags) tags.add(t);
+      }
+    }
+    return [...tags];
+  }
+
+  /**
+   * v0.6.3: Public wrapper for testing
+   */
+  extractSceneTags(text) {
+    return this._extractSceneIntimateTags(text);
   }
 
   _getSpiceTags() {
@@ -898,6 +1009,7 @@ export const autoGenModule = {
   generateNow: () => autoGenInstance.generateNow(),
   getHistory: () => autoGenInstance.getHistory(),
   buildPrompt: (msg) => autoGenInstance.buildPrompt(msg),
+  extractSceneTags: (text) => autoGenInstance._extractSceneIntimateTags(text),
   summary: () => autoGenInstance.summary(),
   // Settings reference
   get settings() { return autoGenInstance.settings; },
