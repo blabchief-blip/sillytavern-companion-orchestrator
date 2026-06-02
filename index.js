@@ -19,10 +19,11 @@ import { ioModule } from './modules/io.js';
 import { spiceModule } from './modules/spice.js';
 import { limitsModule } from './modules/limits.js';
 import { aftercareModule } from './modules/aftercare.js';
+import { stmbBridgeModule } from './modules/stmb_bridge.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -35,6 +36,7 @@ const defaultSettings = Object.freeze({
     spiceEnabled: true,
     limitsEnabled: true,
     aftercareEnabled: true,
+    stmbBridgeEnabled: true,
     // Global
     debugLogging: false,
     autoSaveInterval: 30, // seconds
@@ -92,7 +94,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -181,6 +183,7 @@ const orchestrator = {
         this.wireSpicePanel();
         this.wireLimitsPanel();
         this.wireAftercarePanel();
+        this.wireStmbBridgePanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1070,6 +1073,100 @@ const orchestrator = {
         if (this.settings.spiceEnabled !== false) this.refreshSpicePanel();
         if (this.settings.limitsEnabled !== false) this.refreshLimitsPanel();
         if (this.settings.aftercareEnabled !== false) this.refreshAftercarePanel();
+        if (this.settings.stmbBridgeEnabled !== false) this.refreshStmbBridgePanel();
+    },
+
+    // ===== v0.4.0 — STMB Bridge wiring =====
+
+    wireStmbBridgePanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'stmb_bridge')) return;
+
+        $('#co_stmb_sync_now').on('click', () => {
+            if (!stmbBridgeModule.isStmbInstalled()) {
+                self.toast('STMB yüklü değil', 'warn');
+                return;
+            }
+            const r = stmbBridgeModule.fullSync();
+            if (r.ok) {
+                const sceneOk = r.sceneSync?.ok ? 'sahne senkronize edildi' : null;
+                const memOk = r.memoryMirror?.ok ? `${r.memoryMirror.count} hafıza yansıtıldı` : null;
+                const summary = [sceneOk, memOk].filter(Boolean).join(', ') || 'senkronizasyon tamamlandı';
+                self.toast(summary);
+                self.refreshStmbBridgePanel();
+            } else {
+                self.toast('Senkronizasyon başarısız: ' + r.reason, 'warn');
+            }
+        });
+
+        $('#co_stmb_autosync').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            const cfg = ctx.extensionSettings?.companion_orchestrator?.stmb_bridge;
+            if (cfg) {
+                cfg.autoSync = this.checked;
+                self.toast(`Otomatik sahne senkronizasyonu ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+
+        $('#co_stmb_mirror').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            const cfg = ctx.extensionSettings?.companion_orchestrator?.stmb_bridge;
+            if (cfg) {
+                cfg.mirrorMemories = this.checked;
+                self.toast(`Memory yansıtma ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+
+        $('#co_stmb_push').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            const cfg = ctx.extensionSettings?.companion_orchestrator?.stmb_bridge;
+            if (cfg) {
+                cfg.pushScenes = this.checked;
+                self.toast(`Sahne push ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+    },
+
+    refreshStmbBridgePanel() {
+        if (!this.modules.find(m => m.name === 'stmb_bridge')) return;
+        const status = stmbBridgeModule.status();
+        const $section = $('#co_stmb_section');
+
+        if (!status.installed) {
+            $section.hide();
+            return;
+        }
+        $section.show();
+
+        $('#co_stmb_status').html(
+            `STMB yüklü ✅ — Sahne: <strong>${status.sceneStart ?? '?'}</strong> … <strong>${status.sceneEnd ?? '?'}</strong>` +
+            (status.highestMemoryProcessed != null ? ` | İşlenmiş memory: <strong>${status.highestMemoryProcessed}</strong>` : '')
+        );
+
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.stmb_bridge;
+        if (cfg) {
+            $('#co_stmb_autosync').prop('checked', !!cfg.autoSync);
+            $('#co_stmb_mirror').prop('checked', !!cfg.mirrorMemories);
+            $('#co_stmb_push').prop('checked', !!cfg.pushScenes);
+        }
+
+        // History
+        const history = stmbBridgeModule.getHistory(8);
+        const $box = $('#co_stmb_history');
+        $box.empty();
+        if (!history.length) {
+            $box.html('<i style="opacity: 0.6;">(henüz sync yok)</i>');
+            return;
+        }
+        history.forEach(h => {
+            const time = new Date(h.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            let detail = '';
+            if (h.action === 'sync_scenes_from_stmb') detail = `sahne ${h.sceneStart ?? '?'}-${h.sceneEnd ?? '?'}`;
+            else if (h.action === 'mirror_memories_from_stmb') detail = `${h.count} hafıza yansıtıldı`;
+            else if (h.action === 'push_scene_to_stmb') detail = `sahne gönderildi (start: ${h.sceneStart})`;
+            $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2); font-size: 0.85em;"><strong>${time}</strong> — ${detail}</div>`);
+        });
     },
 
     toast(msg, type = 'info') {

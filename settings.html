@@ -60,6 +60,11 @@
                 <span><strong>Sonrası / Şefkat</strong> — <em style="opacity: 0.75;">Yoğun sahnelerden sonra otomatik soft-reset tetikler (mood, hafıza, stil önerisi).</em></span>
             </label>
 
+            <label class="checkbox_label" for="co_stmbBridgeEnabled" title="SillyTavern-MemoryBooks extension'ı yüklüyse iki yönlü senkronizasyon sağlar.">
+                <input id="co_stmbBridgeEnabled" type="checkbox" checked />
+                <span><strong>STMB Köprüsü</strong> — <em style="opacity: 0.75;">SillyTavern-MemoryBooks ile scene/memory senkronizasyonu (yüklüyse).</em></span>
+            </label>
+
             <hr />
             <!-- ============ MOOD & RELATIONSHIP UI ============ -->
             <div class="co-module-panel" data-module="mood">
@@ -384,6 +389,37 @@
                 <h5 style="margin-top: 12px; margin-bottom: 4px;">Son Aftercare Olayları</h5>
                 <div id="co_aftercare_history" class="co-list-panel" style="font-size: 0.85em; max-height: 120px; overflow-y: auto;">
                     <i style="opacity: 0.6;">(henüz olay yok)</i>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ STMB BRIDGE UI ============ -->
+            <div id="co_stmb_section" class="co-module-panel" data-module="stmb_bridge" style="display: none;">
+                <h4>🌉 STMB Köprüsü <span style="font-size: 0.7em; opacity: 0.7;">(aikohanasaki/SillyTavern-MemoryBooks)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    SillyTavern-MemoryBooks extension'ı yüklüyse iki yönlü senkronizasyon. Scene marker'ları ve memory'leri paylaşır.
+                </p>
+                <div id="co_stmb_status" class="co-current-state" style="font-size: 0.85em; opacity: 0.85; margin-bottom: 6px;">
+                    <i>(durum yükleniyor…)</i>
+                </div>
+                <button id="co_stmb_sync_now" class="menu_button" style="width: 100%;">
+                    <i class="fa-solid fa-arrows-rotate"></i> Şimdi Senkronize Et
+                </button>
+                <label class="checkbox_label" for="co_stmb_autosync" style="margin-top: 8px;">
+                    <input id="co_stmb_autosync" type="checkbox" />
+                    <span>STMB scene marker'larını otomatik yansıt</span>
+                </label>
+                <label class="checkbox_label" for="co_stmb_mirror">
+                    <input id="co_stmb_mirror" type="checkbox" />
+                    <span>STMB memory'lerini Memory Bank'a kopyala</span>
+                </label>
+                <label class="checkbox_label" for="co_stmb_push">
+                    <input id="co_stmb_push" type="checkbox" />
+                    <span>Sahne başlattığımda STMB'ye de bildir</span>
+                </label>
+                <h5 style="margin-top: 12px; margin-bottom: 4px;">Son Senkronizasyonlar</h5>
+                <div id="co_stmb_history" class="co-list-panel" style="font-size: 0.85em; max-height: 120px; overflow-y: auto;">
+                    <i style="opacity: 0.6;">(henüz sync yok)</i>
                 </div>
             </div>
 
