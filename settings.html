@@ -558,6 +558,60 @@
             </div>
 
             <hr />
+            <!-- ============ v0.6.2 SPICE INTENSIFY - MULTI-TIER ============ -->
+            <div class="co-module-panel" data-module="spice_intensify">
+                <h4>🔥 Spice Intensify <span style="font-size: 0.7em; opacity: 0.7;">(Multi-tier · v0.6.2 · 18+ guard rail aktif)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Tag yoğunluğu tier'ı. <b>SOFT</b> default (vanilla), <b>INTENSIFY</b> Pony Diffusion standard NSFW, <b>LoRA-AWARE</b> senin yüklediğin LoRA'lara özel tag'ler ekler.
+                </p>
+
+                <div style="background: #2a1a1a; padding: 8px; margin: 8px 0; border-left: 3px solid #d44; border-radius: 3px;">
+                    <b style="color: #d44;">⚠️ 18+ Guard Rail:</b>
+                    <ul style="margin: 4px 0; padding-left: 20px; font-size: 0.85em; opacity: 0.9;">
+                        <li>Tier 1+ (Intensify) sadece <b>explicitMode = AÇIK</b> iken çalışır</li>
+                        <li>Tier 2 (LoRA-Aware) sadece <b>karakter 18+ verified</b> ise çalışır</li>
+                        <li>Karakter description'da yaş yoksa spice 4 cap = 3</li>
+                    </ul>
+                </div>
+
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin: 8px 0;">
+                    <label style="flex: 1; min-width: 100px; padding: 4px 8px; background: #1e1e1e; border-radius: 2px; cursor: pointer;">
+                        <input type="radio" name="co-spice-tier" value="0" />
+                        <b>0 - SOFT</b><br />
+                        <span style="font-size: 0.8em; opacity: 0.7;">Vanilla romance (default)</span>
+                    </label>
+                    <label style="flex: 1; min-width: 100px; padding: 4px 8px; background: #1e1e1e; border-radius: 2px; cursor: pointer;">
+                        <input type="radio" name="co-spice-tier" value="1" />
+                        <b>1 - INTENSIFY</b><br />
+                        <span style="font-size: 0.8em; opacity: 0.7;">Pony NSFW standartları</span>
+                    </label>
+                    <label style="flex: 1; min-width: 100px; padding: 4px 8px; background: #1e1e1e; border-radius: 2px; cursor: pointer;">
+                        <input type="radio" name="co-spice-tier" value="2" />
+                        <b>2 - LoRA-AWARE</b><br />
+                        <span style="font-size: 0.8em; opacity: 0.7;">Mystic/RealSkin/etc.</span>
+                    </label>
+                </div>
+
+                <div style="background: #1a1a1a; padding: 6px; margin: 8px 0; border-radius: 2px;">
+                    <div style="font-size: 0.85em; margin-bottom: 4px;"><b>LoRA Tag'leri (sadece tier 2):</b></div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.85em;">
+                        <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-lora-mystic" /> <span>Mystic-XXX-ZIT-V7</span></label>
+                        <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-lora-realskin" /> <span>RealSkin_xxXL_v1</span></label>
+                        <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-lora-perfectbreasts" /> <span>PerfectBreastsPonyV2</span></label>
+                        <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-lora-zitnsfw" /> <span>ZITnsfwLoRAv2</span></label>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; font-size: 0.85em;">
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-add-skin" /> <span>🩸 Skin/body sıvıları</span></label>
+                    <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="co-spice-add-expression" /> <span>😮 Yüz ifadeleri (ahegao vs)</span></label>
+                </div>
+
+                <div id="co-spice-summary" style="font-size: 0.85em; padding: 6px; background: #1a1a1a; border-radius: 2px; margin-top: 6px;">
+                </div>
+            </div>
+
+            <hr />
             <!-- ============ v0.6.1 CUSTOM TAGS - USER PRESETS ============ -->
             <div class="co-module-panel" data-module="custom_tags">
                 <h4>🏷️ Özel Etiketler <span style="font-size: 0.7em; opacity: 0.7;">(Custom User Presets · v0.6.1 · 5 max)</span></h4>

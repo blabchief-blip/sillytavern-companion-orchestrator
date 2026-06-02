@@ -569,6 +569,14 @@ class AutoGen {
       effectiveLevel = 3; // cap at 3 unless explicit mode on
     }
 
+    // v0.6.2: Spice Intensify tier system (soft / intensify / lora_aware)
+    // If spice_intensify module is loaded, use it; otherwise fallback to legacy constants
+    const intensifyMod = orch.modules?.find(m => m.name === 'spice_intensify');
+    if (intensifyMod?.getTags) {
+      return intensifyMod.getTags(level, effectiveLevel);
+    }
+
+    // Legacy fallback (v0.6.1 behavior)
     const lighting = SPICE_LIGHTING[effectiveLevel] || SPICE_LIGHTING[0];
     const mood = SPICE_MOOD[effectiveLevel] || SPICE_MOOD[0];
     const pose = SPICE_POSE[effectiveLevel] || [];

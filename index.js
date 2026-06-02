@@ -27,10 +27,11 @@ import { autoGenModule } from './modules/auto_gen.js';
 import { llmTaggerModule } from './modules/llm_tagger.js';
 import { posePresetsModule } from './modules/pose_presets.js';
 import { customTagsModule } from './modules/custom_tags.js';
+import { spiceIntensifyModule } from './modules/spice_intensify.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.6.1';
+const VERSION = '0.6.2';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -105,7 +106,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -217,6 +218,7 @@ const orchestrator = {
         this.wireLLMTaggerPanel();
         this.wirePosePresetsPanel();
         this.wireCustomTagsPanel();
+        this.wireSpiceIntensifyPanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1117,6 +1119,7 @@ const orchestrator = {
         if (this.settings.llmTaggerEnabled !== false) this.refreshLLMTaggerPanel();
         if (this.settings.posePresetsEnabled !== false) this.refreshPosePresetsPanel();
         if (this.settings.customTagsEnabled !== false) this.refreshCustomTagsPanel();
+        this.refreshSpiceIntensifyPanel();
         this.refreshSpiceBadge();
     },
 
@@ -1911,6 +1914,77 @@ const orchestrator = {
                 `);
             }
         }
+    },
+
+    // -----------------------------------------------------------
+    // v0.6.2 Spice Intensify Panel
+    // -----------------------------------------------------------
+    wireSpiceIntensifyPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        if (!$('input[name="co-spice-tier"]').length) return;
+        const mod = this.modules.find(m => m.name === 'spice_intensify');
+        if (!mod) return;
+
+        $('input[name="co-spice-tier"]').on('change', (e) => {
+            const tier = parseInt($(e.currentTarget).val(), 10);
+            if (mod.settings) mod.settings.intensityTier = tier;
+            this.toast(`🔥 Spice tier: ${['', '', ''].map((_, i) => ['SOFT', 'INTENSIFY', 'LoRA-AWARE'][i])[tier]}`, 'info');
+            this.refreshSpiceIntensifyPanel();
+            this.saveSettings();
+        });
+
+        $('#co-spice-lora-mystic').on('change', (e) => {
+            if (mod.settings) mod.settings.enabledLoras['Mystic-XXX-ZIT-V7'] = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+        $('#co-spice-lora-realskin').on('change', (e) => {
+            if (mod.settings) mod.settings.enabledLoras['RealSkin_xxXL_v1'] = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+        $('#co-spice-lora-perfectbreasts').on('change', (e) => {
+            if (mod.settings) mod.settings.enabledLoras['PerfectBreastsPonyV2'] = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+        $('#co-spice-lora-zitnsfw').on('change', (e) => {
+            if (mod.settings) mod.settings.enabledLoras['ZITnsfwLoRAv2'] = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+
+        $('#co-spice-add-skin').on('change', (e) => {
+            if (mod.settings) mod.settings.addSkin = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+        $('#co-spice-add-expression').on('change', (e) => {
+            if (mod.settings) mod.settings.addExpression = $(e.currentTarget).prop('checked');
+            this.saveSettings();
+        });
+    },
+
+    refreshSpiceIntensifyPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const mod = this.modules.find(m => m.name === 'spice_intensify');
+        if (!mod?.settings) return;
+
+        $('input[name="co-spice-tier"]').each((_, el) => {
+            $(el).prop('checked', parseInt($(el).val(), 10) === mod.settings.intensityTier);
+        });
+
+        const loras = mod.settings.enabledLoras || {};
+        $('#co-spice-lora-mystic').prop('checked', !!loras['Mystic-XXX-ZIT-V7']);
+        $('#co-spice-lora-realskin').prop('checked', !!loras['RealSkin_xxXL_v1']);
+        $('#co-spice-lora-perfectbreasts').prop('checked', !!loras['PerfectBreastsPonyV2']);
+        $('#co-spice-lora-zitnsfw').prop('checked', !!loras['ZITnsfwLoRAv2']);
+
+        $('#co-spice-add-skin').prop('checked', mod.settings.addSkin !== false);
+        $('#co-spice-add-expression').prop('checked', mod.settings.addExpression !== false);
+
+        const s = mod.summary();
+        const tierEmoji = ['🌸', '🔥', '💀'][s.tier] || '🌸';
+        $('#co-spice-summary').html(`
+            ${tierEmoji} <b>${s.tierName}</b> · min spice ${s.minSpice} · ${s.enabledLoras.length} LoRA aktif
+        `);
     },
 
     toast(msg, type = 'info') {
