@@ -534,6 +534,68 @@
             </div>
 
             <hr />
+            <!-- ============ v0.6.1 POSE PRESETS - BUILT-IN POSES ============ -->
+            <div class="co-module-panel" data-module="pose_presets">
+                <h4>🎭 Poz Preset'leri <span style="font-size: 0.7em; opacity: 0.7;">(Built-in + Custom · v0.6.1 · 18+)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Hazır pozisyon preset'leri. Sadece 18+ karakterler için. Bir poz seçince sonraki üretimde o pozisyonun tüm tag'leri prompt'a eklenir.
+                </p>
+
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;">
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="co-pose-enabled" />
+                        <span>🎭 Poz Preset'lerini Etkinleştir</span>
+                    </label>
+                </div>
+
+                <div id="co-pose-active" style="padding: 6px; background: #1e1e1e; border-left: 3px solid #555; margin: 8px 0; font-size: 0.85em;">
+                    Yükleniyor...
+                </div>
+
+                <div style="font-size: 0.85em; margin: 6px 0;"><b>Built-in Preset'ler:</b></div>
+                <div id="co-pose-list" style="max-height: 300px; overflow-y: auto; font-size: 0.85em;">
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ v0.6.1 CUSTOM TAGS - USER PRESETS ============ -->
+            <div class="co-module-panel" data-module="custom_tags">
+                <h4>🏷️ Özel Etiketler <span style="font-size: 0.7em; opacity: 0.7;">(Custom User Presets · v0.6.1 · 5 max)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Kendi tag koleksiyonlarınızı oluşturun. Her preset için min spice seviyesi belirleyebilirsiniz (örn: yalnızca spice 3+).
+                </p>
+
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;">
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="co-custom-enabled" />
+                        <span>🏷️ Özel Etiketleri Etkinleştir</span>
+                    </label>
+                </div>
+
+                <div style="background: #1e1e1e; padding: 8px; margin: 8px 0; border-radius: 3px;">
+                    <div style="font-size: 0.85em; margin-bottom: 4px;"><b>Yeni Preset Ekle:</b></div>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px;">
+                        <input type="text" id="co-custom-key" placeholder="key (örn: pool_bikini)" style="flex: 1; min-width: 120px; padding: 3px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 2px; font-size: 0.85em;" />
+                        <input type="text" id="co-custom-name" placeholder="Görünen ad" style="flex: 1; min-width: 120px; padding: 3px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 2px; font-size: 0.85em;" />
+                    </div>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px;">
+                        <input type="text" id="co-custom-tags" placeholder="tag1, tag2, tag3, ..." style="flex: 3; min-width: 200px; padding: 3px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 2px; font-size: 0.85em;" />
+                        <select id="co-custom-min-spice" style="flex: 1; min-width: 80px; padding: 3px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 2px; font-size: 0.85em;" title="Min spice seviyesi">
+                            <option value="0">min spice 0+</option>
+                            <option value="1">min spice 1+</option>
+                            <option value="2">min spice 2+</option>
+                            <option value="3">min spice 3+</option>
+                            <option value="4">min spice 4</option>
+                        </select>
+                        <button id="co-custom-add-btn" class="menu_button" style="font-size: 0.85em;">➕ Ekle</button>
+                    </div>
+                </div>
+
+                <div id="co-custom-list" style="font-size: 0.85em;">
+                </div>
+            </div>
+
+            <hr />
             <!-- ============ v0.5.2 AUTOGEN - COMPANION OWN PIPELINE ============ -->
             <div class="co-module-panel" data-module="auto_gen">
                 <h4>🎬 Otomatik Üretici <span style="font-size: 0.7em; opacity: 0.7;">(Companion Pipeline · v0.5.2)</span></h4>

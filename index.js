@@ -25,10 +25,12 @@ import { avatarDescModule } from './modules/avatar_desc.js';
 import { kazumaBridgeModule } from './modules/kazuma_bridge.js';
 import { autoGenModule } from './modules/auto_gen.js';
 import { llmTaggerModule } from './modules/llm_tagger.js';
+import { posePresetsModule } from './modules/pose_presets.js';
+import { customTagsModule } from './modules/custom_tags.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -103,7 +105,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -213,6 +215,8 @@ const orchestrator = {
         this.wireKazumaBridgePanel();
         this.wireAutoGenPanel();
         this.wireLLMTaggerPanel();
+        this.wirePosePresetsPanel();
+        this.wireCustomTagsPanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1111,6 +1115,8 @@ const orchestrator = {
         if (this.settings.kazumaBridgeEnabled !== false) this.refreshKazumaBridgePanel();
         if (this.settings.autoGenEnabled !== false) this.refreshAutoGenPanel();
         if (this.settings.llmTaggerEnabled !== false) this.refreshLLMTaggerPanel();
+        if (this.settings.posePresetsEnabled !== false) this.refreshPosePresetsPanel();
+        if (this.settings.customTagsEnabled !== false) this.refreshCustomTagsPanel();
         this.refreshSpiceBadge();
     },
 
@@ -1735,6 +1741,175 @@ const orchestrator = {
                 `Bugün: ${s.todayCalls}/${s.maxDaily} call &nbsp;|&nbsp; Toplam: ${s.totalCalls} call, ${s.totalCost}, ${s.avgLatency}<br/>` +
                 `Hatalar: ${s.errors}`
             );
+        }
+    },
+
+    // -----------------------------------------------------------
+    // v0.6.1 Pose Presets Panel (built-in poses + custom)
+    // -----------------------------------------------------------
+    wirePosePresetsPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const $enabled = $('#co-pose-enabled');
+        if (!$enabled.length) return;
+        const mod = this.modules.find(m => m.name === 'pose_presets');
+        if (!mod) return;
+
+        $enabled.on('change', () => {
+            this.settings.posePresetsEnabled = $enabled.prop('checked');
+            mod.settings.enabled = this.settings.posePresetsEnabled;
+            this.toast(`🎭 Poz Preset'leri ${$enabled.prop('checked') ? 'etkin' : 'devre dışı'}`, 'info');
+            this.saveSettings();
+        });
+
+        // Her preset için apply button
+        $(document).on('click', '[data-co-pose-apply]', (e) => {
+            const key = $(e.currentTarget).data('co-pose-apply');
+            mod.settings.activePose = key;
+            this.toast(`🎭 Poz ayarlandı: ${key} (sonraki üretimde)`, 'success');
+            this.refreshPosePresetsPanel();
+        });
+
+        $(document).on('click', '[data-co-pose-clear]', () => {
+            mod.settings.activePose = null;
+            this.toast('🎭 Aktif poz temizlendi', 'info');
+            this.refreshPosePresetsPanel();
+        });
+    },
+
+    refreshPosePresetsPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const mod = this.modules.find(m => m.name === 'pose_presets');
+        if (!mod?.settings) return;
+
+        const $enabled = $('#co-pose-enabled');
+        const $list = $('#co-pose-list');
+        const $active = $('#co-pose-active');
+
+        if ($enabled.length) $enabled.prop('checked', mod.settings.enabled);
+
+        const list = mod.list();
+        if ($list.length) {
+            $list.empty();
+            for (const p of list) {
+                const disabled = !p.enabled;
+                const isActive = mod.settings.activePose === p.key;
+                const spiceBadge = '🌶️'.repeat(p.spice);
+                $list.append(`
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; background: ${isActive ? '#3a3a1a' : '#1e1e1e'}; border-left: 3px solid ${isActive ? '#d4af37' : '#555'}; margin: 2px 0; border-radius: 2px; opacity: ${disabled ? '0.5' : '1'};">
+                        <span style="flex: 1; font-size: 0.85em;">${p.name}</span>
+                        <span style="font-size: 0.7em; opacity: 0.7;">${spiceBadge}</span>
+                        <span style="font-size: 0.7em; opacity: 0.5;">(${p.tagCount} tag)</span>
+                        <button data-co-pose-apply="${p.key}" class="menu_button" style="font-size: 0.7em; padding: 1px 6px;" ${disabled ? 'disabled' : ''}>${isActive ? '✓ Aktif' : 'Uygula'}</button>
+                    </div>
+                `);
+            }
+        }
+
+        if ($active.length) {
+            const activePose = mod.settings.activePose;
+            if (activePose) {
+                const p = list.find(x => x.key === activePose);
+                $active.html(`✅ <b>${p?.name || activePose}</b> <button data-co-pose-clear class="menu_button" style="font-size: 0.75em;">Temizle</button>`);
+            } else {
+                $active.html(`<i style="opacity: 0.6;">Aktif poz yok (default: Companion state)</i>`);
+            }
+        }
+    },
+
+    // -----------------------------------------------------------
+    // v0.6.1 Custom Tags Panel (user-defined presets)
+    // -----------------------------------------------------------
+    wireCustomTagsPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const $enabled = $('#co-custom-enabled');
+        if (!$enabled.length) return;
+        const mod = this.modules.find(m => m.name === 'custom_tags');
+        if (!mod) return;
+
+        $enabled.on('change', () => {
+            this.settings.customTagsEnabled = $enabled.prop('checked');
+            mod.settings.enabled = this.settings.customTagsEnabled;
+            this.saveSettings();
+        });
+
+        $('#co-custom-add-btn').on('click', () => {
+            const key = $('#co-custom-key').val().trim();
+            const name = $('#co-custom-name').val().trim() || key;
+            const tags = $('#co-custom-tags').val().trim();
+            const minSpice = parseInt($('#co-custom-min-spice').val(), 10) || 0;
+
+            if (!key || !tags) {
+                this.toast('Key ve tag gerekli', 'warning');
+                return;
+            }
+
+            try {
+                mod.add(key, name, tags, { minSpice });
+                this.toast(`🏷️ Custom preset eklendi: ${key}`, 'success');
+                $('#co-custom-key, #co-custom-name, #co-custom-tags').val('');
+                this.refreshCustomTagsPanel();
+                this.saveSettings();
+            } catch (e) {
+                this.toast(`Hata: ${e.message}`, 'error');
+            }
+        });
+
+        $(document).on('click', '[data-co-custom-toggle]', (e) => {
+            const key = $(e.currentTarget).data('co-custom-toggle');
+            if (!mod.settings.activePresets) mod.settings.activePresets = [];
+            const idx = mod.settings.activePresets.indexOf(key);
+            if (idx >= 0) {
+                mod.settings.activePresets.splice(idx, 1);
+            } else {
+                mod.settings.activePresets.push(key);
+            }
+            this.refreshCustomTagsPanel();
+        });
+
+        $(document).on('click', '[data-co-custom-remove]', (e) => {
+            const key = $(e.currentTarget).data('co-custom-remove');
+            if (confirm(`"${key}" preset'ini sil?`)) {
+                mod.remove(key);
+                if (mod.settings.activePresets) {
+                    mod.settings.activePresets = mod.settings.activePresets.filter(k => k !== key);
+                }
+                this.refreshCustomTagsPanel();
+                this.saveSettings();
+            }
+        });
+    },
+
+    refreshCustomTagsPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const mod = this.modules.find(m => m.name === 'custom_tags');
+        if (!mod?.settings) return;
+
+        const $enabled = $('#co-custom-enabled');
+        const $list = $('#co-custom-list');
+
+        if ($enabled.length) $enabled.prop('checked', mod.settings.enabled);
+
+        const list = mod.list();
+        if ($list.length) {
+            $list.empty();
+            if (list.length === 0) {
+                $list.append('<i style="opacity: 0.6; font-size: 0.85em;">Henüz custom preset yok. Aşağıdan ekle.</i>');
+            }
+            for (const p of list) {
+                const isActive = mod.settings.activePresets?.includes(p.key);
+                $list.append(`
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; background: ${isActive ? '#1a3a1a' : '#1e1e1e'}; border-left: 3px solid ${isActive ? '#4caf50' : '#555'}; margin: 2px 0; border-radius: 2px;">
+                        <span style="flex: 1; font-size: 0.85em;">${p.name} <span style="opacity: 0.5; font-size: 0.8em;">(${p.key})</span></span>
+                        <span style="font-size: 0.7em; opacity: 0.6;">min spice: ${p.minSpice}, ${p.tagCount} tag</span>
+                        <button data-co-custom-toggle="${p.key}" class="menu_button" style="font-size: 0.7em; padding: 1px 6px;">${isActive ? '✓ Aktif' : 'Aktifleştir'}</button>
+                        <button data-co-custom-remove="${p.key}" class="menu_button" style="font-size: 0.7em; padding: 1px 6px; color: #d44;">Sil</button>
+                    </div>
+                `);
+            }
         }
     },
 

@@ -114,8 +114,6 @@ export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL) {
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://sillytavern.local',
-      'X-Title': 'Companion Orchestrator',
     },
     body: JSON.stringify({
       model,

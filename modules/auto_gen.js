@@ -107,20 +107,49 @@ const USER_ACTION_PATTERNS = [
 // Spice / Heat → Lighting & Atmosphere mapping
 // =====================================================================
 
+// Spice-aware lighting & mood mapping (v0.6.1 — extended)
+// Level 0: vanilla/peaceful, 1: romantic, 2: flirtatious, 3: sensual, 4: explicit
 const SPICE_LIGHTING = {
-  0: ['soft_daylight', 'peaceful', 'calm'],
-  1: ['warm_lighting', 'romantic', 'tender'],
-  2: ['candlelit', 'intimate', 'sensual'],
-  3: ['dim_lighting', 'moody', 'provocative'],
-  4: ['dramatic_lighting', 'candlelit', 'passionate'],
+  0: ['soft_daylight', 'peaceful', 'calm', 'natural_lighting', 'bright'],
+  1: ['warm_lighting', 'romantic', 'tender', 'golden_hour', 'soft_focus'],
+  2: ['candlelit', 'intimate', 'sensual', 'soft_glow', 'warm_skin_tone'],
+  3: ['dim_lighting', 'moody', 'provocative', 'shadowed', 'single_light_source', 'skin_shine', 'sweat'],
+  4: ['dramatic_lighting', 'candlelit', 'passionate', 'low_key', 'rim_lighting', 'skin_highlight'],
 };
 
 const SPICE_MOOD = {
-  0: ['calm', 'relaxed'],
-  1: ['affectionate', 'tender'],
-  2: ['flirtatious', 'seductive'],
-  3: ['aroused', 'breathless'],
-  4: ['intimate', 'passionate'],
+  0: ['calm', 'relaxed', 'happy', 'content'],
+  1: ['affectionate', 'tender', 'loving', 'warm_smile'],
+  2: ['flirtatious', 'seductive', 'teasing', 'coy', 'smirk', 'bedroom_eyes'],
+  3: ['aroused', 'breathless', 'flushed', 'lip_bite', 'heavy_breathing', 'pupils_dilated', 'parted_lips'],
+  4: ['intimate', 'passionate', 'overwhelmed', 'ecstasy', 'surrender', 'desire', 'lustful_gaze'],
+};
+
+// Pose/position tags per spice level (v0.6.1 — physical proximity)
+const SPICE_POSE = {
+  0: [], // vanilla — no specific pose
+  1: ['sitting_close', 'face_to_face', 'eye_contact', 'gentle_touch'],
+  2: ['leaning_close', 'hand_on_face', 'forehead_touch', 'neck_kiss', 'lips_at_ear'],
+  3: ['straddling', 'on_lap', 'pinned_against_wall', 'hands_in_hair', 'pressed_against', 'breath_visible', 'bare_shoulders'],
+  4: ['lying_together', 'under_sheets', 'disheveled_clothing', 'exposed_skin', 'arching_back', 'tangled_limbs'],
+};
+
+// Clothing default per spice (v0.6.1 — controls what's worn)
+const SPICE_CLOTHING = {
+  0: ['normal_clothes'],
+  1: ['casual_clothes', 'loose_fit'],
+  2: ['revealing_clothes', 'cleavage', 'tight_clothes'],
+  3: ['lingerie', 'underwear', 'partially_undressed', 'see_through', 'open_shirt'],
+  4: ['nude', 'nudity', 'explicit', 'stripped', 'torn_clothes'],
+};
+
+// Body language per spice (v0.6.1)
+const SPICE_BODY_LANG = {
+  0: ['relaxed_pose', 'natural_posture'],
+  1: ['soft_smile', 'gentle_lean', 'hand_holding', 'head_tilt'],
+  2: ['hair_flip', 'lip_bite', 'side_glance', 'touched_neck', 'playing_with_hair'],
+  3: ['pulled_close', 'against_body', 'hands_gripping', 'trembling', 'wet_lips'],
+  4: ['arching', 'writhing', 'pulled_hair', 'clenched_jaw', 'head_back', 'moaning', 'gripping_sheets'],
 };
 
 // Mood preset → emotion tags
@@ -202,6 +231,10 @@ class AutoGen {
         useMood: true,
         useSpice: true,
         useScenario: true,
+        usePosePresets: true,    // v0.6.1: built-in pose presets (B senaryosu)
+        useCustomTags: true,     // v0.6.1: custom tag presets (E senaryosu)
+        explicitMode: false,     // v0.6.1 GUARD: explicit (spice 4) için kullanıcı onayı
+        maxAllowedSpice: 3,      // v0.6.1 GUARD: max spice level (0-4), explicitMode on olsa 4'e çıkabilir
         history: [],
         debug: false,
         injectToChat: true,
@@ -407,6 +440,39 @@ class AutoGen {
       scenarioTags.forEach(t => tags.add(t));
     }
 
+    // Pose presets (v0.6.1 — B senaryosu)
+    if (this.settings.usePosePresets) {
+      const poseMod = this.orch?.modules?.find(m => m.name === 'pose_presets');
+      if (poseMod?.settings?.enabled) {
+        // Aktif pozisyon varsa ekle, yoksa hiçbir şey yapma
+        const activePose = poseMod.settings?.activePose;
+        if (activePose) {
+          const poseTags = poseMod.getPoseTags(activePose);
+          poseTags.forEach(t => tags.add(t));
+          if (this.settings.debug) {
+            console.log('[Companion AutoGen] 🎭 Applied pose preset:', activePose, '(', poseTags.length, 'tags)');
+          }
+        }
+      }
+    }
+
+    // Custom tag presets (v0.6.1 — E senaryosu)
+    if (this.settings.useCustomTags) {
+      const customMod = this.orch?.modules?.find(m => m.name === 'custom_tags');
+      if (customMod?.settings?.enabled) {
+        // Aktif custom preset'ler
+        const activeCustom = customMod.settings?.activePresets || [];
+        const currentSpice = this._getCurrentSpice();
+        for (const presetKey of activeCustom) {
+          const customTags = customMod.apply(presetKey, [], currentSpice);
+          customTags.forEach(t => tags.add(t));
+        }
+        if (this.settings.debug && activeCustom.length) {
+          console.log('[Companion AutoGen] 🏷️ Applied custom presets:', activeCustom);
+        }
+      }
+    }
+
     // Action patterns
     for (const pattern of ACTION_PATTERNS) {
       pattern.rx.lastIndex = 0; // reset global regex state
@@ -491,11 +557,48 @@ class AutoGen {
 
     const charId = this.ctx.characterId;
     const level = s[charId]?.level ?? s.currentLevel ?? 0;
+    const clampedLevel = Math.min(Math.max(level, 0), 4);
 
-    const lighting = SPICE_LIGHTING[Math.min(level, 4)] || SPICE_LIGHTING[0];
-    const mood = SPICE_MOOD[Math.min(level, 4)] || SPICE_MOOD[0];
+    // Guard rail: explicit (spice 4) tag'ler sadece yetişkin karakterler için
+    // Default cap = 3 unless explicit enabled + age verified
+    let effectiveLevel = clampedLevel;
+    if (clampedLevel >= 4 && !this._isExplicitAllowed()) {
+      if (this.settings.debug) {
+        console.warn('[Companion AutoGen] Spice 4 blocked — character not verified 18+ or explicit disabled');
+      }
+      effectiveLevel = 3; // cap at 3 unless explicit mode on
+    }
 
-    return [...lighting, ...mood];
+    const lighting = SPICE_LIGHTING[effectiveLevel] || SPICE_LIGHTING[0];
+    const mood = SPICE_MOOD[effectiveLevel] || SPICE_MOOD[0];
+    const pose = SPICE_POSE[effectiveLevel] || [];
+    const clothing = SPICE_CLOTHING[effectiveLevel] || [];
+    const bodyLang = SPICE_BODY_LANG[effectiveLevel] || [];
+
+    return [...lighting, ...mood, ...pose, ...clothing, ...bodyLang];
+  }
+
+  /**
+   * Guard rail: explicit/spice 4 tag'ler sadece şu durumlarda izinli:
+   * 1. auto_gen.settings.explicitMode === true
+   * 2. Companion'da veya karakter description'da 18+ yaş belirtilmiş
+   */
+  _isExplicitAllowed() {
+    const orch = this.orch;
+    if (!orch?.settings?.auto_gen?.explicitMode) return false;
+    // Karakter description'da 18+ kontrolü
+    try {
+      const ctx = this._getCtx() || this.ctx;
+      const char = ctx?.characters?.[ctx.characterId];
+      const desc = (char?.description || '') + ' ' + (char?.creator_notes || '') + ' ' + (char?.personality || '');
+      // Yaygın 18+ işaretleri
+      const adultMarkers = /\b(1[89]|[2-9][0-9])\s*(yo|ya[\u015fs]|years?\s*old|age|\+)|adult\s*character|nsfw\s*allowed|mature\s*content|18\+|21\+/i;
+      if (adultMarkers.test(desc)) return true;
+      // Eğer hiç yaş yoksa explicit'i engelle (güvenli varsayılan)
+      return false;
+    } catch (e) {
+      return false;
+    }
   }
 
   _getCurrentMood() {
