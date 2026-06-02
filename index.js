@@ -20,10 +20,12 @@ import { spiceModule } from './modules/spice.js';
 import { limitsModule } from './modules/limits.js';
 import { aftercareModule } from './modules/aftercare.js';
 import { stmbBridgeModule } from './modules/stmb_bridge.js';
+import { imageGenModule } from './modules/image_gen.js';
+import { avatarDescModule } from './modules/avatar_desc.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -37,6 +39,8 @@ const defaultSettings = Object.freeze({
     limitsEnabled: true,
     aftercareEnabled: true,
     stmbBridgeEnabled: true,
+    imageGenEnabled: true,
+    avatarDescEnabled: true,
     // Global
     debugLogging: false,
     autoSaveInterval: 30, // seconds
@@ -94,7 +98,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -200,6 +204,7 @@ const orchestrator = {
         this.wireLimitsPanel();
         this.wireAftercarePanel();
         this.wireStmbBridgePanel();
+        this.wireImageGenPanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1093,6 +1098,8 @@ const orchestrator = {
         if (this.settings.limitsEnabled !== false) this.refreshLimitsPanel();
         if (this.settings.aftercareEnabled !== false) this.refreshAftercarePanel();
         if (this.settings.stmbBridgeEnabled !== false) this.refreshStmbBridgePanel();
+        if (this.settings.imageGenEnabled !== false) this.refreshImageGenPanel();
+        if (this.settings.avatarDescEnabled !== false) this.refreshImageGenPanel();
         this.refreshSpiceBadge();
     },
 
@@ -1232,6 +1239,127 @@ const orchestrator = {
             else if (h.action === 'mirror_memories_from_stmb') detail = `${h.count} hafıza yansıtıldı`;
             else if (h.action === 'push_scene_to_stmb') detail = `sahne gönderildi (start: ${h.sceneStart})`;
             $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2); font-size: 0.85em;"><strong>${time}</strong> — ${detail}</div>`);
+        });
+    },
+
+    // ===== v0.5.0 — Image Gen + Avatar Desc wiring =====
+
+    wireImageGenPanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'image_gen')) return;
+
+        // Test connection
+        $('#co_img_test').on('click', async () => {
+            const url = $('#co_img_url').val().trim();
+            if (url) imageGenModule.setUrl(url);
+            self.toast("ComfyUI'a ping atılıyor…");
+            const d = await imageGenModule.diagnose();
+            if (d.connection.ok) {
+                self.toast(`✅ Bağlantı: ${d.connection.version} | ${d.connection.gpus} GPU (${d.connection.gpuName})`);
+            } else {
+                self.toast(`❌ Bağlantı başarısız: ${d.connection.error}`, 'error');
+            }
+            self.refreshImageGenPanel();
+        });
+
+        // Workflow file upload
+        $('#co_img_workflow_file').on('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const r = imageGenModule.setWorkflow(text);
+                self.toast(`✅ Workflow yüklendi (${r.nodeCount} node)`);
+                self.refreshImageGenPanel();
+            } catch (err) {
+                self.toast(`❌ Workflow hatası: ${err.message}`, 'error');
+            }
+            e.target.value = ''; // reset
+        });
+
+        // URL değişikliği
+        $('#co_img_url').on('change', function() {
+            imageGenModule.setUrl(this.value.trim());
+        });
+
+        // Otomatik tetikleme toggle
+        $('#co_img_enabled').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.image_gen) {
+                ctx.extensionSettings.companion_orchestrator.image_gen.enabled = this.checked;
+                self.toast(`Otomatik görsel üretimi ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+
+        // Quick generate
+        $('#co_img_quick').on('click', async () => {
+            const prompt = $('#co_img_quick_prompt').val().trim() || 'masterpiece, best quality, 1girl, detailed background';
+            self.toast('Üretim başlatıldı…');
+            const r = await imageGenModule.quickGenerate(prompt);
+            if (r.ok) {
+                self.toast(`✅ Görsel üretildi: ${r.imagePath || 'ComfyUI output'}`);
+            } else {
+                self.toast(`❌ Hata: ${r.error}`, 'error');
+            }
+            self.refreshImageGenPanel();
+        });
+
+        // Avatar override
+        $('#co_img_avatar_save').on('click', () => {
+            const txt = $('#co_img_avatar_override').val().trim();
+            if (txt) {
+                avatarDescModule.setOverride(txt);
+                self.toast('Avatar override kaydedildi');
+            } else {
+                avatarDescModule.clearOverride();
+                self.toast('Override kaldırıldı, otomatik profile dönüldü');
+            }
+            self.refreshImageGenPanel();
+        });
+        $('#co_img_avatar_refresh').on('click', () => {
+            avatarDescModule.refresh();
+            self.toast('Avatar profili yeniden çıkarıldı');
+            self.refreshImageGenPanel();
+        });
+    },
+
+    refreshImageGenPanel() {
+        if (!this.modules.find(m => m.name === 'image_gen')) return;
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.image_gen || {};
+
+        $('#co_img_url').val(cfg.comfyuiUrl || 'http://192.168.68.66:8001');
+        $('#co_img_enabled').prop('checked', !!cfg.enabled);
+        $('#co_img_workflow_status').html(
+            cfg.workflow
+                ? `✅ Workflow yüklü (${Object.keys(cfg.workflow).length} node)`
+                : '<i style="color: #c55;">❌ Workflow yüklenmemiş — yukarıdan JSON dosyasını seç</i>'
+        );
+
+        // Avatar desc
+        const desc = avatarDescModule.getDescription();
+        $('#co_img_avatar_desc').html(
+            desc ? `<strong>Profil:</strong> ${desc}` : "<i style=\"opacity: 0.6;\">(profil çıkarılamadı — karakter description'ında fiziksel bilgi yok)</i>"
+        );
+        const override = ctx.extensionSettings?.companion_orchestrator?.avatar_desc?.override?.[String(ctx.characterId)] || '';
+        $('#co_img_avatar_override').val(override);
+
+        // History
+        const history = imageGenModule.getHistory(8);
+        const $box = $('#co_img_history');
+        $box.empty();
+        if (!history.length) {
+            $box.html('<i style="opacity: 0.6;">(henüz üretim yok)</i>');
+            return;
+        }
+        history.forEach(h => {
+            const time = new Date(h.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if (h.error) {
+                $box.append(`<div style="padding: 3px 0; color: #c55; font-size: 0.85em;"><strong>${time}</strong> — ❌ ${h.error}</div>`);
+            } else {
+                const path = h.imagePath || '(yol alınamadı)';
+                $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2); font-size: 0.85em;"><strong>${time}</strong> ${h.characterName ? '[' + h.characterName + ']' : ''} — ${path}<br><em style="opacity: 0.6;">${h.positive || ''}</em></div>`);
+            }
         });
     },
 

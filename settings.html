@@ -65,6 +65,16 @@
                 <span><strong>STMB Köprüsü</strong> — <em style="opacity: 0.75;">SillyTavern-MemoryBooks ile scene/memory senkronizasyonu (yüklüyse).</em></span>
             </label>
 
+            <label class="checkbox_label" for="co_imageGenEnabled" title="ComfyUI üzerinden her mesaj sonrası veya manuel görsel üretir.">
+                <input id="co_imageGenEnabled" type="checkbox" checked />
+                <span><strong>Görsel Üretici</strong> — <em style="opacity: 0.75;">ComfyUI üzerinden otomatik/manuel görsel üretimi (workflow + avatar + scene prompt).</em></span>
+            </label>
+
+            <label class="checkbox_label" for="co_avatarDescEnabled" title="Karakterin fiziksel profilini ST description'ından çıkarır, image gen için kullanır.">
+                <input id="co_avatarDescEnabled" type="checkbox" checked />
+                <span><strong>Avatar Profili</strong> — <em style="opacity: 0.75;">Karakter description'ından fiziksel özellikleri regex ile parse eder.</em></span>
+            </label>
+
             <hr />
             <!-- ============ MOOD & RELATIONSHIP UI ============ -->
             <div class="co-module-panel" data-module="mood">
@@ -420,6 +430,70 @@
                 <h5 style="margin-top: 12px; margin-bottom: 4px;">Son Senkronizasyonlar</h5>
                 <div id="co_stmb_history" class="co-list-panel" style="font-size: 0.85em; max-height: 120px; overflow-y: auto;">
                     <i style="opacity: 0.6;">(henüz sync yok)</i>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ IMAGE GEN / COMFYUI UI ============ -->
+            <div class="co-module-panel" data-module="image_gen">
+                <h4>🎨 Görsel Üretici <span style="font-size: 0.7em; opacity: 0.7;">(ComfyUI)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    ComfyUI workflow'unu yükle, her mesaj sonrası otomatik veya manuel üretim. Görsel ComfyUI output klasörüne yazılır.
+                </p>
+
+                <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 200px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">ComfyUI URL</span>
+                        <input id="co_img_url" type="text" class="text_pole" placeholder="http://192.168.68.66:8001" style="width: 100%;" />
+                    </label>
+                    <button id="co_img_test" class="menu_button" style="margin-top: 18px;">
+                        <i class="fa-solid fa-plug"></i> Test
+                    </button>
+                </div>
+
+                <div style="margin-top: 8px;">
+                    <span style="display:block; font-size:0.85em; opacity:0.8;">Workflow (API format JSON)</span>
+                    <label for="co_img_workflow_file" class="menu_button" style="display: inline-block; cursor: pointer; margin-top: 4px;">
+                        <i class="fa-solid fa-file-upload"></i> Workflow Dosyası Seç
+                    </label>
+                    <input type="file" id="co_img_workflow_file" accept="application/json,.json" style="display: none;" />
+                    <div id="co_img_workflow_status" style="font-size: 0.85em; margin-top: 4px;">
+                        <i style="opacity: 0.6;">(workflow yüklenmemiş)</i>
+                    </div>
+                </div>
+
+                <hr style="margin: 10px 0; opacity: 0.3;" />
+                <h5 style="margin: 0 0 4px 0;">🧬 Avatar Profili (otomatik)</h5>
+                <div id="co_img_avatar_desc" style="font-size: 0.85em; opacity: 0.85; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px;">
+                    <i>(profil çıkarılıyor…)</i>
+                </div>
+                <div class="co-row" style="display: flex; gap: 4px; margin-top: 4px;">
+                    <input id="co_img_avatar_override" type="text" class="text_pole" placeholder="manuel override (opsiyonel)" style="flex: 1;" />
+                    <button id="co_img_avatar_save" class="menu_button" title="Override kaydet">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                    </button>
+                    <button id="co_img_avatar_refresh" class="menu_button" title="Yeniden çıkar">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                    </button>
+                </div>
+
+                <hr style="margin: 10px 0; opacity: 0.3;" />
+                <h5 style="margin: 0 0 4px 0;">⚡ Hızlı Üretim (Test)</h5>
+                <div class="co-row" style="display: flex; gap: 6px;">
+                    <input id="co_img_quick_prompt" type="text" class="text_pole" placeholder="kısa prompt (avatar + sahne otomatik eklenir)" style="flex: 1;" />
+                    <button id="co_img_quick" class="menu_button">
+                        <i class="fa-solid fa-bolt"></i> Üret
+                    </button>
+                </div>
+
+                <label class="checkbox_label" for="co_img_enabled" style="margin-top: 10px;">
+                    <input id="co_img_enabled" type="checkbox" />
+                    <span>Her mesaj sonrası otomatik üret (tam mod, v0.5.1'de)</span>
+                </label>
+
+                <h5 style="margin-top: 12px; margin-bottom: 4px;">Son Üretimler</h5>
+                <div id="co_img_history" class="co-list-panel" style="font-size: 0.85em; max-height: 140px; overflow-y: auto;">
+                    <i style="opacity: 0.6;">(henüz üretim yok)</i>
                 </div>
             </div>
 
