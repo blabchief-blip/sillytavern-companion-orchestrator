@@ -16,10 +16,13 @@ import { scenariosModule } from './modules/scenarios.js';
 import { lorebookModule } from './modules/lorebook.js';
 import { promptsModule } from './modules/prompts.js';
 import { ioModule } from './modules/io.js';
+import { spiceModule } from './modules/spice.js';
+import { limitsModule } from './modules/limits.js';
+import { aftercareModule } from './modules/aftercare.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -29,6 +32,9 @@ const defaultSettings = Object.freeze({
     scenariosEnabled: true,
     lorebookEnabled: true,
     promptsEnabled: true,
+    spiceEnabled: true,
+    limitsEnabled: true,
+    aftercareEnabled: true,
     // Global
     debugLogging: false,
     autoSaveInterval: 30, // seconds
@@ -86,7 +92,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -172,6 +178,9 @@ const orchestrator = {
         this.wireLorebookPanel();
         this.wireTranslationPanel();
         this.wireExportImport();
+        this.wireSpicePanel();
+        this.wireLimitsPanel();
+        this.wireAftercarePanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -187,11 +196,22 @@ const orchestrator = {
     wireMoodPanel() {
         const self = this;
 
-        // Populate mood preset dropdown
-        const moods = ['neutral', 'happy', 'sad', 'flirty', 'playful', 'angry', 'anxious', 'shy', 'confident', 'tired'];
+        // Populate mood preset dropdown (UI: TR label, value: EN key)
+        const moods = [
+            { key: 'neutral', tr: 'nötr' },
+            { key: 'happy', tr: 'mutlu' },
+            { key: 'sad', tr: 'üzgün' },
+            { key: 'flirty', tr: 'flörtöz' },
+            { key: 'playful', tr: 'şımarık' },
+            { key: 'angry', tr: 'kızgın' },
+            { key: 'anxious', tr: 'kaygılı' },
+            { key: 'shy', tr: 'utangaç' },
+            { key: 'confident', tr: 'kendinden emin' },
+            { key: 'tired', tr: 'yorgun' },
+        ];
         const $sel = $('#co_mood_preset');
         $sel.empty();
-        moods.forEach(m => $sel.append(`<option value="${m}">${m}</option>`));
+        moods.forEach(m => $sel.append(`<option value="${m.key}">${m.tr}</option>`));
 
         // Apply mood
         $('#co_mood_apply').on('click', () => {
@@ -225,7 +245,7 @@ const orchestrator = {
             self.settings.mood.autoTune = this.checked;
             self.settings.mood.autoTuneMessageCount = 0;
             saveSettings();
-            self.toast(`Auto-tune ${this.checked ? 'enabled' : 'disabled'}`);
+            self.toast(`Otomatik ayar ${this.checked ? 'açıldı' : 'kapatıldı'}`);
         });
         $('#co_mood_autotune_interval').on('change', function() {
             self.settings.mood = self.settings.mood || {};
@@ -245,7 +265,7 @@ const orchestrator = {
         $('#co_mood_trust_val').text(tr);
         const charName = this.getCurrentCharName();
         const charLabel = charName ? `<strong>${charName}</strong> — ` : '';
-        $('#co_mood_current').html(`${charLabel}mood: <strong>${cur.mood || 'neutral'}</strong> | affinity: <strong>${aff}/10</strong> | trust: <strong>${tr}/10</strong>`);
+        $('#co_mood_current').html(`${charLabel}ruh hali: <strong>${this.moodTr(cur.mood || 'neutral')}</strong> | yakınlık: <strong>${aff}/10</strong> | güven: <strong>${tr}/10</strong>`);
     },
 
     wireScenarioPanel() {
@@ -257,7 +277,19 @@ const orchestrator = {
             ];
             const $sel = $('#co_scenario_select');
             $sel.empty();
-            scenarios.forEach(s => $sel.append(`<option value="${s.key || s}">${s.name || s}${s.builtin ? '' : ' ✦'}</option>`));
+            // Senaryo TR label haritası
+            const scenarioTrMap = {
+                default: 'Varsayılan',
+                coffee_shop: 'Kafede',
+                late_night_texting: 'Gece Yarısı Mesajlaşma',
+                domestic_soft: 'Ev / Sakin Yaşam',
+                high_stakes: 'Yüksek Riskli Drama',
+            };
+            scenarios.forEach(s => {
+                const key = s.key || s;
+                const tr = scenarioTrMap[key] || (s.name || s);
+                $sel.append(`<option value="${key}">${tr}${s.builtin ? '' : ' ✦'}</option>`);
+            });
         };
         refreshScenarioDropdown();
 
@@ -268,13 +300,13 @@ const orchestrator = {
             if (!key) return;
             scenariosModule.apply(key);
             self.refreshScenarioPanel();
-            self.toast(`Scenario '${key}' applied`);
+            self.toast(`Senaryo '${key}' uygulandı`);
         });
 
         $('#co_scenario_clear').on('click', () => {
             scenariosModule.clear ? scenariosModule.clear() : scenariosModule.apply('default');
             self.refreshScenarioPanel();
-            self.toast('Scenario cleared');
+            self.toast('Senaryo kaldırıldı');
         });
 
         // Custom scenario creator
@@ -291,10 +323,10 @@ const orchestrator = {
             const name = $('#co_scenario_new_name').val().trim();
             const system = $('#co_scenario_new_system').val();
             const authorNote = $('#co_scenario_new_author').val();
-            if (!key) { self.toast('Key required', 'warn'); return; }
+            if (!key) { self.toast('Anahtar gerekli', 'warn'); return; }
             const result = scenariosModule.create({ key, name, system, authorNote });
             if (result.ok) {
-                self.toast(`Scenario '${name || key}' created`);
+                self.toast(`Senaryo '${name || key}' oluşturuldu`);
                 ['key', 'name', 'system', 'author'].forEach(f => $(`#co_scenario_new_${f}`).val(''));
                 $('#co_scenario_creator').hide();
                 refreshScenarioDropdown();
@@ -313,8 +345,8 @@ const orchestrator = {
         const current = scenariosModule.getCurrent ? scenariosModule.getCurrent() : (this.settings.scenarios?.lastUsed || 'default');
         $('#co_scenario_select').val(current);
         $('#co_scenario_current').html(current && current !== 'default'
-            ? `Current: <strong>${current}</strong>`
-            : '<i>(none applied — default scenario)</i>');
+            ? `Aktif: <strong>${current}</strong>`
+            : '<i>(senaryo uygulanmamış — varsayılan)</i>');
         this.refreshScenarioPreview();
     },
 
@@ -341,7 +373,38 @@ const orchestrator = {
             ];
             const $sel = $('#co_preset_select');
             $sel.empty();
-            presets.forEach(p => $sel.append(`<option value="${p.key || p}">${p.name || p}${p.builtin ? '' : ' ✦'}</option>`));
+            // Preset TR label haritası (value EN key kalır, LLM'e EN gider)
+            const presetTrMap = {
+                default: 'Varsayılan',
+                descriptive: 'Betimleyici',
+                terse: 'Kısa & Keskin',
+                emotional: 'Duygusal Derinlik',
+                cinematic: 'Sinematik',
+                explicit_verbose: 'Açık / Detaylı',
+                lyrical: 'Lirik / Şiirsel',
+                noir: 'Noir',
+                comedic: 'Komik / Nüktedan',
+                slow_burn: 'Yavaş Yanan',
+                immersive_2nd: 'İkinci Şahıs (Sen)',
+                modernist: 'Modernist',
+                mythic: 'Mitsel / Yüce',
+                banter: 'Atışma',
+                soft_smut: 'Hafif / İma',
+                raw: 'Çiğ / Ham',
+                dream: 'Rüya gibi / Sürreal',
+                documentary: 'Belgesel / Gerçekçi',
+                // v0.3.0 — Director's Cut
+                aftercare_soft: 'Sonrası / Şefkat',
+                fade_artist: 'Fade Artist (Zarif Geçiş)',
+                tasteful_explicit: 'Nâzenin / Açık',
+                kinetic_intense: 'Kinetik / Yoğun',
+                slow_seduction: 'Yavaş Sedüksiyon',
+            };
+            presets.forEach(p => {
+                const key = p.key || p;
+                const tr = presetTrMap[key] || (p.name || p);
+                $sel.append(`<option value="${key}">${tr}${p.builtin ? '' : ' ✦'}</option>`);
+            });
         };
         refreshPresetDropdown();
 
@@ -352,13 +415,13 @@ const orchestrator = {
             if (!key) return;
             promptsModule.apply(key);
             self.refreshPresetPanel();
-            self.toast(`Style preset '${key}' applied`);
+            self.toast(`Stil preset'i '${key}' uygulandı`);
         });
 
         $('#co_preset_clear').on('click', () => {
             promptsModule.apply('default');
             self.refreshPresetPanel();
-            self.toast('Style reset to default');
+            self.toast('Stil varsayılana sıfırlandı');
         });
 
         // Custom preset creator
@@ -375,10 +438,10 @@ const orchestrator = {
             const name = $('#co_preset_new_name').val().trim();
             const description = $('#co_preset_new_desc').val().trim();
             const systemAddition = $('#co_preset_new_system').val();
-            if (!key) { self.toast('Key required', 'warn'); return; }
+            if (!key) { self.toast('Anahtar gerekli', 'warn'); return; }
             const result = promptsModule.create({ key, name, description, systemAddition });
             if (result.ok) {
-                self.toast(`Preset '${name || key}' created`);
+                self.toast(`Preset '${name || key}' oluşturuldu`);
                 ['key', 'name', 'desc', 'system'].forEach(f => $(`#co_preset_new_${f}`).val(''));
                 $('#co_preset_creator').hide();
                 refreshPresetDropdown();
@@ -396,8 +459,8 @@ const orchestrator = {
         const current = promptsModule.getCurrent ? promptsModule.getCurrent() : (this.settings.prompts?.activePreset || 'default');
         $('#co_preset_select').val(current);
         $('#co_preset_current').html(current && current !== 'default'
-            ? `Current style: <strong>${current}</strong>`
-            : '<i>(default style — no preset active)</i>');
+            ? `Aktif stil: <strong>${current}</strong>`
+            : '<i>(varsayılan stil — preset aktif değil)</i>');
         this.refreshPresetPreview();
     },
 
@@ -439,17 +502,17 @@ const orchestrator = {
                 ? tagsRaw.split(',').map(t => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean).slice(0, 10)
                 : [];
             if (!text) {
-                self.toast('Type a memory first', 'warn');
+                self.toast('Önce bir hafıza yaz', 'warn');
                 return;
             }
             const entry = memoryModule.add({ content: text, importance, kind, tags });
             if (entry) {
                 $('#co_mem_input').val('');
                 $('#co_mem_tags').val('');
-                self.toast(`Memory added (#${entry.id.slice(0, 8)}, ${kind}, imp ${entry.importance}${tags.length ? ', ' + tags.length + ' tag' + (tags.length === 1 ? '' : 's') : ''})`);
+                self.toast(`Hafıza eklendi (#${entry.id.slice(0, 8)}, ${kind}, önem ${entry.importance}${tags.length ? ', ' + tags.length + ' etiket' : ''})`);
                 self.refreshMemoryPanel();
             } else {
-                self.toast('No active character — open a chat first', 'warn');
+                self.toast('Aktif karakter yok — önce bir sohbet aç', 'warn');
             }
         });
 
@@ -468,10 +531,10 @@ const orchestrator = {
         });
 
         $('#co_mem_clear').on('click', () => {
-            if (!confirm('Clear all memories for this character?')) return;
+            if (!confirm('Bu karakterin tüm hafızası silinsin mi?')) return;
             memoryModule.clear();
             self.refreshMemoryPanel();
-            self.toast('Memories cleared');
+            self.toast('Hafızalar silindi');
         });
 
         $('#co_mem_search_btn').on('click', () => self.refreshMemoryPanel());
@@ -502,18 +565,18 @@ const orchestrator = {
 
         const $list = $('#co_mem_list');
         if (!list.length) {
-            $list.html('<i style="opacity: 0.6;">(no memories yet)</i>');
+            $list.html('<i style="opacity: 0.6;">(henüz hafıza yok)</i>');
             return;
         }
         const charName = this.getCurrentCharName();
-        const header = charName ? `<div style="opacity: 0.7; font-size: 0.9em; margin-bottom: 4px;">${charName} — ${list.length} memor${list.length === 1 ? 'y' : 'ies'}</div>` : '';
+        const header = charName ? `<div style="opacity: 0.7; font-size: 0.9em; margin-bottom: 4px;">${charName} — ${list.length} hafıza</div>` : '';
         const items = list.map(m => {
             const tags = (m.tags && m.tags.length) ? m.tags.map(t => `<span class="co-mem-tag" style="background: rgba(100,150,255,0.18); padding: 0 4px; margin-left: 2px; border-radius: 2px; font-size: 0.85em;">#${this.escapeHtml(t)}</span>`).join('') : '';
             return `
             <div class="co-mem-item" style="padding: 4px 6px; margin-bottom: 3px; background: rgba(127,127,127,0.08); border-radius: 3px; display: flex; gap: 6px; align-items: start;">
-                <span class="co-mem-badge" style="background: rgba(127,127,127,0.2); padding: 1px 5px; border-radius: 3px; font-size: 0.85em; white-space: nowrap;">${m.kind || 'note'}/${m.importance || 5}${tags}</span>
+                <span class="co-mem-badge" style="background: rgba(127,127,127,0.2); padding: 1px 5px; border-radius: 3px; font-size: 0.85em; white-space: nowrap;">${this.kindTr(m.kind) || 'not'}/${m.importance || 5}${tags}</span>
                 <span style="flex: 1; word-break: break-word;">${this.escapeHtml(m.content || '')}</span>
-                <button class="co-mem-del menu_button" data-id="${m.id}" style="padding: 0 6px; line-height: 1.2;" title="Forget this memory">
+                <button class="co-mem-del menu_button" data-id="${m.id}" style="padding: 0 6px; line-height: 1.2;" title="Bu hafızayı unut">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -548,7 +611,7 @@ const orchestrator = {
             self.settings.lorebook = self.settings.lorebook || {};
             self.settings.lorebook.autoActivate = this.checked;
             saveSettings();
-            self.toast(`Auto-lorebook ${this.checked ? 'enabled' : 'disabled'}`);
+            self.toast(`Otomatik lorebook ${this.checked ? 'açıldı' : 'kapatıldı'}`);
         });
     },
 
@@ -558,7 +621,7 @@ const orchestrator = {
         $('#co_export_all').on('click', () => {
             const data = ioModule.buildExport();
             ioModule.downloadExport(data);
-            self.toast(`Exported (${JSON.stringify(data).length} bytes)`);
+            self.toast(`Dışa aktarıldı (${JSON.stringify(data).length} bayt)`);
         });
 
         $('#co_export_memories').on('click', () => {
@@ -584,16 +647,16 @@ const orchestrator = {
                     const result = ioModule.applyImport(data, { mode: 'merge' });
                     if (result.ok) {
                         const statStr = Object.entries(result.stats).filter(([_, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(', ');
-                        $('#co_import_status').html(`<span style="color: #5a5;">✓ Imported (merge): ${statStr || 'no new items'}</span>`);
-                        self.toast(`Imported: ${statStr || 'nothing new'}`);
+                        $('#co_import_status').html(`<span style="color: #5a5;">✓ İçe aktarıldı (birleştir): ${statStr || 'yeni öğe yok'}</span>`);
+                        self.toast(`İçe aktarıldı: ${statStr || 'yeni bir şey yok'}`);
                         self.refreshAllPanels();
                     } else {
                         $('#co_import_status').html(`<span style="color: #c55;">✗ ${result.error}</span>`);
                         self.toast(result.error, 'error');
                     }
                 } catch (err) {
-                    $('#co_import_status').html(`<span style="color: #c55;">✗ Invalid JSON: ${err.message}</span>`);
-                    self.toast('Invalid JSON', 'error');
+                    $('#co_import_status').html(`<span style="color: #c55;">✗ Geçersiz JSON: ${err.message}</span>`);
+                    self.toast('Geçersiz JSON', 'error');
                 }
             };
             reader.readAsText(file);
@@ -652,7 +715,7 @@ const orchestrator = {
             if (!ctx.extensionSettings.magicTranslation) ctx.extensionSettings.magicTranslation = {};
             ctx.extensionSettings.magicTranslation.targetLanguage = $lang.val();
             ctx.saveSettingsDebounced();
-            self.toast(`Magic Translation: target → ${$lang.val()}`);
+            self.toast(`Çeviri hedef dili → ${$lang.val()}`);
             refresh();
         });
 
@@ -661,8 +724,281 @@ const orchestrator = {
             if (!ctx.extensionSettings.magicTranslation) ctx.extensionSettings.magicTranslation = {};
             ctx.extensionSettings.magicTranslation.autoMode = $auto.val();
             ctx.saveSettingsDebounced();
-            self.toast(`Magic Translation auto-mode: ${$auto.val()}`);
+            self.toast(`Otomatik çeviri modu: ${$auto.val()}`);
             refresh();
+        });
+    },
+
+    // ===== v0.3.0 — Spice / Heat / Limits / Aftercare wiring =====
+
+    wireSpicePanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'spice')) return;
+
+        // Heat meter cells hoverable
+        $('#co_spice_meter .co-heat-cell').on('mouseenter', function() {
+            const heat = $(this).data('heat');
+            const labels = ['güvenli', 'ima içeren', 'baharatlı', 'açık', 'yoğun'];
+            $(this).attr('title', `Seviye ${heat}: ${labels[heat]}`);
+        });
+
+        // Quick record
+        $('#co_spice_record').on('click', () => {
+            const score = Number($('#co_spice_quick').val());
+            const tagsRaw = $('#co_spice_tag_input').val().trim();
+            const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+            const r = spiceModule.record({ score, tags });
+            if (r) {
+                self.toast(`Spice kaydedildi: ${score}/4${tags.length ? ' (' + tags.length + ' etiket)' : ''}`);
+                $('#co_spice_tag_input').val('');
+                self.refreshSpicePanel();
+            }
+        });
+
+        // Scene start/end
+        $('#co_spice_start_scene').on('click', () => {
+            const name = prompt('Yeni sahne adı (opsiyonel):') || undefined;
+            spiceModule.startScene(name);
+            self.toast('Yeni sahne başlatıldı');
+            self.refreshSpicePanel();
+        });
+        $('#co_spice_end_scene').on('click', () => {
+            spiceModule.endScene();
+            self.toast('Sahne bitirildi');
+            self.refreshSpicePanel();
+        });
+
+        // Auto-tune toggle
+        $('#co_spice_autotune').on('change', function() {
+            const cfg = spiceModule.getLevels ? SillyTavern.getContext().extensionSettings.companion_orchestrator.spice : null;
+            if (cfg && cfg.config) {
+                cfg.config.autoTune = this.checked;
+                self.toast(`Spice otomatik sınıflandırma ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+        $('#co_spice_autotune_interval').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.spice?.config) {
+                ctx.extensionSettings.companion_orchestrator.spice.config.autoTuneInterval = Number(this.value);
+            }
+        });
+
+        // Auto-fade threshold
+        $('#co_spice_autofade').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.spice?.config) {
+                ctx.extensionSettings.companion_orchestrator.spice.config.autoFade = this.checked;
+                self.toast(`Otomatik fade-to-black ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+        $('#co_spice_fade_threshold').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.spice?.config) {
+                ctx.extensionSettings.companion_orchestrator.spice.config.fadeThreshold = Number(this.value);
+            }
+        });
+    },
+
+    refreshSpicePanel() {
+        if (!this.modules.find(m => m.name === 'spice')) return;
+        const heat = spiceModule.currentHeat();
+        // Heat meter cells: light up to current score
+        $('#co_spice_meter .co-heat-cell').each(function() {
+            const idx = Number($(this).data('heat'));
+            $(this).css('opacity', heat && idx <= heat.score ? 1 : 0.3);
+        });
+        if (heat) {
+            $('#co_spice_current').html(
+                `${heat.emoji} <strong>${heat.label}</strong> (${heat.score}/4) | ort: ${heat.average} | tepe: ${heat.peak} | ${heat.messageCount} mesaj`
+            );
+        } else {
+            $('#co_spice_current').html('<i>(henüz veri yok)</i>');
+        }
+        // Tag chips
+        const tags = spiceModule.getTags();
+        const $tagBox = $('#co_spice_tags');
+        $tagBox.empty();
+        if (tags.length === 0) {
+            $tagBox.html('<i style="opacity: 0.6; font-size: 0.9em;">(henüz etiket yok)</i>');
+        } else {
+            tags.slice(0, 12).forEach(t => {
+                $tagBox.append(
+                    `<span class="co-chip" style="background: rgba(127,127,127,0.2); padding: 2px 7px; border-radius: 10px; white-space: nowrap;">${this.kindTr ? this.kindTr(t.tr) : t.tr} <em style="opacity: 0.6;">×${t.count}</em></span>`
+                );
+            });
+        }
+        // Toggles state
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.spice?.config;
+        if (cfg) {
+            $('#co_spice_autotune').prop('checked', !!cfg.autoTune);
+            $('#co_spice_autotune_interval').val(String(cfg.autoTuneInterval || 4));
+            $('#co_spice_autofade').prop('checked', !!cfg.autoFade);
+            $('#co_spice_fade_threshold').val(String(cfg.fadeThreshold || 4));
+        }
+    },
+
+    wireLimitsPanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'limits')) return;
+
+        // Library dropdowns — populate once
+        const lib = limitsModule.getLibrary();
+        const $hard = $('#co_limits_hard_select');
+        const $soft = $('#co_limits_soft_select');
+        const $enjoy = $('#co_limits_enjoy_select');
+        $hard.empty(); $soft.empty(); $enjoy.empty();
+        const libKeys = Object.keys(lib);
+        libKeys.forEach(k => {
+            $hard.append(`<option value="${k}">${lib[k].tr} (${k})</option>`);
+            $soft.append(`<option value="${k}">${lib[k].tr} (${k})</option>`);
+            $enjoy.append(`<option value="${k}">${lib[k].tr} (${k})</option>`);
+        });
+
+        // Master inject toggle
+        $('#co_limits_inject').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (!ctx.extensionSettings.companion_orchestrator) return;
+            if (!ctx.extensionSettings.companion_orchestrator.limits) {
+                ctx.extensionSettings.companion_orchestrator.limits = { state: {}, enabled: false };
+            }
+            ctx.extensionSettings.companion_orchestrator.limits.enabled = this.checked;
+            ctx.saveSettingsDebounced();
+            self.toast(`Profil enjeksiyonu ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+        });
+
+        // Safeword save
+        $('#co_limits_safeword_save').on('click', () => {
+            const w = $('#co_limits_safeword').val().trim();
+            limitsModule.setSafeword(w);
+            self.toast(w ? `Güvenlik sözcüğü: ${w}` : 'Güvenlik sözcüğü silindi');
+            self.refreshLimitsPanel();
+        });
+
+        // Add handlers
+        $('#co_limits_hard_add').on('click', () => {
+            const k = $('#co_limits_hard_select').val();
+            const custom = $('#co_limits_hard_custom').val().trim();
+            const r = limitsModule.add({ type: 'hard', key: custom ? null : k, customLabel: custom || null });
+            if (r?.error) self.toast(r.error, 'warn');
+            else { self.toast('Sert sınır eklendi'); $('#co_limits_hard_custom').val(''); self.refreshLimitsPanel(); }
+        });
+        $('#co_limits_soft_add').on('click', () => {
+            const k = $('#co_limits_soft_select').val();
+            const r = limitsModule.add({ type: 'soft', key: k });
+            if (r?.error) self.toast(r.error, 'warn');
+            else { self.toast('Yumuşak sınır eklendi'); self.refreshLimitsPanel(); }
+        });
+        $('#co_limits_enjoy_add').on('click', () => {
+            const k = $('#co_limits_enjoy_select').val();
+            const r = limitsModule.add({ type: 'enjoy', key: k });
+            if (r?.error) self.toast(r.error, 'warn');
+            else { self.toast('Hoşlanılan eklendi'); self.refreshLimitsPanel(); }
+        });
+
+        // Notes (debounced)
+        let notesTimer = null;
+        $('#co_limits_notes').on('input', () => {
+            clearTimeout(notesTimer);
+            notesTimer = setTimeout(() => {
+                limitsModule.setNotes($('#co_limits_notes').val());
+            }, 600);
+        });
+    },
+
+    refreshLimitsPanel() {
+        if (!this.modules.find(m => m.name === 'limits')) return;
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.limits;
+        const profile = limitsModule.getProfile();
+
+        $('#co_limits_inject').prop('checked', !!(cfg && cfg.enabled));
+        $('#co_limits_safeword_current').html(
+            profile?.safeword ? `Mevcut: <strong>${profile.safeword}</strong>` : '<i>(tanımsız)</i>'
+        );
+        $('#co_limits_safeword').val('');
+        $('#co_limits_notes').val(profile?.notes || '');
+
+        const renderChips = (arr, containerSel, type) => {
+            const $box = $(containerSel);
+            $box.empty();
+            if (!arr || arr.length === 0) {
+                $box.html('<i style="opacity: 0.6; font-size: 0.9em;">(boş)</i>');
+                return;
+            }
+            arr.forEach(item => {
+                const color = type === 'hard' ? '#e36363' : type === 'soft' ? '#e6944b' : '#7ec07e';
+                $box.append(
+                    `<span class="co-chip" data-key="${item.key}" data-type="${type}" style="background: ${color}33; color: ${color}; padding: 3px 8px; border-radius: 10px; white-space: nowrap; cursor: pointer; border: 1px solid ${color}66;" title="Kaldır">${item.tr} ✕</span>`
+                );
+            });
+        };
+        renderChips(profile?.hardLimits, '#co_limits_hard_chips', 'hard');
+        renderChips(profile?.softLimits, '#co_limits_soft_chips', 'soft');
+        renderChips(profile?.enjoys, '#co_limits_enjoy_chips', 'enjoy');
+
+        // Click chip to remove
+        $('.co-chip[data-key]').off('click.chip').on('click.chip', function() {
+            const key = $(this).data('key');
+            const type = $(this).data('type');
+            limitsModule.remove({ type, key });
+            $(this).fadeOut(200, function() { $(this).remove(); });
+        });
+    },
+
+    wireAftercarePanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'aftercare')) return;
+
+        $('#co_aftercare_enabled').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.aftercare) {
+                ctx.extensionSettings.companion_orchestrator.aftercare.enabled = this.checked;
+                self.toast(`Aftercare ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+        $('#co_aftercare_sens').on('input', function() {
+            $('#co_aftercare_sens_val').text(this.value);
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.aftercare) {
+                ctx.extensionSettings.companion_orchestrator.aftercare.sensitivity = Number(this.value);
+            }
+        });
+        $('#co_aftercare_manual').on('click', async () => {
+            const r = await aftercareModule.apply({ note: 'manuel tetik' });
+            if (r) {
+                self.toast('Aftercare tetiklendi');
+                self.refreshAftercarePanel();
+            } else {
+                self.toast('Aftercare tetiklenemedi', 'warn');
+            }
+        });
+    },
+
+    refreshAftercarePanel() {
+        if (!this.modules.find(m => m.name === 'aftercare')) return;
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.aftercare;
+        if (cfg) {
+            $('#co_aftercare_enabled').prop('checked', !!cfg.enabled);
+            $('#co_aftercare_sens').val(cfg.sensitivity ?? 0.6);
+            $('#co_aftercare_sens_val').text(cfg.sensitivity ?? 0.6);
+        }
+        const history = aftercareModule.getHistory(10);
+        const $box = $('#co_aftercare_history');
+        $box.empty();
+        if (!history.length) {
+            $box.html('<i style="opacity: 0.6;">(henüz olay yok)</i>');
+            return;
+        }
+        history.forEach(h => {
+            const time = new Date(h.ts).toLocaleString('tr-TR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+            $box.append(
+                `<div style="padding: 4px 0; border-bottom: 1px dashed rgba(127,127,127,0.2);">
+                    <strong>${time}</strong> — ${h.charName || '?'} <em style="opacity: 0.7;">(${h.note})</em><br>
+                    <span style="opacity: 0.85;">Mood: ${h.moodAction?.from?.mood || '?'} → ${h.moodAction?.to?.mood || '?'} | +${(h.moodAction?.to?.affinity || 0) - (h.moodAction?.from?.affinity || 0)} aff, +${(h.moodAction?.to?.trust || 0) - (h.moodAction?.from?.trust || 0)} trust</span>
+                </div>`
+            );
         });
     },
 
@@ -679,6 +1015,25 @@ const orchestrator = {
     },
 
     // ===== Helpers =====
+
+    // Mood key → Türkçe label
+    moodTr(key) {
+        const map = {
+            neutral: 'nötr', happy: 'mutlu', sad: 'üzgün', flirty: 'flörtöz',
+            playful: 'şımarık', angry: 'kızgın', anxious: 'kaygılı', shy: 'utangaç',
+            confident: 'kendinden emin', tired: 'yorgun',
+            excited: 'heyecanlı', calm: 'sakin',
+        };
+        return map[key] || key;
+    },
+
+    // Memory kind → Türkçe label
+    kindTr(key) {
+        const map = {
+            note: 'not', fact: 'olgu', preference: 'tercih', event: 'olay', trait: 'özellik',
+        };
+        return map[key] || key;
+    },
 
     escapeHtml(s) {
         return String(s)
@@ -705,13 +1060,16 @@ const orchestrator = {
             return this.settings[k];
         }).map(m => m.displayName || m.name).join(', ');
         $('#co_status_bar').html(
-            `<strong>${charName || 'No character'}</strong> · ${enabledMods || 'all off'}`
+            `<strong>${charName || 'Karakter yok'}</strong> · ${enabledMods || 'hepsi kapalı'}`
         );
 
         if (this.settings.moodEnabled !== false) this.refreshMoodPanel();
         if (this.settings.scenariosEnabled !== false) this.refreshScenarioPanel();
         if (this.settings.promptsEnabled !== false) this.refreshPresetPanel();
         if (this.settings.memoryEnabled !== false) this.refreshMemoryPanel();
+        if (this.settings.spiceEnabled !== false) this.refreshSpicePanel();
+        if (this.settings.limitsEnabled !== false) this.refreshLimitsPanel();
+        if (this.settings.aftercareEnabled !== false) this.refreshAftercarePanel();
     },
 
     toast(msg, type = 'info') {

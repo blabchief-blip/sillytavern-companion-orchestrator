@@ -32,35 +32,35 @@ function fmtResult(s) {
 export const slashCommands = {
     help: () => {
         return [
-            'Companion Orchestrator — commands:',
-            '  /co help                       Show this help',
-            '  /co status                     Show module status + current mood',
-            '  /co mem add <text> [--imp N]   Add a memory (1-10 importance)',
-            '  /co mem list [--kind K]        List memories',
-            '  /co mem search <query>         Search memories',
-            '  /co mem clear                  Clear current character memories',
-            '  /co mood set <preset>          Set mood (preset name)',
-            '  /co mood get                   Show current mood/affinity/trust',
-            '  /co mood bump affinity=N trust=M  Adjust stats',
-            '  /co scene list                 List scenarios',
-            '  /co scene apply <key>          Apply a scenario',
-            '  /co scene create <key> <name>  Create custom (uses author note text)',
-            '  /co scene remove <key>         Remove custom scenario',
-            '  /co preset list                List prompt presets',
-            '  /co preset apply <key>         Apply a prompt preset',
-            '  /co lore suggest               Show world info suggestions',
+            'Companion Orchestrator — komutlar:',
+            '  /co help                       Bu yardımı göster',
+            '  /co status                     Modül durumunu + mevcut ruh halini göster',
+            '  /co mem add <metin> [--imp N]  Hafıza ekle (1-10 önem)',
+            '  /co mem list [--kind K]        Hafızaları listele',
+            '  /co mem search <sorgu>         Hafızalarda ara',
+            '  /co mem clear                  Mevcut karakterin hafızasını sil',
+            '  /co mood set <preset>          Ruh hali ayarla (preset adı)',
+            '  /co mood get                   Mevcut ruh hali/yakınlık/güven',
+            '  /co mood bump affinity=N trust=M  Değerleri ayarla',
+            '  /co scene list                 Senaryoları listele',
+            '  /co scene apply <key>          Bir senaryoyu uygula',
+            '  /co scene create <key> <ad>    Özel senaryo oluştur (yazar notu metni kullanır)',
+            '  /co scene remove <key>         Özel senaryoyu sil',
+            '  /co preset list                Stil presetlerini listele',
+            '  /co preset apply <key>         Stil uygula',
+            '  /co lore suggest               World info önerilerini göster',
         ].join('\n');
     },
 
     status: (orch) => {
         const mood = MOD.mood.summary();
-        const lines = ['Companion Orchestrator status:'];
+        const lines = ['Companion Orchestrator durum:'];
         for (const m of orch.modules) {
             const key = m.toggleKey || `${m.name}Enabled`;
-            const on = orch.settings[key] ? 'on' : 'off';
+            const on = orch.settings[key] ? 'açık' : 'kapalı';
             lines.push(`  ${m.displayName}: ${on}`);
         }
-        lines.push(`Current character: ${mood}`);
+        lines.push(`Mevcut karakter: ${mood}`);
         return lines.join('\n');
     },
 
@@ -84,32 +84,32 @@ export const slashCommands = {
             }
             const text = filtered.join(' ');
             const entry = MOD.memory.add({ content: text, importance });
-            return entry ? `Memory added (#${entry.id.slice(0, 8)}, imp ${entry.importance}).` : 'Failed (no active character?)';
+            return entry ? `Hafıza eklendi (#${entry.id.slice(0, 8)}, önem ${entry.importance}).` : 'Başarısız (aktif karakter yok?)';
         },
         list: (args) => {
             const kind = args.find(a => a.startsWith('--kind='))?.split('=')[1] || null;
             const list = MOD.memory.list({ kind });
-            if (!list.length) return '(no memories)';
-            return list.map((m, i) => `${i + 1}. [${m.kind}/imp ${m.importance}] ${m.content}`).join('\n');
+            if (!list.length) return '(hafıza yok)';
+            return list.map((m, i) => `${i + 1}. [${m.kind}/önem ${m.importance}] ${m.content}`).join('\n');
         },
         search: (args) => {
             const q = args.join(' ');
             const res = MOD.memory.search(q);
-            if (!res.length) return '(no matches)';
+            if (!res.length) return '(eşleşme yok)';
             return res.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
         },
         clear: () => {
             MOD.memory.clear();
-            return 'Memories cleared for this character.';
+            return 'Bu karakterin hafızası silindi.';
         },
     },
 
     mood: {
         set: (args) => {
             const name = args[0];
-            if (!name) return 'Usage: /co mood set <preset-name>';
+            if (!name) return 'Kullanım: /co mood set <preset-adı>';
             const r = MOD.mood.set({ mood: name });
-            return r ? `Mood set to ${r.mood}.` : 'Failed.';
+            return r ? `Ruh hali ${r.mood} olarak ayarlandı.` : 'Başarısız.';
         },
         get: () => MOD.mood.summary(),
         bump: (args) => {
@@ -118,7 +118,7 @@ export const slashCommands = {
             const aff = affArg ? Number(affArg.split('=')[1]) : 0;
             const trust = trustArg ? Number(trustArg.split('=')[1]) : 0;
             const r = MOD.mood.bump({ affinity: aff, trust });
-            return r ? `Updated. ${MOD.mood.summary()}` : 'Failed.';
+            return r ? `Güncellendi. ${MOD.mood.summary()}` : 'Başarısız.';
         },
     },
 
@@ -126,18 +126,18 @@ export const slashCommands = {
         list: () => {
             const all = MOD.scenarios.list();
             return Object.entries(all)
-                .map(([k, v]) => `  ${k}${v.builtin ? '' : ' (custom)'} — ${v.name}`)
+                .map(([k, v]) => `  ${k}${v.builtin ? '' : ' (özel)'} — ${v.name}`)
                 .join('\n');
         },
         apply: (args) => {
             const key = args[0];
-            if (!key) return 'Usage: /co scene apply <key>';
+            if (!key) return 'Kullanım: /co scene apply <anahtar>';
             const r = MOD.scenarios.apply(key);
-            return r.ok ? `Applied: ${r.scenario}` : `Failed: ${r.error}`;
+            return r.ok ? `Uygulandı: ${r.scenario}` : `Başarısız: ${r.error}`;
         },
         create: (args) => {
             const [key, ...rest] = args;
-            if (!key) return 'Usage: /co scene create <key> <name>';
+            if (!key) return 'Kullanım: /co scene create <anahtar> <ad>';
             return JSON.stringify(MOD.scenarios.create({ key, name: rest.join(' ') }));
         },
         remove: (args) => {
@@ -149,18 +149,18 @@ export const slashCommands = {
         list: () => {
             const all = MOD.prompts.list();
             return Object.entries(all)
-                .map(([k, v]) => `  ${k}${v.builtin ? '' : ' (custom)'} — ${v.name}: ${v.description || ''}`)
+                .map(([k, v]) => `  ${k}${v.builtin ? '' : ' (özel)'} — ${v.name}: ${v.description || ''}`)
                 .join('\n');
         },
         apply: (args) => {
             const key = args[0];
-            if (!key) return 'Usage: /co preset apply <key>';
+            if (!key) return 'Kullanım: /co preset apply <anahtar>';
             const r = MOD.prompts.apply(key);
-            return r.ok ? `Applied: ${r.preset}` : `Failed: ${r.error}`;
+            return r.ok ? `Uygulandı: ${r.preset}` : `Başarısız: ${r.error}`;
         },
         create: (args) => {
             const [key, ...rest] = args;
-            if (!key) return 'Usage: /co preset create <key> <name>';
+            if (!key) return 'Kullanım: /co preset create <anahtar> <ad>';
             return JSON.stringify(MOD.prompts.create({ key, name: rest.join(' ') }));
         },
         remove: (args) => JSON.stringify(MOD.prompts.remove(args[0])),
@@ -182,7 +182,7 @@ export function registerAllCommands(orch) {
     SlashCommandParser.addCommandObject({
         name: 'co',
         aliases: ['companion'],
-        help: 'Companion Orchestrator — manage memory, mood, scenarios, presets, lorebook. Use /co help for subcommands.',
+        help: 'Companion Orchestrator — hafıza, ruh hali, senaryo, stil ve lorebook yönetimi. Alt komutlar için /co help.',
         // Add a renderHelpItem method so ST's autocomplete dropdown doesn't crash.
         // ST calls `this.command.renderHelpItem(this.name)` when /co is typed in the chat input.
         // Without this, you get "TypeError: this.command.renderHelpItem is not a function"
@@ -231,33 +231,33 @@ export function registerAllCommands(orch) {
                 const action = args[1] || 'list';
                 const rest = args.slice(2);
                 if (slashCommands.mem[action]) return slashCommands.mem[action](rest);
-                return `Unknown mem action: ${action}. Try: add, list, search, clear`;
+                return `Bilinmeyen hafıza eylemi: ${action}. Şunları dene: add, list, search, clear`;
             }
             if (sub === 'mood') {
                 const action = args[1] || 'get';
                 const rest = args.slice(2);
                 if (slashCommands.mood[action]) return slashCommands.mood[action](rest);
-                return `Unknown mood action: ${action}. Try: set, get, bump`;
+                return `Bilinmeyen ruh hali eylemi: ${action}. Şunları dene: set, get, bump`;
             }
             if (sub === 'scene') {
                 const action = args[1] || 'list';
                 const rest = args.slice(2);
                 if (slashCommands.scene[action]) return slashCommands.scene[action](rest);
-                return `Unknown scene action: ${action}. Try: list, apply, create, remove`;
+                return `Bilinmeyen senaryo eylemi: ${action}. Şunları dene: list, apply, create, remove`;
             }
             if (sub === 'preset') {
                 const action = args[1] || 'list';
                 const rest = args.slice(2);
                 if (slashCommands.preset[action]) return slashCommands.preset[action](rest);
-                return `Unknown preset action: ${action}. Try: list, apply, create, remove`;
+                return `Bilinmeyen preset eylemi: ${action}. Şunları dene: list, apply, create, remove`;
             }
             if (sub === 'lore') {
                 const action = args[1] || 'suggest';
                 const rest = args.slice(2);
                 if (slashCommands.lore[action]) return slashCommands.lore[action](rest);
-                return `Unknown lore action: ${action}. Try: suggest`;
+                return `Bilinmeyen lorebook eylemi: ${action}. Şunları dene: suggest`;
             }
-            return `Unknown subcommand: ${sub}. Try: /co help`;
+            return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
         },
         namedArguments: [],
     });

@@ -44,7 +44,7 @@ function save() {
 
 export const memoryModule = {
     name: 'memory',
-    displayName: 'Memory Bank',
+    displayName: 'Hafıza Bankası',
     description: 'Per-character persistent memory entries (facts, events, preferences).',
     toggleKey: 'memoryEnabled',
 

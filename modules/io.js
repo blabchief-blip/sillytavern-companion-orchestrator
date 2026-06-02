@@ -17,7 +17,7 @@ function save() {
 
 export const ioModule = {
     name: 'io',
-    displayName: 'Export / Import',
+    displayName: 'Dışa / İçe Aktar',
     description: 'Backup and restore memory bank, mood, scenarios, and custom presets.',
 
     async init(orch) {

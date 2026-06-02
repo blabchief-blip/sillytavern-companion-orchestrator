@@ -98,6 +98,32 @@ const BUILTIN_PRESETS = {
         description: 'Grounded, observational, real-world fidelity.',
         systemAddition: '[Writing style: Realistic and documentary. Grounded in sensory detail. Mundane objects matter. People do not narrate eloquently; they hesitate, restart, talk past each other. Realism is the craft.]',
     },
+    // v0.3.0 — Director's Cut presets
+    aftercare_soft: {
+        name: 'Aftercare / Tender',
+        description: 'Post-scene tenderness — breath, holding, soft dialogue.',
+        systemAddition: '[Writing style: Aftercare. The scene has peaked; now is the breath, the holding, the small words. Focus on physical closeness without escalation. Dialogue should be quiet, half-finished, honest. Hands, hair, warmth. No escalation. The reader should feel held.]',
+    },
+    fade_artist: {
+        name: 'Fade Artist',
+        description: 'Captures the moment, transitions gracefully to aftermath.',
+        systemAddition: '[Writing style: Fade artist. When a scene approaches its emotional peak, write a single paragraph that crystallizes the moment — sensation, breath, a held image — then transition naturally to aftermath. Never depict the peak explicitly. The power is in the cut.]',
+    },
+    tasteful_explicit: {
+        name: 'Tasteful / Explicit',
+        description: 'Sensation, emotion, breath; no crude language.',
+        systemAddition: '[Writing style: Tasteful explicit. When writing intimate content, focus on sensation, breath, sound, and emotion over mechanical detail. Use metaphor sparingly and only when it earns its place. Maintain character voice throughout. Avoid crude or clinical language. The body speaks; the prose translates.]',
+    },
+    kinetic_intense: {
+        name: 'Kinetic / Intense',
+        description: 'Fast, urgent, visceral, present tense.',
+        systemAddition: '[Writing style: Kinetic and intense. Short sentences. Present tense. Every word must pull weight. Sensation is immediate. There is no time to think. The scene is happening NOW. Urgency is the rhythm.]',
+    },
+    slow_seduction: {
+        name: 'Slow Seduction',
+        description: 'Anticipation, glances, almost-touches, mounting heat.',
+        systemAddition: '[Writing style: Slow seduction. The scene is about what has not yet happened. Clothing, glances, almost-touches. Lingering on detail that would normally be rushed. The reader should feel the heat through delay. Restraint creates the charge.]',
+    },
 };
 
 let _orch = null;
@@ -116,7 +142,7 @@ function save() {
 
 export const promptsModule = {
     name: 'prompts',
-    displayName: 'Prompt Enhancer',
+    displayName: 'Prompt Geliştirici',
     description: 'Apply writing-style presets that inject style directives into the system prompt.',
     toggleKey: 'promptsEnabled',
 

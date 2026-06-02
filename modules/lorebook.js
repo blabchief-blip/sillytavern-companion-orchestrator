@@ -20,7 +20,7 @@ function save() {
 
 export const lorebookModule = {
     name: 'lorebook',
-    displayName: 'Auto-Lorebook',
+    displayName: 'Otomatik Lorebook',
     description: 'Suggests world info entries based on chat context. Manual / suggest command.',
     toggleKey: 'lorebookEnabled',
 

@@ -59,7 +59,7 @@ function save() {
 
 export const scenariosModule = {
     name: 'scenarios',
-    displayName: 'Scenario Templates',
+    displayName: 'Senaryo Şablonları',
     description: 'One-click scenario presets (system prompt + author note + lorebook).',
     toggleKey: 'scenariosEnabled',
 

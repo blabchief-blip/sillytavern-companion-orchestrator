@@ -9,11 +9,16 @@ let _orch = null;
 let _ctx = null;
 
 function getStore() {
+    // Master preset listesi — UI dropdown ve .includes() validation tek kaynaktan geçer
+    const DEFAULT_PRESETS = ['neutral', 'happy', 'sad', 'flirty', 'playful', 'angry', 'anxious', 'shy', 'confident', 'tired', 'excited', 'calm'];
     if (!_orch.settings.mood) {
-        _orch.settings.mood = { state: {}, presets: ['neutral', 'happy', 'sad', 'angry', 'flirty', 'tired', 'excited', 'calm'] };
+        _orch.settings.mood = { state: {}, presets: DEFAULT_PRESETS.slice() };
     }
     if (!_orch.settings.mood.state) _orch.settings.mood.state = {};
-    if (!_orch.settings.mood.presets) _orch.settings.mood.presets = ['neutral', 'happy', 'sad', 'angry', 'flirty', 'tired', 'excited', 'calm'];
+    if (!_orch.settings.mood.presets || !Array.isArray(_orch.settings.mood.presets) || _orch.settings.mood.presets.length < DEFAULT_PRESETS.length) {
+        // Eski/yetersiz preset listesi — default preset listesine sıfırla (UI ile senkron)
+        _orch.settings.mood.presets = DEFAULT_PRESETS.slice();
+    }
     return _orch.settings.mood;
 }
 
@@ -47,7 +52,7 @@ function save() {
 
 export const moodModule = {
     name: 'mood',
-    displayName: 'Mood & Relationship',
+    displayName: 'Ruh Hali & İlişki',
     description: 'Track per-character mood, affinity, and trust across sessions.',
     toggleKey: 'moodEnabled',
 
@@ -100,8 +105,8 @@ export const moodModule = {
 
     summary() {
         const bucket = ensureBucket();
-        if (!bucket) return '(no character)';
-        return `mood: ${bucket.mood} | affinity: ${bucket.affinity}/10 | trust: ${bucket.trust}/10`;
+        if (!bucket) return '(karakter yok)';
+        return `ruh hali: ${bucket.mood} | yakınlık: ${bucket.affinity}/10 | güven: ${bucket.trust}/10`;
     },
 
     /**
