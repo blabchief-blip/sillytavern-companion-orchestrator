@@ -177,8 +177,8 @@ class SpiceIntensify {
     this.orch = orch;
     if (!orch.settings.spice_intensify) {
       orch.settings.spice_intensify = {
-        // 0=soft (default), 1=intensify, 2=lora_aware
-        intensityTier: 0,
+        // 0=soft, 1=intensify, 2=lora_aware (default — patron's preference)
+        intensityTier: 2,
         // Per-LoRA enable toggle
         enabledLoras: {
           'Mystic-XXX-ZIT-V7': true,
@@ -193,6 +193,10 @@ class SpiceIntensify {
         // Per-tier minimum spice
         minSpice: 0, // 0=any spice, 4=explicit only
       };
+    } else {
+      // v0.6.2 migration: existing user — force tier 2 (patron's preference)
+      // Kullanıcı isterse UI'dan tier 0/1'e çekebilir
+      orch.settings.spice_intensify.intensityTier = 2;
     }
   }
 

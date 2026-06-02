@@ -552,11 +552,22 @@ class AutoGen {
 
   _getSpiceTags() {
     const orch = this.orch;
-    const s = orch.settings.spiceData || orch.settings.spice;
+    // v0.6.2: Spice state is at orch.settings.spice.state[charId].current
+    // Legacy fallbacks: spiceData, spice[charId].level
+    let s = orch.settings.spice;
     if (!s) return [];
 
     const charId = this.ctx.characterId;
-    const level = s[charId]?.level ?? s.currentLevel ?? 0;
+    let level = 0;
+    if (s.state) {
+      // v0.6.2 spice module structure: state[charId] (key may be string or number)
+      level = s.state[charId]?.current ?? s.state[String(charId)]?.current ?? 0;
+    } else if (s[charId]) {
+      // legacy: s[charId].level
+      level = s[charId].level ?? 0;
+    } else if (s.currentLevel !== undefined) {
+      level = s.currentLevel;
+    }
     const clampedLevel = Math.min(Math.max(level, 0), 4);
 
     // Guard rail: explicit (spice 4) tag'ler sadece yetişkin karakterler için
@@ -619,9 +630,12 @@ class AutoGen {
 
   _getCurrentSpice() {
     const orch = this.orch;
-    const s = orch.settings.spiceData || orch.settings.spice;
+    const s = orch.settings.spice;
     if (!s) return 0;
     const charId = this.ctx?.characterId;
+    if (s.state) {
+      return s.state[charId]?.current ?? s.state[String(charId)]?.current ?? 0;
+    }
     return s[charId]?.level ?? s.currentLevel ?? 0;
   }
 
