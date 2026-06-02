@@ -23,7 +23,7 @@ import { stmbBridgeModule } from './modules/stmb_bridge.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -141,6 +141,22 @@ const orchestrator = {
             templateData
         );
         $('#extensions_settings2').append(html);
+
+        // Inject floating spice badge (chat'te sağ üst köşe) — v0.4.1
+        if ($('#co_spice_badge').length === 0) {
+            $('body').append(`
+                <div id="co_spice_badge" class="co-floating-badge" title="Spice / Heat — Companion Orchestrator">
+                    <span class="co-badge-emoji">🟢</span>
+                    <span class="co-badge-text">güvenli</span>
+                </div>
+            `);
+            // Click → drawer'ı aç
+            $('#co_spice_badge').on('click', () => {
+                const drawer = Array.from(document.querySelectorAll('.inline-drawer-toggle'))
+                    .find(el => el.textContent.includes('Companion Orchestrator'));
+                if (drawer) drawer.click();
+            });
+        }
 
         // Hydrate UI from current settings
         $('#co_enabled').prop('checked', !!this.settings.enabled);
@@ -755,6 +771,7 @@ const orchestrator = {
                 self.toast(`Spice kaydedildi: ${score}/4${tags.length ? ' (' + tags.length + ' etiket)' : ''}`);
                 $('#co_spice_tag_input').val('');
                 self.refreshSpicePanel();
+                self.refreshSpiceBadge();
             }
         });
 
@@ -764,11 +781,13 @@ const orchestrator = {
             spiceModule.startScene(name);
             self.toast('Yeni sahne başlatıldı');
             self.refreshSpicePanel();
+            self.refreshSpiceBadge();
         });
         $('#co_spice_end_scene').on('click', () => {
             spiceModule.endScene();
             self.toast('Sahne bitirildi');
             self.refreshSpicePanel();
+            self.refreshSpiceBadge();
         });
 
         // Auto-tune toggle
@@ -1074,6 +1093,53 @@ const orchestrator = {
         if (this.settings.limitsEnabled !== false) this.refreshLimitsPanel();
         if (this.settings.aftercareEnabled !== false) this.refreshAftercarePanel();
         if (this.settings.stmbBridgeEnabled !== false) this.refreshStmbBridgePanel();
+        this.refreshSpiceBadge();
+    },
+
+    // ===== v0.4.1 — Floating Spice Badge =====
+
+    refreshSpiceBadge() {
+        const $badge = $('#co_spice_badge');
+        if ($badge.length === 0) return;
+        // Eğer spice kapalıysa badge gizle
+        if (this.settings.spiceEnabled === false) {
+            $badge.hide();
+            return;
+        }
+        // Karakter yoksa default gçster
+        const ctx = SillyTavern?.getContext?.();
+        const charId = ctx?.characterId;
+        const charName = ctx?.characters?.[charId]?.name;
+        if (charId === undefined || charId === null) {
+            $badge.html('<span class="co-badge-emoji">⚪</span><span class="co-badge-text">karakter yok</span>');
+            $badge.attr('data-heat', '-1');
+            $badge.show();
+            return;
+        }
+        // Heat verisi
+        if (!this.modules.find(m => m.name === 'spice')) {
+            $badge.hide();
+            return;
+        }
+        const heat = spiceModule.currentHeat();
+        if (!heat) {
+            $badge.html('<span class="co-badge-emoji">⚪</span><span class="co-badge-text">veri yok</span>');
+            $badge.attr('data-heat', '-1');
+            $badge.show();
+            return;
+        }
+        // Emoji + label + skor
+        let subText = '';
+        if (heat.messageCount > 0) {
+            subText = ` ${heat.score}/4${heat.messageCount > 1 ? ` (ort ${heat.average})` : ''}`;
+        }
+        $badge.html(
+            `<span class="co-badge-emoji">${heat.emoji}</span>` +
+            `<span class="co-badge-text">${heat.label}${subText}</span>`
+        );
+        $badge.attr('data-heat', String(heat.score));
+        $badge.attr('title', `${charName} — heat: ${heat.label} (${heat.score}/4) | ortalama: ${heat.average} | tepe: ${heat.peak}`);
+        $badge.show();
     },
 
     // ===== v0.4.0 — STMB Bridge wiring =====

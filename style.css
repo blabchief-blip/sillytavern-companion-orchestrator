@@ -137,3 +137,51 @@
 .companion-orchestrator-settings input[type="range"]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
 }
+
+/* ===== v0.4.1 — Floating Spice Badge ===== */
+.co-floating-badge {
+    position: fixed;
+    top: 80px;  /* sağ üst köşe, header'ın altında */
+    right: 16px;
+    z-index: 9999;
+    background: rgba(20, 20, 20, 0.85);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 18px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform 0.15s ease, background 0.2s ease, opacity 0.2s ease;
+    opacity: 0.92;
+}
+.co-floating-badge:hover {
+    transform: scale(1.05);
+    opacity: 1;
+}
+.co-floating-badge .co-badge-emoji {
+    font-size: 1.05em;
+    line-height: 1;
+}
+.co-floating-badge .co-badge-text {
+    white-space: nowrap;
+    line-height: 1;
+}
+/* Heat seviyesine göre sol border (renk ipucu) */
+.co-floating-badge[data-heat="0"] { border-left: 3px solid #7ec07e; }
+.co-floating-badge[data-heat="1"] { border-left: 3px solid #e6c66b; }
+.co-floating-badge[data-heat="2"] { border-left: 3px solid #e6944b; }
+.co-floating-badge[data-heat="3"] { border-left: 3px solid #e36363; }
+.co-floating-badge[data-heat="4"] { border-left: 3px solid #c14e9b; animation: co-pulse 1.6s ease-in-out infinite; }
+.co-floating-badge[data-heat="-1"] { border-left: 3px solid #888; opacity: 0.5; }
+
+@keyframes co-pulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(193, 78, 155, 0.4); }
+    50% { box-shadow: 0 2px 16px rgba(193, 78, 155, 0.8); }
+}
