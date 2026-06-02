@@ -75,6 +75,11 @@
                 <span><strong>Avatar Profili</strong> — <em style="opacity: 0.75;">Karakter description'ından fiziksel özellikleri regex ile parse eder.</em></span>
             </label>
 
+            <label class="checkbox_label" for="co_kazumaBridgeEnabled" title="Companion state'ini Image Gen Kazuma'nın prompt'una zenginleştirir.">
+                <input id="co_kazumaBridgeEnabled" type="checkbox" checked />
+                <span><strong>Kazuma Köprüsü</strong> — <em style="opacity: 0.75;">Companion'ın state'ini Kazuma prompt'una zenginleştirir (Kazuma yüklüyse).</em></span>
+            </label>
+
             <hr />
             <!-- ============ MOOD & RELATIONSHIP UI ============ -->
             <div class="co-module-panel" data-module="mood">
@@ -434,7 +439,114 @@
             </div>
 
             <hr />
-            <!-- ============ IMAGE GEN / COMFYUI UI ============ -->
+            <!-- ============ KAZUMA BRIDGE UI ============ -->
+            <div class="co-module-panel" data-module="kazuma_bridge">
+                <h4>🌉 Kazuma Köprüsü <span style="font-size: 0.7em; opacity: 0.7;">(v0.5.1+)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Companion'ın state-aware verilerini (avatar profili, ruh hali, spice, sahne) <strong>Image Gen Kazuma</strong> extension'ının prompt'una otomatik enjekte eder. Kazuma zaten her mesajda ComfyUI'a gönderiyor; biz sadece prompt'u zenginleştiriyoruz.
+                </p>
+
+                <div id="co_kazuma_status" style="padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px; font-size: 0.85em;">
+                    <i>Kazuma kontrol ediliyor…</i>
+                </div>
+
+                <div class="co-row" style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                    <label class="checkbox_label" for="co_kazuma_inject_avatar" style="font-size: 0.85em;">
+                        <input id="co_kazuma_inject_avatar" type="checkbox" />
+                        <span>Avatar Profili</span>
+                    </label>
+                    <label class="checkbox_label" for="co_kazuma_inject_mood" style="font-size: 0.85em;">
+                        <input id="co_kazuma_inject_mood" type="checkbox" />
+                        <span>Ruh Hali</span>
+                    </label>
+                    <label class="checkbox_label" for="co_kazuma_inject_spice" style="font-size: 0.85em;">
+                        <input id="co_kazuma_inject_spice" type="checkbox" />
+                        <span>Spice (atmosfer)</span>
+                    </label>
+                    <label class="checkbox_label" for="co_kazuma_inject_scenario" style="font-size: 0.85em;">
+                        <input id="co_kazuma_inject_scenario" type="checkbox" />
+                        <span>Sahne</span>
+                    </label>
+                </div>
+
+                <h5 style="margin-top: 10px; margin-bottom: 4px;">Son Zenginleştirme</h5>
+                <div id="co_kazuma_last_prompt" style="font-size: 0.8em; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px; max-height: 100px; overflow-y: auto; word-break: break-word;">
+                    <i style="opacity: 0.6;">(henüz zenginleştirme yapılmadı)</i>
+                </div>
+
+                <h5 style="margin-top: 10px; margin-bottom: 4px;">Geçmiş (son 5)</h5>
+                <div id="co_kazuma_history" class="co-list-panel" style="font-size: 0.8em; max-height: 100px; overflow-y: auto;">
+                    <i style="opacity: 0.6;">(henüz yok)</i>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ v0.5.2 AUTOGEN - COMPANION OWN PIPELINE ============ -->
+            <div class="co-module-panel" data-module="auto_gen">
+                <h4>🎬 Otomatik Üretici <span style="font-size: 0.7em; opacity: 0.7;">(Companion Pipeline · v0.5.2)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    AI mesajı geldiğinde Companion'ın kendi pipeline'ı görsel üretir. Kazuma'yı bypass eder; avatar/mood/spice/scenario context'i otomatik enjekte edilir.
+                </p>
+
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;">
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="co_autogen_enabled" checked>
+                        <strong>Master Toggle (AÇIK)</strong>
+                    </label>
+                    <span style="opacity: 0.5;">|</span>
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        Tetikleme:
+                        <select id="co_autogen_trigger" style="padding: 2px 6px;">
+                            <option value="ai">AI mesajı (önerilen)</option>
+                            <option value="user">Kullanıcı mesajı</option>
+                            <option value="both">İkisi de</option>
+                            <option value="manual">Sadece manuel</option>
+                        </select>
+                    </label>
+                    <button id="co_autogen_now" class="menu_button" type="button" style="padding: 4px 10px; background: #4a4; color: #fff; border: 0; border-radius: 3px; cursor: pointer;">
+                        ▶ Şimdi Üret
+                    </button>
+                </div>
+
+                <div id="co_autogen_status" style="padding: 4px 8px; background: rgba(127,127,127,0.1); border-radius: 3px; font-size: 0.85em; margin: 4px 0;">
+                    (yükleniyor...)
+                </div>
+
+                <details style="margin-top: 6px;">
+                    <summary style="cursor: pointer; font-size: 0.9em; opacity: 0.8;">⚙️ Companion State Injection</summary>
+                    <div style="padding: 8px 0; display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85em;">
+                        <label><input type="checkbox" id="co_autogen_use_avatar" checked> Avatar Profili</label>
+                        <label><input type="checkbox" id="co_autogen_use_mood" checked> Ruh Hali</label>
+                        <label><input type="checkbox" id="co_autogen_use_spice" checked> Spice / Atmosphere</label>
+                        <label><input type="checkbox" id="co_autogen_use_scenario" checked> Senaryo Şablonu</label>
+                        <label><input type="checkbox" id="co_autogen_inject_chat" checked> Görseli chat'e inject</label>
+                        <label><input type="checkbox" id="co_autogen_debug"> Debug log</label>
+                    </div>
+                </details>
+
+                <details style="margin-top: 4px;">
+                    <summary style="cursor: pointer; font-size: 0.9em; opacity: 0.8;">⚙️ ComfyUI Ayarları</summary>
+                    <div style="padding: 8px 0; display: grid; grid-template-columns: 1fr 2fr; gap: 6px 12px; font-size: 0.85em; align-items: center;">
+                        <label>Workflow:</label>
+                        <select id="co_autogen_workflow"><option value="6Lora-CyberReal.json">6Lora-CyberReal.json</option></select>
+                        <label>Throttle (ms):</label>
+                        <input type="number" id="co_autogen_throttle" min="0" step="500" value="8000" style="padding: 2px 6px;">
+                        <label>Negative prompt:</label>
+                        <input type="text" id="co_autogen_negative" value="lowres, bad anatomy, bad hands, blurry, watermark, text" style="padding: 2px 6px; font-family: monospace; font-size: 0.85em;">
+                    </div>
+                </details>
+
+                <details open style="margin-top: 6px;">
+                    <summary style="cursor: pointer; font-size: 0.9em; opacity: 0.8;">🖼️ Son Üretimler (son 5)</summary>
+                    <div id="co_autogen_history" class="co-list-panel" style="margin-top: 6px; max-height: 200px; overflow-y: auto; font-size: 0.85em;">
+                        <i style="opacity: 0.6;">(henüz üretim yapılmadı)</i>
+                    </div>
+                </details>
+            </div>
+
+            <hr />
+            <!-- ============ IMAGE GEN / COMFYUI UI (DEPRECATED) ============ -->
+            <!-- v0.5.1: Bu panel kullanımdan kaldırıldı. Image Gen Kazuma extension'ı kullanılıyor. -->
             <div class="co-module-panel" data-module="image_gen">
                 <h4>🎨 Görsel Üretici <span style="font-size: 0.7em; opacity: 0.7;">(ComfyUI)</span></h4>
                 <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">

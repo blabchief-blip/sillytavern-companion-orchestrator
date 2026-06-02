@@ -1,0 +1,13 @@
+{
+  "4": {"inputs": {"ckpt_name": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"}, "class_type": "CheckpointLoaderSimple"},
+  "5": {"inputs": {"width": 832, "height": 1216, "batch_size": 1}, "class_type": "EmptyLatentImage"},
+  "6": {"inputs": {"text": "*input*", "clip": ["35", 0]}, "class_type": "CLIPTextEncode"},
+  "7": {"inputs": {"text": "*ninput*", "clip": ["35", 0]}, "class_type": "CLIPTextEncode"},
+  "8": {"inputs": {"samples": ["3", 0], "vae": ["4", 2]}, "class_type": "VAEDecode"},
+  "9": {"inputs": {"filename_prefix": "6Lora-Pony", "images": ["8", 0]}, "class_type": "SaveImage"},
+  "3": {"inputs": {"seed": 12345, "steps": 25, "cfg": 7, "sampler_name": "euler_ancestral", "scheduler": "karras", "denoise": 1, "model": ["35", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]}, "class_type": "KSampler"},
+  "35": {"inputs": {"lora_name": "*lora*", "strength_model": 0.8, "strength_clip": 0.8, "model": ["36", 0], "clip": ["36", 1]}, "class_type": "LoraLoader"},
+  "36": {"inputs": {"lora_name": "*lora2*", "strength_model": 0.8, "strength_clip": 0.8, "model": ["37", 0], "clip": ["37", 1]}, "class_type": "LoraLoader"},
+  "37": {"inputs": {"lora_name": "*lora3*", "strength_model": 0.8, "strength_clip": 0.8, "model": ["38", 0], "clip": ["38", 1]}, "class_type": "LoraLoader"},
+  "38": {"inputs": {"lora_name": "*lora4*", "strength_model": 0.8, "strength_clip": 0.8, "model": ["4", 0], "clip": ["4", 1]}, "class_type": "LoraLoader"}
+}

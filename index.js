@@ -22,10 +22,12 @@ import { aftercareModule } from './modules/aftercare.js';
 import { stmbBridgeModule } from './modules/stmb_bridge.js';
 import { imageGenModule } from './modules/image_gen.js';
 import { avatarDescModule } from './modules/avatar_desc.js';
+import { kazumaBridgeModule } from './modules/kazuma_bridge.js';
+import { autoGenModule } from './modules/auto_gen.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.5.0';
+const VERSION = '0.5.2';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -41,6 +43,8 @@ const defaultSettings = Object.freeze({
     stmbBridgeEnabled: true,
     imageGenEnabled: true,
     avatarDescEnabled: true,
+    kazumaBridgeEnabled: true,
+    autoGenEnabled: true,
     // Global
     debugLogging: false,
     autoSaveInterval: 30, // seconds
@@ -98,7 +102,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -205,6 +209,8 @@ const orchestrator = {
         this.wireAftercarePanel();
         this.wireStmbBridgePanel();
         this.wireImageGenPanel();
+        this.wireKazumaBridgePanel();
+        this.wireAutoGenPanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1100,6 +1106,8 @@ const orchestrator = {
         if (this.settings.stmbBridgeEnabled !== false) this.refreshStmbBridgePanel();
         if (this.settings.imageGenEnabled !== false) this.refreshImageGenPanel();
         if (this.settings.avatarDescEnabled !== false) this.refreshImageGenPanel();
+        if (this.settings.kazumaBridgeEnabled !== false) this.refreshKazumaBridgePanel();
+        if (this.settings.autoGenEnabled !== false) this.refreshAutoGenPanel();
         this.refreshSpiceBadge();
     },
 
@@ -1360,6 +1368,252 @@ const orchestrator = {
                 const path = h.imagePath || '(yol alınamadı)';
                 $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2); font-size: 0.85em;"><strong>${time}</strong> ${h.characterName ? '[' + h.characterName + ']' : ''} — ${path}<br><em style="opacity: 0.6;">${h.positive || ''}</em></div>`);
             }
+        });
+    },
+
+    /**
+     * v0.5.1: Monkey-patch Kazuma'nın generateWithComfy'sini.
+     * Prompt Companion tarafından zenginleştirilir.
+     * Not: Bu basit bir sub-agent pattern'i. Kazuma'nın kaynak kodu değişmez.
+     */
+    patchKazumaGenerate() {
+        if (!this.modules.find(m => m.name === 'kazuma_bridge')) return;
+        // Kazuma'nın global API'si yok ama internal extension'ı üzerinden erişilebilir.
+        // generateWithComfy ST extension'ın private scope'unda, monkey-patch edemeyiz.
+        // Bunun yerine: Kazuma'nın *input* placeholder'ına Companion state'i
+        // ComfyUI prompt gönderilmeden ÖNCE enjekte edilecek. Bunu Companion'ın
+        // onMessageReceived'ında yapabiliriz: Kazuma'ın generateWithComfy'si
+        // çağrıldığında *input* zaten extension_settings'te tutulmuyor, ama
+        // 'customNegative' alanı üzerinden trick yapabiliriz.
+        //
+        // ALTERNATİF (gerçek): Companion kendi image_gen modülünü kullanmaya
+        // devam eder, Kazuma ise kendi başına çalışır. İkisi throttle ile
+        // kontrol edilir (cooldown süresi). Kullanıcı ayarından birini seçer.
+        //
+        // Bu fonksiyon şu an placeholder. v0.5.2'de Arif-salah'ın extension'ı
+        // window.generateWithComfy expose ederse burada bridge kurulacak.
+    },
+
+    wireKazumaBridgePanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'kazuma_bridge')) return;
+        const kb = this.modules.find(m => m.name === 'kazuma_bridge');
+
+        // Inject toggles
+        $('#co_kazuma_inject_avatar').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.kazuma_bridge) {
+                ctx.extensionSettings.companion_orchestrator.kazuma_bridge.injectAvatarDesc = this.checked;
+            }
+        });
+        $('#co_kazuma_inject_mood').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.kazuma_bridge) {
+                ctx.extensionSettings.companion_orchestrator.kazuma_bridge.injectMood = this.checked;
+            }
+        });
+        $('#co_kazuma_inject_spice').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.kazuma_bridge) {
+                ctx.extensionSettings.companion_orchestrator.kazuma_bridge.injectSpice = this.checked;
+            }
+        });
+        $('#co_kazuma_inject_scenario').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            if (ctx.extensionSettings?.companion_orchestrator?.kazuma_bridge) {
+                ctx.extensionSettings.companion_orchestrator.kazuma_bridge.injectScenario = this.checked;
+            }
+        });
+    },
+
+    refreshKazumaBridgePanel() {
+        if (!this.modules.find(m => m.name === 'kazuma_bridge')) return;
+        const kb = this.modules.find(m => m.name === 'kazuma_bridge');
+        const ctx = SillyTavern.getContext();
+        const cfg = ctx.extensionSettings?.companion_orchestrator?.kazuma_bridge || {};
+
+        // Status
+        if (kb.isKazumaInstalled()) {
+            const ks = ctx.extensionSettings['Image-gen-kazuma'];
+            const autoGen = ks?.autoGenEnabled ? '✅' : '❌';
+            $('#co_kazuma_status').html(
+                `✅ <strong>Kazuma yüklü</strong> · URL: ${ks.comfyUrl} · Model: ${ks.selectedModel || '(default)'} · Auto-gen: ${autoGen} (her ${ks.autoGenFreq} mesaj)`
+            );
+        } else {
+            $('#co_kazuma_status').html(
+                "<i style=\"color: #c55;\">❌ Image Gen Kazuma extension'ı yüklü değil. ST Extension Installer'dan yükleyin.</i>"
+            );
+        }
+
+        // Toggles
+        $('#co_kazuma_inject_avatar').prop('checked', cfg.injectAvatarDesc !== false);
+        $('#co_kazuma_inject_mood').prop('checked', cfg.injectMood !== false);
+        $('#co_kazuma_inject_spice').prop('checked', cfg.injectSpice !== false);
+        $('#co_kazuma_inject_scenario').prop('checked', cfg.injectScenario !== false);
+
+        // Last prompt
+        const last = kb.getLastPrompt();
+        if (last.prompt) {
+            const time = new Date(last.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            $('#co_kazuma_last_prompt').html(
+                `<em style="opacity: 0.6;">[${time}]</em><br>${last.prompt}`
+            );
+        } else {
+            $('#co_kazuma_last_prompt').html('<i style="opacity: 0.6;">(henüz zenginleştirme yapılmadı)</i>');
+        }
+
+        // History
+        const history = kb.getHistory(5);
+        const $box = $('#co_kazuma_history');
+        $box.empty();
+        if (!history.length) {
+            $box.html('<i style="opacity: 0.6;">(henüz yok)</i>');
+            return;
+        }
+        history.forEach(h => {
+            const time = new Date(h.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2);"><strong>${time}</strong> · +${h.partsAdded} tag<br><em style="opacity: 0.6; font-size: 0.9em;">${h.enriched}</em></div>`);
+        });
+    },
+
+    // ================================================================
+    // AutoGen Panel (v0.5.2 - Companion's own image gen pipeline)
+    // ================================================================
+    wireAutoGenPanel() {
+        if (!this.modules.find(m => m.name === 'auto_gen')) return;
+        const self = this;
+        const ag = this.modules.find(m => m.name === 'auto_gen');
+
+        // Master toggle
+        $('#co_autogen_enabled').on('change', function() {
+            self.settings.autoGenEnabled = this.checked;
+            ag.setEnabled(this.checked);
+            const ctx = SillyTavern.getContext();
+            if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
+        });
+
+        // Trigger select
+        $('#co_autogen_trigger').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.trigger = this.value;
+        });
+
+        // Generate Now button
+        $('#co_autogen_now').on('click', async function() {
+            this.disabled = true;
+            this.textContent = '⏳ Üretiliyor...';
+            try {
+                await ag.generateNow();
+            } finally {
+                this.disabled = false;
+                this.textContent = '▶ Şimdi Üret';
+            }
+        });
+
+        // Inject toggles
+        $('#co_autogen_use_avatar').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.useAvatar = this.checked;
+        });
+        $('#co_autogen_use_mood').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.useMood = this.checked;
+        });
+        $('#co_autogen_use_spice').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.useSpice = this.checked;
+        });
+        $('#co_autogen_use_scenario').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.useScenario = this.checked;
+        });
+        $('#co_autogen_inject_chat').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.injectToChat = this.checked;
+        });
+        $('#co_autogen_debug').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.debug = this.checked;
+        });
+
+        // Workflow settings
+        $('#co_autogen_workflow').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.workflowFile = this.value;
+        });
+        $('#co_autogen_throttle').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.throttleMs = parseInt(this.value, 10);
+        });
+        $('#co_autogen_negative').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.negativeOverride = this.value;
+        });
+    },
+
+    refreshAutoGenPanel() {
+        if (!this.modules.find(m => m.name === 'auto_gen')) return;
+        const ag = this.modules.find(m => m.name === 'auto_gen');
+        const ctx = SillyTavern.getContext();
+        const cfg = ag.settings || {};
+
+        // Master toggle
+        $('#co_autogen_enabled').prop('checked', this.settings.autoGenEnabled !== false);
+
+        // Trigger
+        $('#co_autogen_trigger').val(cfg.trigger || 'ai');
+
+        // Workflow dropdown
+        const $wf = $('#co_autogen_workflow');
+        if ($wf.length) {
+            // Workflows'ı çek
+            fetch('/api/sd/comfy/workflows', {
+                method: 'POST',
+                headers: ctx.getRequestHeaders(),
+            })
+            .then(r => r.json())
+            .then(workflows => {
+                $wf.empty();
+                workflows.forEach(w => {
+                    $wf.append(`<option value="${w}">${w}</option>`);
+                });
+                $wf.val(cfg.workflowFile || '6Lora-CyberReal.json');
+            })
+            .catch(() => {
+                $wf.empty().append(`<option value="${cfg.workflowFile}">${cfg.workflowFile}</option>`);
+            });
+        }
+
+        // Throttle
+        $('#co_autogen_throttle').val(cfg.throttleMs || 8000);
+        $('#co_autogen_negative').val(cfg.negativeOverride || '');
+
+        // Inject toggles
+        $('#co_autogen_use_avatar').prop('checked', cfg.useAvatar !== false);
+        $('#co_autogen_use_mood').prop('checked', cfg.useMood !== false);
+        $('#co_autogen_use_spice').prop('checked', cfg.useSpice !== false);
+        $('#co_autogen_use_scenario').prop('checked', cfg.useScenario !== false);
+        $('#co_autogen_inject_chat').prop('checked', cfg.injectToChat !== false);
+        $('#co_autogen_debug').prop('checked', cfg.debug === true);
+
+        // Status
+        const sum = ag.summary();
+        $('#co_autogen_status').html(
+            `Trigger: <strong>${sum.trigger}</strong> · Workflow: <strong>${sum.workflow}</strong> · LoRA: <strong>${sum.loraCount}</strong> · Son üretim: <strong>${sum.lastGen}</strong>`
+        );
+
+        // History
+        const history = ag.getHistory();
+        const $box = $('#co_autogen_history');
+        $box.empty();
+        if (!history.length) {
+            $box.html('<i style="opacity: 0.6;">(henüz üretim yapılmadı)</i>');
+            return;
+        }
+        history.slice(0, 5).forEach(h => {
+            const time = new Date(h.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const imgLink = h.filename
+                ? `http://192.168.68.66:8001/view?filename=${h.filename}&type=output`
+                : null;
+            $box.append(`
+                <div style="padding: 5px 0; border-bottom: 1px dashed rgba(127,127,127,0.2); display: flex; gap: 8px; align-items: flex-start;">
+                    ${imgLink ? `<img src="${imgLink}" style="width: 60px; height: 88px; object-fit: cover; border-radius: 3px; flex-shrink: 0;">` : '<div style="width: 60px;"></div>'}
+                    <div style="flex: 1; min-width: 0;">
+                        <strong>${time}</strong> · ${h.filename || '(yok)'}<br>
+                        <em style="opacity: 0.6; font-size: 0.85em; word-break: break-all;">${(h.prompt || '').slice(0, 200)}${h.prompt?.length > 200 ? '…' : ''}</em>
+                    </div>
+                </div>
+            `);
         });
     },
 
