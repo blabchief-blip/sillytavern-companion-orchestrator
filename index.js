@@ -24,10 +24,11 @@ import { imageGenModule } from './modules/image_gen.js';
 import { avatarDescModule } from './modules/avatar_desc.js';
 import { kazumaBridgeModule } from './modules/kazuma_bridge.js';
 import { autoGenModule } from './modules/auto_gen.js';
+import { llmTaggerModule } from './modules/llm_tagger.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.5.2';
+const VERSION = '0.6.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -102,7 +103,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -211,6 +212,7 @@ const orchestrator = {
         this.wireImageGenPanel();
         this.wireKazumaBridgePanel();
         this.wireAutoGenPanel();
+        this.wireLLMTaggerPanel();
 
         // Wire refresh on chat change
         const refreshBound = () => this.refreshAllPanels();
@@ -1108,6 +1110,7 @@ const orchestrator = {
         if (this.settings.avatarDescEnabled !== false) this.refreshImageGenPanel();
         if (this.settings.kazumaBridgeEnabled !== false) this.refreshKazumaBridgePanel();
         if (this.settings.autoGenEnabled !== false) this.refreshAutoGenPanel();
+        if (this.settings.llmTaggerEnabled !== false) this.refreshLLMTaggerPanel();
         this.refreshSpiceBadge();
     },
 
@@ -1615,6 +1618,124 @@ const orchestrator = {
                 </div>
             `);
         });
+    },
+
+    // -----------------------------------------------------------
+    // v0.6.0 LLM Tagger Panel (OpenRouter Smart Tags)
+    // -----------------------------------------------------------
+    wireLLMTaggerPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+
+        const $enabled = $('#co-llm-tagger-enabled');
+        const $key = $('#co-llm-tagger-key');
+        const $model = $('#co-llm-tagger-model');
+        const $context = $('#co-llm-tagger-context');
+        const $debug = $('#co-llm-tagger-debug');
+        const $dailyLimit = $('#co-llm-tagger-daily-limit');
+        const $testBtn = $('#co-llm-tagger-test-btn');
+        const $status = $('#co-llm-tagger-status');
+
+        if (!$enabled.length) return;
+
+        $enabled.on('change', () => {
+            this.settings.llmTaggerEnabled = $enabled.prop('checked');
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (llmMod) llmMod.settings.enabled = this.settings.llmTaggerEnabled;
+            this.toast(`🎯 LLM Tagger ${$enabled.prop('checked') ? 'etkin' : 'devre dışı'}`, 'info');
+            this.saveSettings();
+        });
+
+        $key.on('change', () => {
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (llmMod) llmMod.settings.apiKey = $key.val().trim();
+            this.saveSettings();
+        });
+
+        $model.on('change', () => {
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (llmMod) llmMod.settings.model = $model.val();
+            this.saveSettings();
+        });
+
+        $context.on('change', () => {
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (llmMod) llmMod.settings.useCompanionContext = $context.prop('checked');
+            this.saveSettings();
+        });
+
+        $debug.on('change', () => {
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (llmMod) llmMod.settings.debug = $debug.prop('checked');
+            this.saveSettings();
+        });
+
+        $dailyLimit.on('change', () => {
+            const v = parseInt($dailyLimit.val(), 10);
+            if (!isNaN(v) && v > 0) {
+                const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+                if (llmMod) llmMod.settings.maxDailyCalls = v;
+                this.saveSettings();
+            }
+        });
+
+        $testBtn.on('click', async () => {
+            const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+            if (!llmMod) return;
+            const key = $key.val().trim() || llmMod.settings.apiKey;
+            if (!key) {
+                this.toast('Önce API key gir', 'warning');
+                return;
+            }
+            $testBtn.prop('disabled', true).text('⏳ Test ediliyor...');
+            $status.text('⏳ OpenRouter\'a istek gönderiliyor...');
+            try {
+                const result = await llmMod.testKey(key);
+                if (result.ok) {
+                    $status.html(`✅ <b>Key geçerli!</b><br/>Model: ${result.model}<br/>Latency: ${result.latency}ms<br/>Cost: $${result.cost?.toFixed(6) || '0'}<br/>Sample tags: ${result.sampleTags?.join(', ')}`);
+                    this.toast('✅ LLM Tagger key test başarılı', 'success');
+                } else {
+                    $status.html(`❌ <b>Key hatalı:</b> ${result.error}`);
+                    this.toast('❌ LLM Tagger key test başarısız', 'error');
+                }
+            } catch (e) {
+                $status.html(`❌ Hata: ${e.message}`);
+            }
+            $testBtn.prop('disabled', false).text('🧪 Key Test Et');
+        });
+    },
+
+    refreshLLMTaggerPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const llmMod = this.modules.find(m => m.name === 'llm_tagger');
+        if (!llmMod?.settings) return;
+
+        const $enabled = $('#co-llm-tagger-enabled');
+        const $key = $('#co-llm-tagger-key');
+        const $model = $('#co-llm-tagger-model');
+        const $context = $('#co-llm-tagger-context');
+        const $debug = $('#co-llm-tagger-debug');
+        const $dailyLimit = $('#co-llm-tagger-daily-limit');
+        const $status = $('#co-llm-tagger-status');
+
+        if ($enabled.length) $enabled.prop('checked', llmMod.settings.enabled);
+        if ($key.length) $key.val(llmMod.settings.apiKey || '');
+        if ($model.length) $model.val(llmMod.settings.model);
+        if ($context.length) $context.prop('checked', llmMod.settings.useCompanionContext);
+        if ($debug.length) $debug.prop('checked', llmMod.settings.debug);
+        if ($dailyLimit.length) $dailyLimit.val(llmMod.settings.maxDailyCalls);
+
+        const s = llmMod.summary();
+        if ($status.length) {
+            $status.html(
+                `<b>${s.name}</b><br/>` +
+                `Enabled: ${s.enabled ? '✅' : '❌'} &nbsp; Key: ${s.hasKey ? '✅' : '❌'}<br/>` +
+                `Model: ${s.model}<br/>` +
+                `Bugün: ${s.todayCalls}/${s.maxDaily} call &nbsp;|&nbsp; Toplam: ${s.totalCalls} call, ${s.totalCost}, ${s.avgLatency}<br/>` +
+                `Hatalar: ${s.errors}`
+            );
+        }
     },
 
     toast(msg, type = 'info') {

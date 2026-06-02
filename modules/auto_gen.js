@@ -294,8 +294,38 @@ class AutoGen {
     try {
       this.settings.lastGenTs = Date.now();
 
-      // 1) Build prompt from message + Companion state
-      const prompt = this.buildPrompt(lastAiMessage);
+      // 1) Get LLM tags (if LLM Tagger available + enabled)
+      let llmTags = null;
+      let llmMeta = null;
+      if (this.orch?.modules) {
+        const llmMod = this.orch.modules.find(m => m.name === 'llm_tagger');
+        if (llmMod?.settings?.enabled && llmMod?.settings?.apiKey) {
+          try {
+            const check = llmMod.canCall();
+            if (check.ok) {
+              const companionState = {
+                mood: this._getCurrentMood(),
+                spice: this._getCurrentSpice(),
+                tags: this._getSpiceTags().slice(0, 5),
+              };
+              llmMeta = await llmMod.extract(lastAiMessage.mes || '', companionState);
+              llmTags = llmMeta.tags;
+              if (this.settings.debug) {
+                console.log('[Companion AutoGen] 🧠 LLM extracted', llmTags.length, 'tags in', llmMeta.latency, 'ms');
+              }
+            } else {
+              if (this.settings.debug) {
+                console.log('[Companion AutoGen] LLM Tagger skipped:', check.reason);
+              }
+            }
+          } catch (e) {
+            console.warn('[Companion AutoGen] LLM Tagger failed, using regex fallback:', e.message);
+          }
+        }
+      }
+
+      // 2) Build prompt from message + Companion state (+ LLM tags if available)
+      const prompt = this.buildPrompt(lastAiMessage, llmTags);
       if (this.settings.debug) {
         console.log('[Companion AutoGen] Prompt:', prompt);
       }
@@ -338,7 +368,7 @@ class AutoGen {
   // -----------------------------------------------------------
   // Prompt Builder (context-aware)
   // -----------------------------------------------------------
-  buildPrompt(message) {
+  buildPrompt(message, llmTags = null) {
     const text = (message.mes || message.message || '').replace(/<[^>]+>/g, ' ').trim();
     if (!text) return this.settings.prefix;
 
@@ -347,6 +377,11 @@ class AutoGen {
 
     // Quality prefix
     this.settings.qualityTags.forEach(t => tags.add(t));
+
+    // LLM tags (priority context — if provided)
+    if (llmTags && llmTags.length > 0) {
+      llmTags.forEach(t => tags.add(t));
+    }
 
     // Avatar description
     if (this.settings.useAvatar) {
@@ -461,6 +496,22 @@ class AutoGen {
     const mood = SPICE_MOOD[Math.min(level, 4)] || SPICE_MOOD[0];
 
     return [...lighting, ...mood];
+  }
+
+  _getCurrentMood() {
+    const orch = this.orch;
+    const m = orch.settings.moodData;
+    if (!m) return null;
+    const charId = this.ctx?.characterId;
+    return m[charId]?.current || m.current || null;
+  }
+
+  _getCurrentSpice() {
+    const orch = this.orch;
+    const s = orch.settings.spiceData || orch.settings.spice;
+    if (!s) return 0;
+    const charId = this.ctx?.characterId;
+    return s[charId]?.level ?? s.currentLevel ?? 0;
   }
 
   _getScenarioTags() {
@@ -726,5 +777,3 @@ export const autoGenModule = {
   // Settings reference
   get settings() { return autoGenInstance.settings; },
 };
-
-export { AutoGen };
