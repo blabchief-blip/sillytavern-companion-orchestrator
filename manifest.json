@@ -1,0 +1,19 @@
+{
+    "display_name": "Companion Orchestrator",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "dependencies": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Bora Çetintaş (via Momo)",
+    "version": "0.2.0",
+    "homePage": "https://github.com/boracetintas/sillytavern-companion-orchestrator",
+    "auto_update": false,
+    "minimum_client_version": "1.18.0",
+    "hooks": {
+        "install": "onInstall",
+        "enable": "onEnable",
+        "disable": "onDisable"
+    }
+}

@@ -1,0 +1,139 @@
+/* Companion Orchestrator */
+
+.companion-orchestrator-settings .co-version {
+    margin-left: 0.5em;
+    font-size: 0.8em;
+}
+
+.companion-orchestrator-settings .co-help code {
+    background: rgba(127, 127, 127, 0.15);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    font-size: 0.95em;
+}
+
+.companion-orchestrator-settings .co-help hr {
+    margin: 0.5em 0;
+    border: none;
+    border-top: 1px solid rgba(127, 127, 127, 0.25);
+}
+
+/* Module panels - subtle differentiation */
+.companion-orchestrator-settings .co-module-panel {
+    margin: 6px 0;
+    padding: 4px 0;
+}
+
+.companion-orchestrator-settings .co-module-panel h4 {
+    margin: 6px 0 4px 0;
+    font-size: 1em;
+}
+
+/* Status bar - quick orientation */
+.companion-orchestrator-settings .co-status-bar {
+    border-left: 3px solid rgba(127, 127, 127, 0.5);
+    padding: 6px 10px;
+    background: rgba(127, 127, 127, 0.06);
+    border-radius: 0 4px 4px 0;
+}
+
+/* Memory item list - hoverable */
+.companion-orchestrator-settings .co-mem-item {
+    transition: background 0.15s ease;
+}
+.companion-orchestrator-settings .co-mem-item:hover {
+    background: rgba(127, 127, 127, 0.14) !important;
+}
+
+.companion-orchestrator-settings .co-mem-tag {
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+.companion-orchestrator-settings .co-mem-tag:hover {
+    background: rgba(100, 150, 255, 0.35) !important;
+}
+
+/* Preview panels - scrollable code */
+.companion-orchestrator-settings .co-preview {
+    white-space: pre-wrap;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+/* Current state indicators */
+.companion-orchestrator-settings .co-current-state {
+    border-left: 2px solid rgba(127, 127, 127, 0.4);
+    padding: 2px 8px;
+    margin: 4px 0;
+    background: rgba(127, 127, 127, 0.04);
+    border-radius: 0 3px 3px 0;
+}
+
+/* List panels - subtle scrollbar */
+.companion-orchestrator-settings .co-list-panel::-webkit-scrollbar {
+    width: 8px;
+}
+.companion-orchestrator-settings .co-list-panel::-webkit-scrollbar-track {
+    background: rgba(127, 127, 127, 0.05);
+}
+.companion-orchestrator-settings .co-list-panel::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.25);
+    border-radius: 4px;
+}
+.companion-orchestrator-settings .co-list-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(127, 127, 127, 0.4);
+}
+
+/* Inline creator containers (scenario/preset) */
+.companion-orchestrator-settings #co_scenario_creator,
+.companion-orchestrator-settings #co_preset_creator {
+    animation: co-slide-in 0.18s ease-out;
+}
+
+@keyframes co-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Inline rows */
+.companion-orchestrator-settings .co-row {
+    align-items: center;
+}
+
+/* Section headers - subtle visual hierarchy */
+.companion-orchestrator-settings h4 {
+    margin-top: 8px;
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: var(--SmartThemeBodyColor, inherit);
+}
+
+/* Range slider - track styling */
+.companion-orchestrator-settings input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(127, 127, 127, 0.3);
+    border-radius: 2px;
+    outline: none;
+}
+.companion-orchestrator-settings input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--SmartThemeQuoteColor, #888);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+.companion-orchestrator-settings input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}

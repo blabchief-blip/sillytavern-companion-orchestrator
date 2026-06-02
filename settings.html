@@ -1,0 +1,311 @@
+<div class="companion-orchestrator-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>
+                <span data-i18n="Companion Orchestrator">Companion Orchestrator</span>
+                <span class="co-version" style="opacity: 0.6; font-weight: normal;">v{{version}}</span>
+            </b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <label class="checkbox_label" for="co_enabled" title="Master switch">
+                <input id="co_enabled" type="checkbox" checked />
+                <span data-i18n="Enable Companion Orchestrator">Enable Companion Orchestrator</span>
+            </label>
+
+            <div class="co-status-bar" id="co_status_bar" style="margin: 8px 0; padding: 6px 10px; background: rgba(127,127,127,0.1); border-radius: 4px; font-size: 0.9em;">
+                <i>Loading…</i>
+            </div>
+
+            <hr />
+            <h4 data-i18n="Modules">Modules</h4>
+
+            <label class="checkbox_label" for="co_memoryEnabled" title="Per-character persistent memory entries (facts, events, preferences).">
+                <input id="co_memoryEnabled" type="checkbox" checked />
+                <span><strong>Memory Bank</strong> — <em style="opacity: 0.75;">Per-character persistent memory entries (facts, events, preferences).</em></span>
+            </label>
+
+            <label class="checkbox_label" for="co_moodEnabled" title="Track per-character mood, affinity, and trust across sessions.">
+                <input id="co_moodEnabled" type="checkbox" checked />
+                <span><strong>Mood &amp; Relationship</strong> — <em style="opacity: 0.75;">Track per-character mood, affinity, and trust across sessions.</em></span>
+            </label>
+
+            <label class="checkbox_label" for="co_scenariosEnabled" title="One-click scenario presets (system prompt + author note + lorebook).">
+                <input id="co_scenariosEnabled" type="checkbox" checked />
+                <span><strong>Scenario Templates</strong> — <em style="opacity: 0.75;">One-click scenario presets (system prompt + author note + lorebook).</em></span>
+            </label>
+
+            <label class="checkbox_label" for="co_lorebookEnabled" title="Suggests world info entries based on chat context. Manual / suggest command.">
+                <input id="co_lorebookEnabled" type="checkbox" checked />
+                <span><strong>Auto-Lorebook</strong> — <em style="opacity: 0.75;">Suggests world info entries based on chat context. Manual / suggest command.</em></span>
+            </label>
+
+            <label class="checkbox_label" for="co_promptsEnabled" title="Apply writing-style presets that inject style directives into the system prompt.">
+                <input id="co_promptsEnabled" type="checkbox" checked />
+                <span><strong>Prompt Enhancer</strong> — <em style="opacity: 0.75;">Apply writing-style presets that inject style directives into the system prompt.</em></span>
+            </label>
+
+            <hr />
+            <!-- ============ MOOD & RELATIONSHIP UI ============ -->
+            <div class="co-module-panel" data-module="mood">
+                <h4 data-i18n="Mood &amp; Relationship">💕 Mood &amp; Relationship</h4>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Mood preset</span>
+                        <select id="co_mood_preset" class="text_pole" style="width: 100%;">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </label>
+                    <button id="co_mood_apply" class="menu_button" style="margin-top: 18px;">
+                        <i class="fa-solid fa-heart"></i> Apply
+                    </button>
+                </div>
+                <div class="co-row" style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Affinity: <span id="co_mood_affinity_val">5</span>/10</span>
+                        <input id="co_mood_affinity" type="range" min="1" max="10" value="5" style="width: 100%;" />
+                    </label>
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Trust: <span id="co_mood_trust_val">5</span>/10</span>
+                        <input id="co_mood_trust" type="range" min="1" max="10" value="5" style="width: 100%;" />
+                    </label>
+                </div>
+                <button id="co_mood_bump" class="menu_button" style="margin-top: 6px; width: 100%;">
+                    <i class="fa-solid fa-sliders"></i> Save Affinity/Trust
+                </button>
+                <div id="co_mood_current" class="co-current-state" style="font-size: 0.85em; opacity: 0.85; margin-top: 6px;">
+                    <i>(select a character)</i>
+                </div>
+                <label class="checkbox_label" for="co_mood_autotune" style="margin-top: 8px;">
+                    <input id="co_mood_autotune" type="checkbox" />
+                    <span>Auto-tune via LLM (every <select id="co_mood_autotune_interval" class="text_pole" style="width: 50px; display: inline-block; padding: 1px 4px;"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option><option value="10">10</option></select> messages)</span>
+                </label>
+            </div>
+
+            <hr />
+            <!-- ============ SCENARIO TEMPLATES UI ============ -->
+            <div class="co-module-panel" data-module="scenarios">
+                <h4 data-i18n="Scenario Templates">🎬 Scenario Templates</h4>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Scenario</span>
+                        <select id="co_scenario_select" class="text_pole" style="width: 100%;">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </label>
+                    <button id="co_scenario_apply" class="menu_button" style="margin-top: 18px;">
+                        <i class="fa-solid fa-play"></i> Apply
+                    </button>
+                    <button id="co_scenario_clear" class="menu_button" style="margin-top: 18px;" title="Remove applied scenario">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <button id="co_scenario_new_btn" class="menu_button" style="margin-top: 18px;" title="Create custom scenario">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <div id="co_scenario_current" class="co-current-state" style="font-size: 0.85em; opacity: 0.85; margin-top: 6px;">
+                    <i>(none applied)</i>
+                </div>
+                <div id="co_scenario_preview" class="co-preview" style="margin-top: 6px; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px; font-size: 0.85em; max-height: 120px; overflow-y: auto; display: none;">
+                </div>
+
+                <!-- Custom scenario creator (hidden by default) -->
+                <div id="co_scenario_creator" style="display: none; margin-top: 10px; padding: 10px; background: rgba(127,127,127,0.06); border-radius: 4px; border: 1px dashed rgba(127,127,127,0.3);">
+                    <h5 style="margin: 0 0 6px 0;">➕ New Custom Scenario</h5>
+                    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                        <input id="co_scenario_new_key" class="text_pole" placeholder="key (lowercase, e.g. my_cafe)" style="flex: 1;" />
+                        <input id="co_scenario_new_name" class="text_pole" placeholder="Display name" style="flex: 1;" />
+                    </div>
+                    <textarea id="co_scenario_new_system" class="text_pole" placeholder="System prompt (setting, tone) — use {{user}} and {{char}} for placeholders" rows="3" style="width: 100%; resize: vertical; font-family: inherit;"></textarea>
+                    <textarea id="co_scenario_new_author" class="text_pole" placeholder="Author note (in-bracket direction, e.g. [Focus on…])" rows="2" style="width: 100%; margin-top: 6px; resize: vertical; font-family: inherit;"></textarea>
+                    <div style="display: flex; gap: 6px; margin-top: 6px;">
+                        <button id="co_scenario_save" class="menu_button" style="flex: 1;">
+                            <i class="fa-solid fa-floppy-disk"></i> Save Scenario
+                        </button>
+                        <button id="co_scenario_cancel" class="menu_button">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ PROMPT ENHANCER UI ============ -->
+            <div class="co-module-panel" data-module="prompts">
+                <h4 data-i18n="Prompt Enhancer">✨ Prompt Enhancer (Style)</h4>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Style preset</span>
+                        <select id="co_preset_select" class="text_pole" style="width: 100%;">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </label>
+                    <button id="co_preset_apply" class="menu_button" style="margin-top: 18px;">
+                        <i class="fa-solid fa-pen-fancy"></i> Apply
+                    </button>
+                    <button id="co_preset_clear" class="menu_button" style="margin-top: 18px;" title="Reset to default">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <button id="co_preset_new_btn" class="menu_button" style="margin-top: 18px;" title="Create custom preset">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <div id="co_preset_current" class="co-current-state" style="font-size: 0.85em; opacity: 0.85; margin-top: 6px;">
+                    <i>(default style)</i>
+                </div>
+                <div id="co_preset_preview" class="co-preview" style="margin-top: 6px; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px; font-size: 0.85em; max-height: 120px; overflow-y: auto; display: none;">
+                </div>
+
+                <!-- Custom preset creator (hidden by default) -->
+                <div id="co_preset_creator" style="display: none; margin-top: 10px; padding: 10px; background: rgba(127,127,127,0.06); border-radius: 4px; border: 1px dashed rgba(127,127,127,0.3);">
+                    <h5 style="margin: 0 0 6px 0;">➕ New Custom Style Preset</h5>
+                    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                        <input id="co_preset_new_key" class="text_pole" placeholder="key (lowercase)" style="flex: 1;" />
+                        <input id="co_preset_new_name" class="text_pole" placeholder="Display name" style="flex: 1;" />
+                    </div>
+                    <input id="co_preset_new_desc" class="text_pole" placeholder="Short description" style="width: 100%; margin-bottom: 6px;" />
+                    <textarea id="co_preset_new_system" class="text_pole" placeholder="System addition (e.g. [Writing style: ...])" rows="4" style="width: 100%; resize: vertical; font-family: inherit;"></textarea>
+                    <div style="display: flex; gap: 6px; margin-top: 6px;">
+                        <button id="co_preset_save" class="menu_button" style="flex: 1;">
+                            <i class="fa-solid fa-floppy-disk"></i> Save Preset
+                        </button>
+                        <button id="co_preset_cancel" class="menu_button">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ MEMORY BANK UI ============ -->
+            <div class="co-module-panel" data-module="memory">
+                <h4 data-i18n="Memory Bank">🧠 Memory Bank</h4>
+                <div class="co-row" style="display: flex; gap: 6px; align-items: stretch;">
+                    <input id="co_mem_input" type="text" class="text_pole" placeholder="What to remember about this character…" style="flex: 1;" />
+                    <select id="co_mem_kind" class="text_pole" style="width: 90px;" title="Kind">
+                        <option value="note">note</option>
+                        <option value="fact">fact</option>
+                        <option value="preference">preference</option>
+                        <option value="event">event</option>
+                        <option value="trait">trait</option>
+                    </select>
+                    <select id="co_mem_imp" class="text_pole" style="width: 80px;" title="Importance">
+                        <option value="3">3</option>
+                        <option value="5" selected>5</option>
+                        <option value="7">7</option>
+                        <option value="9">9</option>
+                    </select>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; margin-top: 6px;">
+                    <input id="co_mem_tags" type="text" class="text_pole" placeholder="tags (comma separated, e.g. coffee, location)" style="flex: 1;" />
+                    <button id="co_mem_add" class="menu_button">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button id="co_mem_clear" class="menu_button" title="Clear all memories for this character">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; margin-top: 8px;">
+                    <input id="co_mem_search" type="text" class="text_pole" placeholder="Search…" style="flex: 1;" />
+                    <select id="co_mem_kind_filter" class="text_pole" style="width: 100px;" title="Filter by kind">
+                    </select>
+                    <button id="co_mem_search_btn" class="menu_button">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                    <button id="co_mem_show_all" class="menu_button" title="Show all">
+                        <i class="fa-solid fa-list"></i>
+                    </button>
+                </div>
+                <div id="co_mem_list" class="co-list-panel" style="margin-top: 6px; max-height: 200px; overflow-y: auto; font-size: 0.85em;">
+                    <i style="opacity: 0.6;">(no memories yet)</i>
+                </div>
+            </div>
+
+            <hr />
+            <!-- ============ AUTO-LOREBOOK UI ============ -->
+            <div class="co-module-panel" data-module="lorebook">
+                <h4 data-i18n="Auto-Lorebook">📚 Auto-Lorebook</h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Suggests world info entries based on current chat context.
+                </p>
+                <button id="co_lore_suggest" class="menu_button" style="width: 100%;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Suggest Entries Now
+                </button>
+                <div id="co_lore_results" class="co-list-panel" style="margin-top: 6px; max-height: 200px; overflow-y: auto; font-size: 0.85em;">
+                </div>
+                <label class="checkbox_label" for="co_lore_auto" style="margin-top: 8px;">
+                    <input id="co_lore_auto" type="checkbox" />
+                    <span>Auto-activate top match (≥ 0.8 score)</span>
+                </label>
+            </div>
+
+            <hr />
+            <!-- ============ MAGIC TRANSLATION INTEGRATION ============ -->
+            <div id="co_translation_section" class="co-module-panel" data-module="translation">
+                <h4 data-i18n="Magic Translation">🌐 Magic Translation <span style="font-size: 0.7em; opacity: 0.7;">(bmen25124)</span></h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Quick controls for the Magic Translation extension. Configure profile in its own panel.
+                </p>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Target language</span>
+                        <select id="co_mt_target" class="text_pole" style="width: 100%;">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+                    <label style="flex: 1; min-width: 120px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Auto-translate</span>
+                        <select id="co_mt_mode" class="text_pole" style="width: 100%;">
+                            <option value="">(loading…)</option>
+                        </select>
+                    </label>
+                </div>
+                <div id="co_mt_profile" class="co-current-state" style="font-size: 0.85em; opacity: 0.85; margin-top: 6px;">
+                    Profile: <i>(none)</i>
+                </div>
+            </div>
+
+            <hr />
+            <h4 data-i18n="Export / Import">Export / Import</h4>
+            <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                Backup or share your memory bank, mood, scenarios, and custom presets as JSON.
+            </p>
+            <div class="co-row" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button id="co_export_all" class="menu_button" style="flex: 1; min-width: 140px;">
+                    <i class="fa-solid fa-download"></i> Export All
+                </button>
+                <label for="co_import_file" class="menu_button" style="flex: 1; min-width: 140px; text-align: center; cursor: pointer;">
+                    <i class="fa-solid fa-upload"></i> Import JSON
+                </label>
+                <input type="file" id="co_import_file" accept="application/json,.json" style="display: none;" />
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                <button id="co_export_memories" class="menu_button" style="font-size: 0.85em; flex: 1;">
+                    memories only
+                </button>
+                <button id="co_export_mood" class="menu_button" style="font-size: 0.85em; flex: 1;">
+                    mood only
+                </button>
+                <button id="co_export_scenarios" class="menu_button" style="font-size: 0.85em; flex: 1;">
+                    scenarios only
+                </button>
+            </div>
+            <div id="co_import_status" style="margin-top: 6px; font-size: 0.85em; opacity: 0.85;"></div>
+
+            <hr />
+            <h4 data-i18n="Debug">Debug</h4>
+            <label class="checkbox_label" for="co_debugLogging">
+                <input id="co_debugLogging" type="checkbox" />
+                <span data-i18n="Enable debug logging">Enable debug logging (console)</span>
+            </label>
+
+            <hr />
+            <div class="co-help" style="font-size: 0.85em; opacity: 0.85; line-height: 1.5;">
+                <strong>Tip:</strong> All controls above are also available as <code>/co</code> slash commands.
+                Type <code>/co help</code> in chat.
+            </div>
+        </div>
+    </div>
+</div>
