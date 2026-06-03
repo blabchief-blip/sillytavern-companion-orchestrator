@@ -32,6 +32,9 @@ export const ioModule = {
      */
     buildExport(sections = []) {
         const s = _orch.settings;
+        // Deep-clone each section so callers can mutate state without
+        // poisoning the returned export payload.
+        const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
         const include = (k) => sections.length === 0 || sections.includes(k);
         const exp = {
             schema: SCHEMA_VERSION,
@@ -41,23 +44,23 @@ export const ioModule = {
             user: _ctx?.name || 'unknown',
         };
         if (include('memory')) {
-            exp.memory = s.memory || { entries: {} };
+            exp.memory = clone(s.memory) || { entries: {} };
         }
         if (include('mood')) {
-            exp.mood = s.mood || { state: {}, presets: [] };
+            exp.mood = clone(s.mood) || { state: {}, presets: [] };
         }
         if (include('scenarios')) {
             // Storage: modules use settings.scenariosData.custom + settings.scenarios.lastUsed
             exp.scenarios = {
                 lastUsed: s.scenarios?.lastUsed || null,
-                custom: s.scenariosData?.custom || {},
+                custom: clone(s.scenariosData?.custom) || {},
             };
         }
         if (include('prompts')) {
             // Storage: modules use settings.promptsData.customPresets + settings.prompts.activePreset
             exp.prompts = {
                 activePreset: s.prompts?.activePreset || 'default',
-                customPresets: s.promptsData?.customPresets || {},
+                customPresets: clone(s.promptsData?.customPresets) || {},
             };
         }
         return exp;

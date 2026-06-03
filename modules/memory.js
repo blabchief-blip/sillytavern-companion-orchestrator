@@ -15,8 +15,10 @@ function getBank() {
     if (!_orch.settings[STORE_KEY]) {
         _orch.settings[STORE_KEY] = { entries: {} };
     } else if (!_orch.settings[STORE_KEY].entries || typeof _orch.settings[STORE_KEY].entries !== 'object') {
-        // Defensive: legacy/old data may exist without `entries`
-        _orch.settings[STORE_KEY] = { entries: _orch.settings[STORE_KEY].entries || {} };
+        // Defensive: legacy/old data may exist without `entries`.
+        // Preserve any sibling config (e.g. maxMemoriesPerChar) by mutating
+        // the existing object in place rather than replacing it.
+        _orch.settings[STORE_KEY].entries = _orch.settings[STORE_KEY].entries || {};
     }
     return _orch.settings[STORE_KEY];
 }
@@ -53,6 +55,9 @@ export const memoryModule = {
         _ctx = SillyTavern.getContext();
         if (!orch.settings[STORE_KEY]) {
             orch.settings[STORE_KEY] = { entries: {} };
+        } else if (!orch.settings[STORE_KEY].entries) {
+            // Existing object without entries — keep sibling config intact.
+            orch.settings[STORE_KEY].entries = {};
         }
     },
 

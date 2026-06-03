@@ -1,0 +1,31 @@
+{
+  "name": "companion-orchestrator",
+  "version": "0.7.0",
+  "description": "SillyTavern extension: 20 bundled character-management modules.",
+  "type": "module",
+  "private": true,
+  "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test \"tests/unit/*.test.js\" \"tests/llm/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:llm": "node --test \"tests/llm/*.test.js\"",
+    "test:watch": "node --test --watch \"tests/unit/*.test.js\" \"tests/llm/*.test.js\""
+  },
+  "keywords": [
+    "sillytavern",
+    "extension",
+    "memory",
+    "mood",
+    "scenarios",
+    "lorebook",
+    "lora"
+  ],
+  "author": "blabchief",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blabchief-blip/sillytavern-companion-orchestrator.git"
+  }
+}

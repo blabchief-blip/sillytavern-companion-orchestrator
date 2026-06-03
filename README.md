@@ -171,6 +171,23 @@ All modules are reachable via the `/co` (alias `/companion`) slash command. Use 
 - **Backends:** any ST-compatible completion backend (Kobold, OpenAI, OpenRouter, etc.)
 - **Auto-tune** uses `generateQuietPrompt` — requires a working completion API
 
+## Development
+
+### Tests
+
+Native `node --test`, zero dependencies. The suite has two layers:
+
+- **Unit** (`tests/unit/`) — module behavior, storage, roundtrip, validation
+- **LLM behavior** (`tests/llm/`) — auto-tune parsing, lorebook scoring, malformed-response handling
+
+```bash
+npm test            # both
+npm run test:unit   # unit only
+npm run test:llm    # LLM behavior only
+```
+
+CI runs on every push via `.github/workflows/test.yml` (Node 20, 22, 24 on macOS).
+
 ## License
 
 AGPL-3.0. See `LICENSE`.
