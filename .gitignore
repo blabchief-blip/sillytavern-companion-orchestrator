@@ -16,5 +16,6 @@ dist/
 
 # Test artifacts
 playwright-mcp/
-*.test.js
 test-*.html
+playwright-report/
+test-results/
