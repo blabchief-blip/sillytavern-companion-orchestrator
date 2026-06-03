@@ -1,8 +1,8 @@
 # Companion Orchestrator
 
-A unified SillyTavern extension that bundles **5 character-management modules** in a single, low-friction install. Built for power users who want fine-grained control over memory, mood, scenarios, lorebook, and writing style — all from the extension settings panel and `/co` slash commands.
+A unified SillyTavern extension that bundles **20 character-management modules** in a single, low-friction install. Built for power users who want fine-grained control over memory, mood, scenarios, lorebook, writing style, character LoRA, image generation, and more — all from the extension settings panel and `/co` slash commands.
 
-> **Status:** v0.2.0 — stable for personal use. Tested on SillyTavern 1.18.0+ (release + staging branches).
+> **Status:** v0.7.0 — public release. Tested on SillyTavern 1.18.0+ (release + staging branches).
 
 ## Features
 
@@ -15,10 +15,11 @@ Per-character persistent memory entries (up to 50 per character). Each entry has
 - Slash commands: `/co mem add|list|search|forget|clear`
 
 ### 💕 Mood & Relationship
-Per-character mood, affinity (1–10), and trust (1–10) tracking. Comes with:
+Per-character mood, affinity (1–10), and trust (1–10) tracking.
 - 10 built-in mood presets
 - Live status indicator
 - **Auto-tune** via LLM: every N messages, runs a quiet prompt to classify emotional tone and adjusts affinity/trust/mood automatically
+- Slash commands: `/co mood set|get|bump`
 
 ### 🎬 Scenario Templates
 Quick-apply scenario presets that inject a system prompt and author note in one click.
@@ -28,7 +29,7 @@ Quick-apply scenario presets that inject a system prompt and author note in one 
 
 ### ✨ Prompt Enhancer (Style Presets)
 Apply writing-style directives to the system prompt.
-- **16 built-in styles**: Descriptive, Terse, Emotional, Cinematic, NSFW Verbose, Lyrical, Noir, Comedic, Slow Burn, Immersive 2nd Person, Modernist, Mythic, Snappy Banter, Soft/Suggestive, Raw, Dreamlike, Documentary
+- **17 built-in styles**: Default, Descriptive, Terse, Emotional, Cinematic, Explicit Verbose, Lyrical, Noir, Comedic, Slow Burn, Immersive 2nd Person, Modernist, Mythic, Banter, Soft Smut, Raw, Dream, Documentary
 - **Custom preset creator** (in-panel)
 - Slash commands: `/co preset list|apply|create|remove`
 
@@ -38,8 +39,28 @@ Keyword-overlap scoring of world info entries against recent chat context. Two m
 - **Auto-activate** — when a match scores ≥ 0.8, auto-emits `WORLDINFO_FORCE_ACTIVATE`
 - Slash command: `/co lore suggest`
 
+### 🌶️ Spice
+3-tier tag intensity (soft / intensify / lora_aware) for character LoRA-aware response steering.
+- Per-character state, scene-keyword triggered
+- Manual override + auto-activation modes
+
+### 🔥 Spice Intensify
+Layered spice escalation tied to in-character moments and turn count.
+- Tracks tier transitions and emits prompts that adapt LoRA strength on the fly
+- Integrates with the character LoRA profiles module
+
+### 🛡️ Limits
+Soft + hard guardrails for sensitive content.
+- Configurable per-character ceilings
+- Emits a warning prompt when approaching the limit, then refuses to escalate further
+
+### 💞 Aftercare
+Post-spice recovery flow.
+- When a scene cools (no spice tags in last N turns), injects a gentle re-grounding prompt
+- Helps the model return to baseline tone without hard reset
+
 ### 🌐 Magic Translation Integration
-Quick controls for the [Magic Translation](https://github.com/bmen25124/SillyTavern-Magic-Translation) extension (bmen25124) if installed:
+Quick controls for the [Magic Translation](https://github.com/bmen25124/SillyTavern-Magic-Translation) extension if installed:
 - Target language selector (10 languages)
 - Auto-translate mode selector (none / inputs / responses / both)
 - Current profile display
@@ -47,15 +68,68 @@ Quick controls for the [Magic Translation](https://github.com/bmen25124/SillyTav
 ### 💾 Export / Import
 - Export everything as JSON (full backup or per-section: memories, mood, scenarios, presets)
 - Import with **merge** or **replace** semantics
-- Schema-versioned for forward compatibility
+- Schema-versioned (v1) for forward compatibility
 - Roundtrip-safe (tested)
 
-### ⚙️ Architecture
-- Single bundled extension (5 modules in one)
+### 🖼️ Image Generation
+Hooks for triggering image gen on scene tags or slash command.
+- Works alongside SillyTavern's built-in image gen
+- Per-character trigger keywords
+
+### 👤 Avatar Description
+Generate a per-character avatar description prompt from chat context.
+- One-click capture, editable before save
+- Useful for consistent character imagery
+
+### 🌉 Kazuma Bridge
+Bridge layer for [Kazuma](https://github.com/) (community tavern manager). Pushes per-character state (mood, affinity, memories) to a shared state file.
+- Optional, off by default
+- File-based, no network calls
+
+### 🧵 STMB Bridge
+Bridge for the **SillyTavern Memory Bank** extension: two-way sync between CO's memory bank and STMB entries.
+- Configurable conflict resolution (CO wins / STMB wins / merge)
+- Periodic + on-message sync
+
+### 🪄 Auto Gen
+Auto-generate starter messages, character tags, or scenario seeds on first chat load.
+- Uses quiet prompt
+- One-time per character (gated by local flag)
+
+### 🏷️ LLM Tagger
+Auto-tagging for new messages, with **scene-aware** extraction (regex + LLM hybrid).
+- Detects scene keywords (location, mood, action type) and applies matching tags
+- Feeds the spice + auto-lorebook modules
+
+### 🎨 Pose Presets
+Reusable pose / expression / framing presets for image gen.
+- 8 built-ins + custom creator
+- Injectable as `setExtensionPrompt` snippets
+
+### 🏷️ Custom Tags
+Per-character user-defined tag taxonomy. Tags are persistent and feed the auto-lorebook + spice modules.
+
+### 🧬 Character LoRA Profiles
+Per-character LoRA configuration: model path, strength, trigger words, sampling overrides.
+- Auto-activates the right LoRA when switching characters
+- Profile editor in settings panel
+
+### 📝 Prompt Templates
+Reusable multi-block prompt templates (system + author + jailbreak slots) with variable substitution.
+- Variable library, drag-to-reorder
+- Slash command to apply on demand
+
+---
+
+## Architecture
+
+- Single bundled extension (20 modules in one)
 - Per-module toggle + master enable
 - Refresh-on-chat-change (all panels re-hydrate when you switch characters)
 - Cross-module storage isolation (unique `STORE_KEY` per module)
 - Defensive data handling (legacy/empty data safe)
+- `setExtensionPrompt` for non-destructive prompt injection
+- Event-driven (`MESSAGE_RECEIVED`, `MESSAGE_SENT`, `CHARACTER_MESSAGE_RENDERED`, `WORLDINFO_FORCE_ACTIVATE`)
 
 ## Install
 
@@ -64,7 +138,7 @@ Drop the `companion-orchestrator` folder into SillyTavern's extensions directory
 ```bash
 # From your SillyTavern root:
 cd extensions
-git clone https://github.com/bmen25124/SillyTavern-Companion-Orchestrator.git third-party/companion-orchestrator
+git clone https://github.com/blabchief-blip/sillytavern-companion-orchestrator.git third-party/companion-orchestrator
 ```
 
 Restart SillyTavern (or click "Reload Extensions"). The extension auto-mounts.
@@ -73,33 +147,27 @@ The settings panel will appear under **Extensions → Companion Orchestrator**.
 
 ## Slash Commands
 
-All modules are also reachable via the `/co` (alias `/companion`) slash command:
+All modules are reachable via the `/co` (alias `/companion`) slash command. Use `/co help` for the full list, but the highlights:
 
 ```
-/co help                                       - show all commands
-/co status                                     - module status summary
-/co mem add <text> [--imp N] [--kind K] [--tags a,b]
-/co mem list [--kind K] [--tag T]
-/co mem search <query>
-/co mem forget <id>                            - delete one memory
-/co mem clear                                  - wipe current character's memories
-/co mood set <mood>                            - apply mood preset
-/co mood get                                   - print current state
-/co mood bump --aff N --trust M                - adjust affinity/trust
-/co scene list                                 - show all scenarios
-/co scene apply <key>                          - apply scenario
-/co scene create <key> <name> --system S --author A
-/co scene remove <key>
-/co scene clear                                - revert to default
-/co preset list                                - show all style presets
-/co preset apply <key>
-/co preset create <key> <name> --system S
-/co lore suggest                               - rank world info entries
+/co help                          - show all commands
+/co status                        - module status summary
+/co mem add|list|search|forget|clear
+/co mood set|get|bump
+/co scene list|apply|create|remove|clear
+/co preset list|apply|create|remove
+/co lore suggest
+/co tag add|list|remove           - custom tags
+/co pose list|apply|create        - pose presets
+/co template list|apply           - prompt templates
+/co lora list|apply|edit          - character LoRA profiles
+/co export [section]              - export JSON
+/co import <file> [--merge]       - import JSON
 ```
 
 ## Compatibility
 
-- **SillyTavern:** 1.18.0+ (uses `setExtensionPrompt` and `eventSource`)
+- **SillyTavern:** 1.18.0+ (uses `setExtensionPrompt`, `eventSource`, `MessageFormatter` API)
 - **Backends:** any ST-compatible completion backend (Kobold, OpenAI, OpenRouter, etc.)
 - **Auto-tune** uses `generateQuietPrompt` — requires a working completion API
 
@@ -109,6 +177,6 @@ AGPL-3.0. See `LICENSE`.
 
 ## Credits
 
-- Built by Momo 🐱 (Bora Çetintaş) for personal use
+- Built by **blabchief** (with help from Momo 🐱) for personal use
 - Inspired by ST's built-in World Info, Author's Note, and the broader ST extension ecosystem
 - Magic Translation integration courtesy of [bmen25124/SillyTavern-Magic-Translation](https://github.com/bmen25124/SillyTavern-Magic-Translation)

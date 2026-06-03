@@ -6,9 +6,9 @@
     "dependencies": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "Bora Çetintaş (via Momo)",
+    "author": "blabchief",
     "version": "0.7.0",
-    "homePage": "https://github.com/boracetintas/sillytavern-companion-orchestrator",
+    "homePage": "https://github.com/blabchief-blip/sillytavern-companion-orchestrator",
     "auto_update": false,
     "minimum_client_version": "1.18.0",
     "hooks": {
