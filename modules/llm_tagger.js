@@ -108,23 +108,37 @@ export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL) {
   
   const userPrompt = `SCENE:\n${text}\n\nJSON ARRAY OF TAGS:`;
   
+  // v0.6.4: Body'yi UTF-8 encode et (Türkçe karakter fix)
+  // Önce body objesini oluştur, sonra encode et
+  const bodyObj = {
+    model,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 200,
+    temperature: 0.3,
+    top_p: 0.9,
+  };
+  
+  // TextEncoder ile UTF-8 byte'larına çevir, sonra string'e geri (Browser fetch'in internal encoder'ı bypass)
+  const bodyJson = JSON.stringify(bodyObj);
+  const bodyBytes = new TextEncoder().encode(bodyJson);
+  const bodyString = new TextDecoder('utf-8').decode(bodyBytes);
+  
   const start = Date.now();
+  
+  // v0.6.4 fix: Authorization header'ı ASCII-safe yap
+  // (apiKey'de Türkçe karakter varsa header hata verir)
+  const safeApiKey = apiKey ? String(apiKey).replace(/[^\x00-\xFF]/g, '?') : '';
+  
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${safeApiKey}`,
+      'Content-Type': 'application/json; charset=utf-8',
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 200,
-      temperature: 0.3,
-      top_p: 0.9,
-    }),
+    body: bodyString,
   });
   const latency = Date.now() - start;
   

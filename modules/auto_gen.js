@@ -339,15 +339,17 @@ class AutoGen {
       return;
     }
     const et = ctx.eventTypes;
+    // v0.6.4: MESSAGE_RENDERED kullan (Magic Translation'ın updateMessageBlock render'ı bitirmesini bekle)
+    const eventName = et.MESSAGE_RENDERED || et.MESSAGE_RECEIVED;
 
     const handler = async (data) => {
       if (!this.settings.enabled) return;
       await this._onMessageReceived(data);
     };
 
-    ctx.eventSource.on(et.MESSAGE_RECEIVED, handler);
-    this._unsub = () => ctx.eventSource.removeListener(et.MESSAGE_RECEIVED, handler);
-    console.log('[Companion AutoGen] ✅ Subscribed to MESSAGE_RECEIVED');
+    ctx.eventSource.on(eventName, handler);
+    this._unsub = () => ctx.eventSource.removeListener(eventName, handler);
+    console.log(`[Companion AutoGen] ✅ Subscribed to ${eventName}`);
   }
 
   _unsubscribe() {
@@ -674,7 +676,6 @@ class AutoGen {
       // v0.6.2 spice module structure: state[charId] (key may be string or number)
       level = s.state[charId]?.current ?? s.state[String(charId)]?.current ?? 0;
     } else if (s[charId]) {
-      // legacy: s[charId].level
       level = s[charId].level ?? 0;
     } else if (s.currentLevel !== undefined) {
       level = s.currentLevel;
@@ -692,10 +693,23 @@ class AutoGen {
     }
 
     // v0.6.2: Spice Intensify tier system (soft / intensify / lora_aware)
-    // If spice_intensify module is loaded, use it; otherwise fallback to legacy constants
+    // v0.7.0: Per-character profile override
+    const charProfilesMod = orch.modules?.find(m => m.name === 'char_lora_profiles');
     const intensifyMod = orch.modules?.find(m => m.name === 'spice_intensify');
     if (intensifyMod?.getTags) {
-      return intensifyMod.getTags(level, effectiveLevel);
+      // v0.7.0: Apply char profile's tier if set
+      let effectiveTierConfig = intensifyMod.settings;
+      if (charProfilesMod?.getEffective) {
+        const profile = charProfilesMod.getEffective(charId);
+        if (profile && profile.tier !== effectiveTierConfig.intensityTier) {
+          // Override with profile's tier for this character
+          effectiveTierConfig = { ...effectiveTierConfig, intensityTier: profile.tier };
+        }
+      }
+      return intensifyMod.getTags.call(
+        { settings: effectiveTierConfig, orch: intensifyMod.orch },
+        level, effectiveLevel
+      );
     }
 
     // Legacy fallback (v0.6.1 behavior)

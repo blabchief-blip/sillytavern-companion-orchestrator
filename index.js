@@ -28,10 +28,12 @@ import { llmTaggerModule } from './modules/llm_tagger.js';
 import { posePresetsModule } from './modules/pose_presets.js';
 import { customTagsModule } from './modules/custom_tags.js';
 import { spiceIntensifyModule } from './modules/spice_intensify.js';
+import { charLoraProfilesModule } from './modules/char_lora_profiles.js';
+import { promptTemplatesModule } from './modules/prompt_templates.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.6.2';
+const VERSION = '0.7.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -106,7 +108,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule];
 
 const orchestrator = {
     name: MODULE_NAME,
