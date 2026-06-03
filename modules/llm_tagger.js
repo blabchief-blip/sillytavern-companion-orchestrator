@@ -180,6 +180,15 @@ class LLMTagger {
   
   init(orch) {
     this.orch = orch;
+    // v0.7.0: Migration — yeni retry alanlarını merge et
+    if (orch.settings.llm_tagger) {
+      if (orch.settings.llm_tagger.maxRetries === undefined) {
+        orch.settings.llm_tagger.maxRetries = 3;
+      }
+      if (orch.settings.llm_tagger.retryDelayMs === undefined) {
+        orch.settings.llm_tagger.retryDelayMs = 1000;
+      }
+    }
     if (!orch.settings.llm_tagger) {
       orch.settings.llm_tagger = {
         enabled: true,
@@ -190,6 +199,8 @@ class LLMTagger {
         maxPerHourCalls: 50,
         lastCallTs: 0,
         minCallIntervalMs: 2000,
+        maxRetries: 3,                          // v0.7.0: retry on 429/5xx/network
+        retryDelayMs: 1000,                     // v0.7.0: base backoff (1s, 2s, 4s)
         useCompanionContext: true,
         debug: false,
         // Per-call stats
@@ -258,30 +269,61 @@ class LLMTagger {
     }
     
     const start = Date.now();
-    try {
-      const result = await extractLLMTags(augmentedText, this.settings.apiKey, this.settings.model);
-      const totalLatency = Date.now() - start;
-      
-      this.settings.stats.totalCalls++;
-      this.settings.stats.totalCost += result.cost || 0;
-      this.settings.stats.totalLatency += totalLatency;
-      
-      if (this.settings.debug) {
-        console.log('[Companion LLMTagger] ✅ Extracted', result.tags.length, 'tags in', totalLatency, 'ms, $', result.cost);
+    // v0.7.0: Retry logic — 3 attempts with exponential backoff
+    // 429 (rate limit), 5xx (server error), network errors -> retry
+    // 4xx (auth, bad request) -> fail fast
+    const maxRetries = this.settings.maxRetries ?? 3;
+    const baseDelayMs = this.settings.retryDelayMs ?? 1000;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await extractLLMTags(augmentedText, this.settings.apiKey, this.settings.model);
+        const totalLatency = Date.now() - start;
+        
+        this.settings.stats.totalCalls++;
+        this.settings.stats.totalCost += result.cost || 0;
+        this.settings.stats.totalLatency += totalLatency;
+        
+        if (this.settings.debug) {
+          console.log(`[Companion LLMTagger] ✅ Extracted ${result.tags.length} tags in ${totalLatency}ms, $${result.cost} (attempt ${attempt})`);
+        }
+        
+        return {
+          tags: result.tags,
+          latency: totalLatency,
+          cost: result.cost,
+          model: result.model,
+          raw: result.raw,
+          attempt,
+        };
+      } catch (e) {
+        lastError = e;
+        const msg = e.message || '';
+        const status = parseInt(msg.match(/OpenRouter (\d+)/)?.[1] || '0', 10);
+        
+        // Fail fast: 4xx (except 429) — auth/bad request won't fix itself
+        if (status >= 400 && status < 500 && status !== 429) {
+          this.settings.stats.errors++;
+          console.error(`[Companion LLMTagger] ❌ Permanent error (${status}):`, msg);
+          throw e;
+        }
+        
+        // Retry: 429 / 5xx / network / other
+        if (attempt < maxRetries) {
+          const delay = baseDelayMs * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+          console.warn(`[Companion LLMTagger] ⚠️ Attempt ${attempt}/${maxRetries} failed: ${msg.slice(0, 100)}. Retrying in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          this.settings.stats.errors++;
+          console.error(`[Companion LLMTagger] ❌ All ${maxRetries} attempts failed:`, msg);
+          throw e;
+        }
       }
-      
-      return {
-        tags: result.tags,
-        latency: totalLatency,
-        cost: result.cost,
-        model: result.model,
-        raw: result.raw,
-      };
-    } catch (e) {
-      this.settings.stats.errors++;
-      console.error('[Companion LLMTagger] ❌ Error:', e.message);
-      throw e;
     }
+    
+    // Should not reach here, but just in case
+    throw lastError || new Error('LLM Tagger: unknown error');
   }
   
   /**

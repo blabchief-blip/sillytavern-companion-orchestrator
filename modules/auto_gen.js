@@ -274,12 +274,21 @@ class AutoGen {
     };
     this.ctx = this._getCtx();
 
+    // v0.7.0: Migration — mevcut settings'e yeni alanları merge et
+    // (Eski versionlarda kayıtlı settings'e microsleepMs ekle)
+    if (orch.settings.auto_gen) {
+      if (orch.settings.auto_gen.microsleepMs === undefined) {
+        orch.settings.auto_gen.microsleepMs = 100;
+      }
+    }
+
     // Settings init
     if (!orch.settings.auto_gen) {
       orch.settings.auto_gen = {
         enabled: false,                       // master toggle
         trigger: 'ai',                        // 'ai' | 'user' | 'both' | 'manual'
         throttleMs: 8000,                     // min ms between gens
+        microsleepMs: 100,                    // v0.7.0: wait for other render listeners (Magic Translation)
         lastGenTs: 0,
         comfyuiUrl: orch.settings.image_gen?.comfyuiUrl || 'http://192.168.68.66:8001',
         workflowFile: '6Lora-CyberReal.json', // file adı string olmalı!
@@ -339,8 +348,10 @@ class AutoGen {
       return;
     }
     const et = ctx.eventTypes;
-    // v0.6.4: MESSAGE_RENDERED kullan (Magic Translation'ın updateMessageBlock render'ı bitirmesini bekle)
-    const eventName = et.MESSAGE_RENDERED || et.MESSAGE_RECEIVED;
+    // v0.7.0: CHARACTER_MESSAGE_RENDERED (ST render tamamlandıktan SONRA)
+    // Magic Translation'ın updateMessageBlock'ı MESSAGE_RECEIVED sonrası çalışıyor,
+    // render tamamlanınca CHARACTER_MESSAGE_RENDERED tetiklenir — conflict yok
+    const eventName = et.CHARACTER_MESSAGE_RENDERED || et.MESSAGE_RECEIVED;
 
     const handler = async (data) => {
       if (!this.settings.enabled) return;
@@ -379,6 +390,14 @@ class AutoGen {
     if (now - this.settings.lastGenTs < this.settings.throttleMs) {
       console.log('[Companion AutoGen] Throttled, skipping');
       return;
+    }
+
+    // v0.7.0: Mikrosleep — Magic Translation gibi async listener'lar render'ı bitirsin
+    // MESSAGE_RENDERED event'i zaten render sonrası tetikleniyor ama Magic Translation
+    // updateMessageBlock + ReasoningHandler hâlâ async DOM update yapabilir
+    // 100ms = pratik olarak yeterli (test ederek ayarlanabilir)
+    if (this.settings.microsleepMs && this.settings.microsleepMs > 0) {
+      await new Promise(r => setTimeout(r, this.settings.microsleepMs));
     }
 
     // ST MESSAGE_RECEIVED: data = { message: ChatMessage, mes_id }
