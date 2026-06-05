@@ -139,15 +139,24 @@ const phoneShellModule = {
      * Shell'i mount et. Phone-mode aktif olur.
      */
     mount() {
+        console.log('[phone_shell] mount() called, _active=' + _active);
         if (_active) return { ok: true, alreadyActive: true };
         if (typeof document === 'undefined' || !document.body) {
+            console.warn('[phone_shell] mount() failed: document.body unavailable');
             return { ok: false, error: 'document.body unavailable' };
         }
         _active = true;
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = true;
         }
-        _renderShell();
+        try {
+            _renderShell();
+            console.log('[phone_shell] mount() success, _active=' + _active);
+        } catch (e) {
+            _active = false;
+            console.error('[phone_shell] _renderShell failed:', e);
+            return { ok: false, error: 'renderShell: ' + (e?.message || e) };
+        }
         return { ok: true, platform: _currentPlatform };
     },
 
