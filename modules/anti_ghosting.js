@@ -335,8 +335,10 @@ export const antiGhostingModule = {
         if (!s) return [];
         const out = [];
         for (const matchId of Object.keys(s.perMatch)) {
+            const state = s.perMatch[matchId];
             const pulse = this.generatePulse(matchId, safetyLevel, now);
-            if (pulse.shouldSend && !pulse.repliedSincePulse) {
+            // Include if: stage needs a pulse AND (never pulsed yet OR user hasn't replied since last pulse)
+            if (pulse.shouldSend && (state.pulseCount === 0 || !state.repliedSincePulse)) {
                 out.push({ matchId, pulse });
             }
         }

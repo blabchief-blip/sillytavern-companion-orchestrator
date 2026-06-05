@@ -29,8 +29,8 @@ beforeEach(async () => {
     bindOrchestrator(orch);
     await tinderModule.init(orch);
     await platformTransitionModule.init(orch, ctx);
-    // Settings seed for content_safety (transitionTo etkiler)
-    orch.settings.content_safety = orch.settings.content_safety || { level: 'sfw', moduleMax: {} };
+    // Settings seed for contentSafety (transitionTo writes to contentSafety._perModule)
+    orch.settings.contentSafety = orch.settings.contentSafety || { level: 'sfw', _perModule: {} };
 });
 
 afterEach(() => {
@@ -150,19 +150,19 @@ describe('transitionTo', () => {
 
     test('transitionTo: content_safety moduleMax günceller', () => {
         platformTransitionModule.transitionTo('m1', 'whatsapp_style');
-        // whatsapp_style safetyCap=nsfw
-        assert.equal(orch.settings.content_safety.moduleMax.tinder, 'nsfw');
+        // whatsapp_style safetyCap=nsfw — contentSafetyModule uses contentSafety._perModule
+        assert.equal(orch.settings.contentSafety._perModule.tinder, 'nsfw');
     });
 
     test('transitionTo: signal_style nsfw cap', () => {
         platformTransitionModule.transitionTo('m1', 'signal_style');
-        assert.equal(orch.settings.content_safety.moduleMax.tinder, 'nsfw');
+        assert.equal(orch.settings.contentSafety._perModule.tinder, 'nsfw');
     });
 
     test('transitionTo: tinder_chat\'e dönüş safetyCap=suggestive', () => {
         platformTransitionModule.transitionTo('m1', 'whatsapp_style');
         platformTransitionModule.transitionTo('m1', 'tinder_chat');
-        assert.equal(orch.settings.content_safety.moduleMax.tinder, 'suggestive');
+        assert.equal(orch.settings.contentSafety._perModule.tinder, 'suggestive');
     });
 });
 

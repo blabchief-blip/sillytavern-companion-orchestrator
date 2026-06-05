@@ -235,10 +235,13 @@ export const platformTransitionModule = {
         state.promptInjected = injectPromptAdditive(platform, ctx);
 
         // Content_safety per-module cap güncelle
-        if (_orch?.settings?.content_safety) {
+        // contentSafetyModule settings.contentSafety._perModule kullanır (camelCase)
+        if (_orch?.settings?.contentSafety) {
             const cap = PLATFORMS[platform].safetyCap;
-            _orch.settings.content_safety.moduleMax = _orch.settings.content_safety.moduleMax || {};
-            _orch.settings.content_safety.moduleMax.tinder = cap;
+            if (!_orch.settings.contentSafety._perModule) {
+                _orch.settings.contentSafety._perModule = {};
+            }
+            _orch.settings.contentSafety._perModule.tinder = cap;
         }
 
         save();

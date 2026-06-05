@@ -33,6 +33,8 @@ import { promptTemplatesModule } from './modules/prompt_templates.js';
 import { tinderModule } from './modules/tinder.js';
 import { booruPromptModule } from './modules/booru_prompt.js';
 import { contentSafetyModule } from './modules/content_safety.js';
+import { antiGhostingModule } from './modules/anti_ghosting.js';
+import { platformTransitionModule } from './modules/platform_transition.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 import { mountModularSettings, refreshAllPanelsGeneric } from './modules/ui.js';
 
@@ -113,7 +115,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule, contentSafetyModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule, contentSafetyModule, antiGhostingModule, platformTransitionModule];
 
 const orchestrator = {
     name: MODULE_NAME,
