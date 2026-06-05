@@ -19,3 +19,7 @@ playwright-mcp/
 test-*.html
 playwright-report/
 test-results/
+
+# Companion Orchestrator — local-only files
+tinder-selfie-workflow.json
+ui-proposal.html

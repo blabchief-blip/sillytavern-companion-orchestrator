@@ -283,6 +283,54 @@ export function registerAllCommands(orch) {
                 if (slashCommands.lore[action]) return slashCommands.lore[action](rest);
                 return `Bilinmeyen lorebook eylemi: ${action}. Şunları dene: suggest`;
             }
+            if (sub === 'tinder') {
+                // v0.8.2: /co tinder <action> [args...]
+                //   /co tinder exchange <matchId>   — Trust threshold exchange tetikle
+                //   /co tinder stage <matchId>      — stage'i göster
+                //   /co tinder list                 — tüm exchange state'leri
+                //   /co tinder reset <matchId>      — exchange state'i sıfırla
+                const action = args[1] || 'help';
+                if (action === 'exchange') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co tinder exchange <matchId>';
+                    if (typeof MOD.tinder.explicitExchangeCommand !== 'function') {
+                        return 'tinder.explicitExchangeCommand mevcut değil (modül eski sürüm?).';
+                    }
+                    const r = MOD.tinder.explicitExchangeCommand(matchId);
+                    if (r.action === 'exchange') {
+                        return `📱 Numara paylaşıldı: ${r.dialogue}`;
+                    }
+                    if (r.action === 'refuse' || r.action === 'soften') {
+                        return `⏸️ Reddedildi (${r.stage}, ${r.msgCount} mesaj): ${r.dialogue}`;
+                    }
+                    return JSON.stringify(r);
+                }
+                if (action === 'stage') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co tinder stage <matchId>';
+                    if (typeof MOD.tinder.getExchangeStage !== 'function') {
+                        return 'tinder.getExchangeStage mevcut değil.';
+                    }
+                    return `Stage: ${MOD.tinder.getExchangeStage(matchId)}`;
+                }
+                if (action === 'list') {
+                    if (typeof MOD.tinder.listExchanges !== 'function') {
+                        return 'tinder.listExchanges mevcut değil.';
+                    }
+                    const all = MOD.tinder.listExchanges();
+                    if (all.length === 0) return 'Hiç exchange kaydı yok.';
+                    return all.map(e => `${e.matchId}: ${e.stage} (${e.msgCount} mesaj, ${e.numberShared ? 'numara verildi' : 'numara yok'})`).join('\n');
+                }
+                if (action === 'reset') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co tinder reset <matchId>';
+                    if (typeof MOD.tinder.resetExchange !== 'function') {
+                        return 'tinder.resetExchange mevcut değil.';
+                    }
+                    return MOD.tinder.resetExchange(matchId) ? `Sıfırlandı: ${matchId}` : 'Bulunamadı.';
+                }
+                return 'Kullanım: /co tinder <exchange|stage|list|reset> [matchId]';
+            }
             return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
         },
         namedArguments: [],

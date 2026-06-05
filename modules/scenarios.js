@@ -64,6 +64,16 @@ const BUILTIN_SCENARIOS = {
         // hala var ama re-apply tetiklemiyor (artık no-op); test updated.
         __tinderFlow: false,
     },
+    // v0.8.2: Phone Match — Tinder sonrası platform geçiş senaryosu
+    phone_match: {
+        name: 'Phone Match (Numara Verişimi)',
+        system: "Tone: A modern Tinder match transitioning off the app to a more personal channel. {{char}} and {{user}} matched and have built enough chemistry (10+ messages) that the character is ready to share a phone number. The exchange is the dramatic moment. The conversation will then move toward more intimate, real-time communication (WhatsApp/Telegram style — shorter messages, seen receipts, voice note suggestions, photo sharing).",
+        authorNote: "[You are about to share your phone number with {{user}}. The exchange should feel earned and organic. Once shared, the conversation will shift to a more intimate, immediate register — think WhatsApp/SMS rather than Tinder. Content_safety level controls the tone: SFW = warm and clean, Suggestive = flirty with promise, NSFW = openly charged and sexually explicit. After the number is shared, suggest what comes next: voice notes, photos, a video call, or just keeping the conversation going. Do not propose a physical meetup in this scenario — the relationship is in the digital exchange phase.]",
+        lorebookKeys: ['tinder_apps', 'whatsapp_style', 'messaging_apps', 'phone_exchange', 'platform_transition'],
+        // v0.8.2: allowNsfw flag — content_safety ile entegre.
+        // Eğer content_safety.level < 'suggestive' ise senaryo kendini yumuşatır.
+        allowNsfw: true,
+    },
 };
 
 let _orch = null;
@@ -101,6 +111,12 @@ export const scenariosModule = {
     },
 
     list() {
+        if (!_orch) {
+            // init() çağrılmadan list() çağrılırsa sadece built-in'leri dön
+            const merged = {};
+            for (const [k, v] of Object.entries(BUILTIN_SCENARIOS)) merged[k] = { ...v, builtin: true };
+            return merged;
+        }
         const store = getStore();
         const merged = {};
         for (const [k, v] of Object.entries(BUILTIN_SCENARIOS)) merged[k] = { ...v, builtin: true };
@@ -185,6 +201,10 @@ export const scenariosModule = {
             // D seçti: organik sohbet, script yok.)
             _ctx.setExtensionPrompt('CO_TINDER_STAGE', '', 0, 0);
             // Lorebook activation is best-effort; users can also wire these via /lorebook
+            // v0.8.2: guard — _orch.settings.scenarios init()'te set edilmiş
+            // olmalı, ama test ortamında buildOrchestrator() bu key'i
+            // seed etmeyebilir. Defensive init:
+            if (!_orch.settings.scenarios) _orch.settings.scenarios = {};
             _orch.settings.scenarios.lastUsed = key;
             save();
             return { ok: true, scenario: scenario.name };

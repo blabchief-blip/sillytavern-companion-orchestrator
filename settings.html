@@ -81,6 +81,66 @@
             </label>
 
             <hr />
+
+            <!-- ============ CONTENT SAFETY (v0.8.2) ============ -->
+            <div class="co-module-panel" data-module="content_safety">
+                <h4>🛡️ İçerik Güvenliği (Content Safety Gate)</h4>
+                <p style="opacity: 0.75; font-size: 0.85em; margin: 4px 0 8px;">
+                    Tüm modüller için global içerik seviyesi. Per-modül tavan (cap) ayrıca modülün ayarındadır.
+                    <strong>Global = floor</strong> (her zaman min, kimse aşmaz) · <strong>Mod cap = ceiling</strong> (modül sınırı).
+                </p>
+                <div class="co-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <label class="radio_label" style="flex: 1; min-width: 140px;">
+                        <input type="radio" name="co_content_safety_global" value="sfw" />
+                        <span><strong>SFW</strong> — <em style="opacity: 0.7;">Sadece güvenli içerik, explicit kelimeler maskelenir.</em></span>
+                    </label>
+                    <label class="radio_label" style="flex: 1; min-width: 140px;">
+                        <input type="radio" name="co_content_safety_global" value="suggestive" />
+                        <span><strong>Suggestive</strong> — <em style="opacity: 0.7;">Flörtatif, ima var ama açık değil.</em></span>
+                    </label>
+                    <label class="radio_label" style="flex: 1; min-width: 140px;">
+                        <input type="radio" name="co_content_safety_global" value="nsfw" />
+                        <span><strong>NSFW</strong> — <em style="opacity: 0.7;">Per-modül cap'e kadar explicit izin var.</em></span>
+                    </label>
+                </div>
+                <div style="margin-top: 6px; font-size: 0.8em; opacity: 0.7;">
+                    <span id="co_content_safety_summary">—</span>
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- ============ TINDER MODULE (v0.8.2) ============ -->
+            <div class="co-module-panel" data-module="tinder">
+                <h4>📱 Tinder — Trust Threshold Exchange</h4>
+                <p style="opacity: 0.75; font-size: 0.85em; margin: 4px 0 8px;">
+                    Tinder modülü için exchange ayarları. Karakter eşleşince mesaj sayısına göre 3 aşamadan geçer:
+                    <strong>locked</strong> (0–4) → <strong>soft_open</strong> (5–9) → <strong>exchange</strong> (10+).
+                    "Numara/WhatsApp ver" isteği bu aşamaya göre değerlendirilir.
+                </p>
+                <div class="co-row" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 200px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Soft-open eşiği (mesaj)</span>
+                        <input type="number" id="co_tinder_threshold_soft_open" min="1" max="50"
+                               class="text_pole" style="width: 100%;" />
+                    </label>
+                    <label style="flex: 1; min-width: 200px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Exchange eşiği (mesaj)</span>
+                        <input type="number" id="co_tinder_threshold_exchange" min="5" max="100"
+                               class="text_pole" style="width: 100%;" />
+                    </label>
+                </div>
+                <div style="margin-top: 8px; opacity: 0.85; font-size: 0.85em;">
+                    <span id="co_tinder_summary">—</span>
+                </div>
+                <div style="margin-top: 8px;">
+                    <button id="co_tinder_reset_exchange_all" class="menu_button" type="button">
+                        Tüm exchange state'lerini sıfırla
+                    </button>
+                </div>
+            </div>
+
+            <hr />
             <!-- ============ MOOD & RELATIONSHIP UI ============ -->
             <div class="co-module-panel" data-module="mood">
                 <h4>💕 Ruh Hali &amp; İlişki</h4>

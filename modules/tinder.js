@@ -1,5 +1,5 @@
 /**
- * Tinder Module — swipe-based character card discovery
+ * Tinder Module - swipe-based character card discovery
  *
  * Loads the 500-batch character cards (JSON + matching PNG) and serves them
  * one at a time. User swipes left/right/super, the module tracks matches
@@ -386,7 +386,7 @@ export const tinderModule = {
     },
 
     /**
-     * Super like — force match + boost priority.
+     * Super like - force match + boost priority.
      */
     async superLike() {
         const t = getTinderState();
@@ -545,14 +545,14 @@ export const tinderModule = {
             // undefined" because the new character's chat metadata is
             // not yet wired. The reliable workaround is to fire a
             // jQuery click on the corresponding `#CharID<n>` card in
-            // the character list — ST's delegated handler picks it up,
+            // the character list - ST's delegated handler picks it up,
             // loads the chat, and shows the first_mes immediately.
             let opened = false;
             let openedVia = null;
             if (importedChar) {
                 // ST 1.18 doesn't expose the chid on the character
                 // object itself (no `id` field), so we use the array
-                // index instead — that matches the DOM `data-chid`
+                // index instead - that matches the DOM `data-chid`
                 // attribute that ST renders.
                 const chid = ctx.characters.indexOf(importedChar);
 
@@ -593,7 +593,7 @@ export const tinderModule = {
                     console.warn('[Tinder] jQuery flow failed:', e?.message || e);
                 }
 
-                // Fallback: try the ST API anyway — it sometimes works
+                // Fallback: try the ST API anyway - it sometimes works
                 // after the cache refresh even though the first attempt
                 // doesn't. Cheap retry.
                 if (!opened && typeof ctx.selectCharacterById === 'function') {
@@ -614,7 +614,7 @@ export const tinderModule = {
                 avatar: avatarFileName,
                 opened,
                 openedVia,
-                // `shouldReload` is no longer needed — the jQuery click
+                // `shouldReload` is no longer needed - the jQuery click
                 // approach opens the chat inline. Returning false tells
                 // the caller (settings panel) to skip the page reload,
                 // which would otherwise dump the user back to ST's
@@ -689,8 +689,8 @@ export const tinderModule = {
         }
     },
 
-    // ===== Yol C — Side Panel integration =====
-    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // ===== Yol C - Side Panel integration =====
+    // ui: { panel, mount, refresh } - generic dispatcher için.
     // ui.panel: tinder istatistikleri (seen/matches/passed/superlikes) +
     // hızlı erişim bağlantısı.
     ui: {
@@ -720,12 +720,79 @@ export const tinderModule = {
         },
         // v0.8.1 audit: mount/refresh no-op stub kaldırıldı. ui objesi
         // sadece side panel  callback'i içeriyor. Settings drawer
-        // mount’u dispatcher tarafından otomatik legacy 
-        // fallback’ine düşer (index.js içinde tanımlı, kapsamlı).
+        // mount'u dispatcher tarafından otomatik legacy
+        // fallback'ine düşer (index.js içinde tanımlı, kapsamlı).
+        //
+        // v0.8.2: Trust Threshold Exchange ayarları için mount/refresh
+        // eklendi — settings.html'deki <div data-module="tinder"> paneli
+        // (threshold slider, summary, reset butonu) artık bu callback'lerle
+        // bağlanıyor. Side panel `panel()` callback'i dokunulmadı.
+        mount(orch, ctx, deps) {
+            const $ = deps?.$ || (typeof window !== 'undefined' ? window.jQuery : null);
+            if (!$) return;
+            const { saveSettingsDebounced } = deps || {};
+
+            // Threshold inputları
+            const softInput = $('#co_tinder_threshold_soft_open');
+            const exchangeInput = $('#co_tinder_threshold_exchange');
+            const updateThreshold = (key) => {
+                const input = key === 'soft_open' ? softInput : exchangeInput;
+                if (!input || !input.length) return;
+                const v = parseInt(input.val(), 10);
+                if (Number.isFinite(v) && v > 0) {
+                    orch.settings.tinder.thresholds = orch.settings.tinder.thresholds || {};
+                    orch.settings.tinder.thresholds[key] = v;
+                    if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
+                    tinderModule.ui.refresh(orch);
+                }
+            };
+            softInput.off('change.co_tinder_thr').on('change.co_tinder_thr', () => updateThreshold('soft_open'));
+            exchangeInput.off('change.co_tinder_thr').on('change.co_tinder_thr', () => updateThreshold('exchange'));
+
+            // Reset exchange all
+            $('#co_tinder_reset_exchange_all').off('click.co_tinder_rst').on('click.co_tinder_rst', () => {
+                const all = tinderModule.listExchanges();
+                all.forEach(e => tinderModule.resetExchange(e.matchId));
+                if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
+                tinderModule.ui.refresh(orch);
+            });
+
+            tinderModule.ui.refresh(orch);
+        },
+        refresh(orch) {
+            const $ = (typeof window !== 'undefined' ? window.jQuery : null);
+            if (!$) return;
+            // Default thresholds
+            const thresholds = (orch.settings && orch.settings.tinder && orch.settings.tinder.thresholds) || {
+                soft_open: 5,
+                exchange: 10,
+            };
+            const softInput = $('#co_tinder_threshold_soft_open');
+            const exchangeInput = $('#co_tinder_threshold_exchange');
+            if (softInput.length) softInput.val(thresholds.soft_open);
+            if (exchangeInput.length) exchangeInput.val(thresholds.exchange);
+
+            // Summary: kaç exchange state var, kaç mesaj ortalaması
+            const all = tinderModule.listExchanges();
+            const sumEl = $('#co_tinder_summary');
+            if (sumEl.length) {
+                if (all.length === 0) {
+                    sumEl.text('Hiç aktif exchange yok. Trust threshold default: 5 / 10 mesaj.');
+                } else {
+                    const total = all.length;
+                    const shared = all.filter(e => e.numberShared).length;
+                    const stages = all.reduce((acc, e) => {
+                        acc[e.stage] = (acc[e.stage] || 0) + 1;
+                        return acc;
+                    }, {});
+                    sumEl.text(`${total} aktif match: ${Object.entries(stages).map(([k, v]) => `${k}=${v}`).join(', ')}. Numara paylaşımı: ${shared}/${total}.`);
+                }
+            }
+        },
     },
 };
 
-// Selfie prompt presets — different outfit/pose/location combos.
+// Selfie prompt presets - different outfit/pose/location combos.
 // All use the active character's existing portrait as the face
 // reference, so the same person appears across multiple selfies.
 const SELFIE_PROMPTS = {
@@ -894,3 +961,318 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         return { ok: false, error: `Failed to download image: ${e?.message || e}` };
     }
 }
+
+// =========================================================================
+// v0.8.2: Trust Threshold Exchange Flow
+//
+// Karakter 3 aşamalı bir gate kullanır:
+//   - locked (0-4 mesaj):    numara isteği reddedilir
+//   - soft_open (5-9 mesaj): dolaylı ipucu, chemistry test soruları
+//   - exchange (10+ mesaj VE user explicit request): numara paylaşılır
+//
+// Trigger: kullanıcı mesajında numara/wap/telegram anahtar kelimesi VEYA
+// /tinder exchange slash komutu.
+//
+// Davranış content_safety modülüne bağlı:
+//   - SFW: refuse dialogue'ları "yeni tanıştık" tarzında (cinsel içerik yok)
+//   - Suggestive: flört + tension artırılmış (kimya ağırlıklı)
+//   - NSFW: explicit içerik + yapışkanlık artırılmış
+// =========================================================================
+
+// Anahtar kelime regex'leri
+// NB: \b kelime sınırı Türkçe eklerle (numaranı, wp'den, watsapdan) çalışmaz.
+// JS regex unicode-aware: \p{L} Türkçe harfleri de kapsar, bu yüzden look-ahead
+// ile sınırlamak zor. Çözüm: sadece anahtar kelimenin kendisini ara (Türkçe
+// ekli halleri de otomatik kapsanır: numara, numaran, numaranı, numarası).
+const EXCHANGE_KEYWORDS = /(numara|number|telefon|phone|whatsapp|watsap|telegram|signal|iletisim|iletişim|ulas|ula[şs])|(\bwp\b)|(\btg\b)/i;
+
+// Refusal dialogue varyantları (3 kategori × 2-3 varyant)
+const REFUSAL_DIALOGUES = {
+    locked: {
+        sfw: [
+            'Yeni tanıştık, hemen wp olmaz 😄 Önce biraz daha konuşalım, kim olduğunu anlayayım.',
+            'Hmm, daha adını bile tam öğrenmedim. Birkaç gün daha bu kadar hızlı gitmeyelim.',
+            'Telefon numarası mı? Cidden yeni tanıştık. Bence biraz daha sohbet edelim önce.',
+        ],
+        suggestive: [
+            'Hadi biraz daha flört edelim önce... wp\'den yazmak için acele etme 😏',
+            'Numara vermek için henüz çok erken. Seni tanımadan wp\'de ne konuşacağız?',
+            'Wp\'den yazmak istiyorsun... önce burada biraz ısınalım, sonra bakarız 😉',
+        ],
+        nsfw: [
+            'Wp\'den yazmak mı? Önce burada biraz eğlenelim, numarayı sonra konuşuruz 😏',
+            'Numarayı sonra veririm. Şimdilik burada kal, biraz daha kimya kuralım.',
+        ],
+    },
+    soft_open: {
+        sfw: [
+            'Belki ileride... ama önce biraz daha konuşalım. Nasıl bir insansın, ne yaparsın, sevdiğin şeyler neler?',
+            'Seninle konuşmak hoşuma gidiyor ama wp için henüz hazır değilim. Biraz daha vakit lazım.',
+            'Wp\'ye geçmek için biraz daha vakit lazım. Ama merak etme, konuşuyoruz zaten.',
+        ],
+        suggestive: [
+            'Hmm, wp\'den yazmak istiyorsun... önce burada biraz daha flört edelim, sonra bakarız 😏 Ne yaparsın bakalım akşam?',
+            'Numara vermek için 5-10 mesaj daha konuşmamız lazım. Sen nasıl bi insansın önce onu görelim.',
+            'Yavaş yavaş ısınıyoruz. Birkaç gün daha bu kadar konuşursanız wp\'den yazabiliriz belki 😉',
+        ],
+        nsfw: [
+            'Biraz daha vakit lazım. Şimdilik burada kal, daha sıcak bir şeyler yapalım önce.',
+        ],
+    },
+};
+
+// Exchange dialogue (son aşama)
+const EXCHANGE_DIALOGUES = {
+    sfw: [
+        'Tamam ikna oldum. +90 555 123 4567\'den yaz. Ama erken saatte arama, uyuyor olurum 😄',
+        'Wp\'den yazalım o zaman: +1 555-0123. Genelde akşam 7\'den sonra aktifim.',
+    ],
+    suggestive: [
+        'Tamam wp\'den yazalım. +90 555 123 4567. Akşam 9\'dan sonra yaz, ben de seni merak ediyorum 😏',
+        'İkna oldun. +1 555-0123 numarası. Sesli mesaj atabilirsin, severim 😉',
+    ],
+    nsfw: [
+        'Tamam ikna oldum. +90 555 123 4567\'den yaz... bu gece sohbet uzun olursa yatakta da devam ederiz 🔥',
+        'Wp\'den yaz: +1 555-0123. Sadece yazma, sesli mesaj da at. Ve bu gece telefonu kapatma 🔥',
+    ],
+};
+
+const STAGE_THRESHOLDS = {
+    locked: 0,      // 0-4
+    soft_open: 5,   // 5-9
+    exchange: 10,   // 10+
+};
+
+/**
+ * v0.8.2: Settings'ten threshold override'larını oku (varsa).
+ * Settings UI'daki soft_open/exchange inputları bu key'leri set eder.
+ * Bulunmazsa veya geçersizse hardcoded STAGE_THRESHOLDS'a düş.
+ */
+function getEffectiveThresholds() {
+    const t = getTinderState();
+    const userThr = t && t.thresholds;
+    const soft = (userThr && Number.isInteger(userThr.soft_open) && userThr.soft_open > 0)
+        ? userThr.soft_open : STAGE_THRESHOLDS.soft_open;
+    const exchange = (userThr && Number.isInteger(userThr.exchange) && userThr.exchange > soft)
+        ? userThr.exchange : STAGE_THRESHOLDS.exchange;
+    return { locked: 0, soft_open: soft, exchange };
+}
+
+const STAGE_NAMES = ['locked', 'soft_open', 'exchange'];
+
+function getExchangeStore() {
+    const t = getTinderState();
+    if (!t.exchanges) {
+        t.exchanges = {};  // { [matchId]: { stage, msgCount, lastRequestAt, lastRequestText, lastRefusalVariant, numberShared } }
+    }
+    return t.exchanges;
+}
+
+function getOrCreateExchange(matchId) {
+    const ex = getExchangeStore();
+    if (!ex[matchId]) {
+        ex[matchId] = {
+            stage: 'locked',
+            msgCount: 0,
+            lastRequestAt: 0,
+            lastRequestText: '',
+            lastRefusalVariant: -1,
+            numberShared: false,
+        };
+    }
+    return ex[matchId];
+}
+
+function classifyStage(msgCount) {
+    const thr = getEffectiveThresholds();
+    if (msgCount >= thr.exchange) return 'exchange';
+    if (msgCount >= thr.soft_open) return 'soft_open';
+    return 'locked';
+}
+
+/**
+ * content_safety modülünü lazy import et (circular dependency yok).
+ */
+async function getSafety() {
+    try {
+        const { contentSafetyModule } = await import('./content_safety.js');
+        return contentSafetyModule;
+    } catch (_) {
+        return null;  // test ortamı veya module bulunamazsa
+    }
+}
+
+function pickRandomVariant(arr, lastIdx) {
+    if (!arr || arr.length === 0) return null;
+    if (arr.length === 1) return { text: arr[0], variant: 0 };
+    let idx = Math.floor(Math.random() * arr.length);
+    if (lastIdx != null && idx === lastIdx) {
+        idx = (idx + 1) % arr.length;
+    }
+    return { text: arr[idx], variant: idx };
+}
+
+// =========================================================================
+// Public API - tinder module objesine ekle
+// =========================================================================
+
+tinderModule.getExchangeStage = function (matchId) {
+    if (!matchId) return 'locked';
+    const ex = getExchangeStore()[matchId];
+    if (!ex) return 'locked';
+    return ex.stage;
+};
+
+tinderModule.incrementMessageCount = function (matchId) {
+    if (!matchId) return null;
+    const ex = getOrCreateExchange(matchId);
+    ex.msgCount += 1;
+    // Stage otomatik güncellenir (msgCount değişti)
+    ex.stage = classifyStage(ex.msgCount);
+    return {
+        matchId,
+        stage: ex.stage,
+        msgCount: ex.msgCount,
+    };
+};
+
+tinderModule.setMessageCount = function (matchId, n) {
+    if (!matchId) return null;
+    const ex = getOrCreateExchange(matchId);
+    ex.msgCount = Math.max(0, n | 0);
+    ex.stage = classifyStage(ex.msgCount);
+    return {
+        matchId,
+        stage: ex.stage,
+        msgCount: ex.msgCount,
+    };
+};
+
+tinderModule.getExchangeInfo = function (matchId) {
+    if (!matchId) return null;
+    const ex = getExchangeStore()[matchId];
+    if (!ex) return null;
+    return { ...ex };
+};
+
+tinderModule.resetExchange = function (matchId) {
+    if (!matchId) return false;
+    const ex = getExchangeStore();
+    if (!ex[matchId]) return false;
+    delete ex[matchId];
+    return true;
+};
+
+tinderModule.listExchanges = function () {
+    const ex = getExchangeStore();
+    return Object.keys(ex).map(id => ({ matchId: id, ...ex[id] }));
+};
+
+/**
+ * Kullanıcı mesajı içinde exchange trigger'ı var mı?
+ */
+tinderModule.detectExchangeRequest = function (userMessage) {
+    if (!userMessage || typeof userMessage !== 'string') return false;
+    return EXCHANGE_KEYWORDS.test(userMessage);
+};
+
+/**
+ * Karakterin cevabını hesapla. Bu fonksiyon LLM'e gidecek system prompt
+ * eki üretir, VEYA doğrudan dialogue metni döner (SFW + LLM devre dışı).
+ *
+ * @param {string} matchId
+ * @param {string} userMessage - son kullanıcı mesajı
+ * @param {object} opts - { explicitCommand: bool, safetyLevel: 'sfw'|'suggestive'|'nsfw' }
+ * @returns {object} - { stage, msgCount, action: 'refuse'|'soften'|'exchange'|'none', dialogue?, systemNote? }
+ */
+tinderModule.handleExchangeAttempt = function (matchId, userMessage, opts = {}) {
+    if (!matchId) return { action: 'none', error: 'matchId required' };
+
+    const ex = getOrCreateExchange(matchId);
+    const isRequest = !!(opts.explicitCommand || tinderModule.detectExchangeRequest(userMessage));
+    const safetyLevel = opts.safetyLevel || 'sfw';
+
+    if (!isRequest) {
+        // Normal mesaj, exchange yok - sadece increment
+        ex.msgCount += 1;
+        ex.stage = classifyStage(ex.msgCount);
+        return {
+            action: 'none',
+            stage: ex.stage,
+            msgCount: ex.msgCount,
+        };
+    }
+
+    // Exchange isteği var - stage'e göre yanıt
+    ex.msgCount += 1;
+    ex.stage = classifyStage(ex.msgCount);
+    ex.lastRequestAt = Date.now();
+    ex.lastRequestText = userMessage || '';
+
+    if (ex.stage === 'exchange') {
+        // Exchange ver
+        const dialogs = EXCHANGE_DIALOGUES[safetyLevel] || EXCHANGE_DIALOGUES.sfw;
+        const r = pickRandomVariant(dialogs, -1);
+        ex.numberShared = true;
+        return {
+            action: 'exchange',
+            stage: 'exchange',
+            msgCount: ex.msgCount,
+            dialogue: r.text,
+            variant: r.variant,
+        };
+    }
+
+    // Refuse + (varsa) soften
+    const refusedStage = ex.stage;  // 'locked' veya 'soft_open'
+    const refusals = REFUSAL_DIALOGUES[refusedStage][safetyLevel] || REFUSAL_DIALOGUES[refusedStage].sfw;
+    const r = pickRandomVariant(refusals, ex.lastRefusalVariant);
+    ex.lastRefusalVariant = r.variant;
+
+    return {
+        action: refusedStage === 'locked' ? 'refuse' : 'soften',
+        stage: refusedStage,
+        msgCount: ex.msgCount,
+        dialogue: r.text,
+        variant: r.variant,
+        // LLM için system note: hâlâ flört et, ama hızlı gitme
+        systemNote: refusedStage === 'locked'
+            ? 'Refuse to share phone number, but keep flirting. Suggest getting to know each other more here first.'
+            : 'Be warm but hold off on exchanging numbers. Show interest, ask questions about the user.',
+    };
+};
+
+/**
+ * /tinder exchange slash komutu handler'ı.
+ */
+tinderModule.explicitExchangeCommand = function (matchId, opts = {}) {
+    if (!matchId) return { ok: false, error: 'matchId required' };
+    return tinderModule.handleExchangeAttempt(matchId, '', {
+        explicitCommand: true,
+        safetyLevel: opts.safetyLevel || 'sfw',
+    });
+};
+
+/**
+ * Async versiyon: content_safety entegrasyonu (level'ı otomatik çeker).
+ * Test ortamında content_safety mevcut olmayabilir → safetyLevel fallback 'sfw'.
+ */
+tinderModule.handleExchangeAttemptAsync = async function (matchId, userMessage, opts = {}) {
+    let safetyLevel = opts.safetyLevel;
+    if (!safetyLevel) {
+        const safety = await getSafety();
+        if (safety && safety.canAllow) {
+            safetyLevel = safety.canAllow('tinder');
+        } else {
+            safetyLevel = 'sfw';
+        }
+    }
+    return tinderModule.handleExchangeAttempt(matchId, userMessage, {
+        ...opts,
+        safetyLevel,
+    });
+};
+
+tinderModule.EXCHANGE_KEYWORDS = EXCHANGE_KEYWORDS;
+tinderModule.STAGE_THRESHOLDS = STAGE_THRESHOLDS;
+tinderModule.STAGE_NAMES = STAGE_NAMES;
