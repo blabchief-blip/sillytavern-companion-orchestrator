@@ -117,7 +117,8 @@ describe('init / mount / unmount', () => {
         assert.ok(fresh.settings.phone_shell);
         assert.equal(fresh.settings.phone_shell.active, false);
         assert.equal(fresh.settings.phone_shell.platform, 'tinder_chat');
-        assert.equal(fresh.settings.phone_shell.fullscreen, false);
+        // v0.8.5: fullscreen default true (sahne modu)
+        assert.equal(fresh.settings.phone_shell.fullscreen, true);
     });
 
     test('mount: shell DOM oluşturur', () => {
@@ -252,27 +253,28 @@ describe('appendMessage / clearMessages', () => {
 // =========================================================================
 
 describe('toggleFullscreen', () => {
-    test('false → true (default)', () => {
-        assert.equal(phoneShellModule.getInfo().fullscreen, false);
+    // v0.8.5: default artık true (sahne modu)
+    test('true → false (sahne modundan split view)', () => {
+        assert.equal(phoneShellModule.getInfo().fullscreen, true);
         const r = phoneShellModule.toggleFullscreen();
         assert.equal(r.ok, true);
-        assert.equal(r.fullscreen, true);
-    });
-
-    test('true → false', () => {
-        phoneShellModule.toggleFullscreen();
-        const r = phoneShellModule.toggleFullscreen();
         assert.equal(r.fullscreen, false);
     });
 
-    test('shell aktifken width style değişir', () => {
-        phoneShellModule.mount();
-        const shell = dom.window.document.querySelector('#co-phone-shell');
-        assert.equal(shell.style.width, '380px');
+    test('false → true (split viewden sahne modu)', () => {
         phoneShellModule.toggleFullscreen();
-        // toggleFullscreen() _renderShell() çağırır → yeni shell
+        const r = phoneShellModule.toggleFullscreen();
+        assert.equal(r.fullscreen, true);
+    });
+
+    test('shell aktifken width style değişir (false: 380px, true: 100vw)', () => {
+        phoneShellModule.mount();
+        // Default fullscreen=true → 100vw
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.equal(shell.style.width, '100vw');
+        phoneShellModule.toggleFullscreen();
         const newShell = dom.window.document.querySelector('#co-phone-shell');
-        assert.equal(newShell.style.width, '100vw');
+        assert.equal(newShell.style.width, '380px');
     });
 });
 
@@ -285,7 +287,8 @@ describe('helpers', () => {
         const i = phoneShellModule.getInfo();
         assert.equal(i.active, false);
         assert.equal(i.platform, 'tinder_chat');
-        assert.equal(i.fullscreen, false);
+        // v0.8.5: fullscreen default true
+        assert.equal(i.fullscreen, true);
         assert.equal(i.messageCount, 0);
     });
 

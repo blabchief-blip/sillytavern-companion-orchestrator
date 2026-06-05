@@ -120,10 +120,12 @@ const phoneShellModule = {
         const s = orch.settings.phone_shell = orch.settings.phone_shell || {
             active: false,
             platform: 'tinder_chat',
-            fullscreen: false,
+            fullscreen: true,
         };
         _currentPlatform = s.platform || 'tinder_chat';
-        _fullscreen = !!s.fullscreen;
+        // v0.8.5: fullscreen = true default (sahne modu)
+        // Eski split view isteyen kullanıcılar settings.phone_shell.fullscreen = false yapabilir.
+        _fullscreen = s.fullscreen !== false;
         return { ok: true };
     },
 
@@ -262,18 +264,7 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
-        // Debug: her tetiklendiğinde detay log'la (v0.8.5'te kaldırılacak)
-        if (typeof console !== 'undefined') {
-            const keys = data?.message ? Object.keys(data.message) : [];
-            console.log('[phone_shell] onMessageReceived _active=' + _active + ' data.keys=' + JSON.stringify(data ? Object.keys(data) : []) + ' msg.keys=' + JSON.stringify(keys) + ' role=' + JSON.stringify(data?.message?.role) + ' is_user=' + JSON.stringify(data?.message?.is_user) + ' textLen=' + (data?.message?.mes || '').length);
-        }
-        if (!_active) {
-            // _active false → shell mount edilmemiş. Ama data geldikten sonra
-            // belki henüz mount tamamlanmamıştır — ST generate sonrası race condition.
-            // Burada append etmek yerine bir "pending" kuyruğuna al ve mount
-            // olunca flush etmek ideal olur, ama şimdilik sadece log.
-            return;
-        }
+        if (!_active) return;
         const msg = data?.message;
         if (!msg) return;
         if (msg.is_user === true || msg.role === 'user') return;
@@ -339,19 +330,6 @@ const phoneShellModule = {
             .filter(m => m && (m.mes || '').trim() && m.is_system !== true)
             .filter(m => m.role !== 'system')
             .slice(-count);
-        if (typeof console !== 'undefined') {
-            const roles = {};
-            for (const m of recent) roles[m.role ?? '<undefined>'] = (roles[m.role ?? '<undefined>'] || 0) + 1;
-            // İlk 3 chat mesajının role + mes başlangıcı log'la (debug)
-            const sample = chat.slice(0, 3).map(m => ({
-                role: m.role ?? '<undefined>',
-                name: m.name ?? '<no name>',
-                is_user: m.is_user,
-                is_system: m.is_system,
-                mesStart: String(m.mes || '').slice(0, 40),
-            }));
-            console.log('[phone_shell] importChatHistory recent roles=' + JSON.stringify(roles) + ' total=' + chat.length + ' sample=' + JSON.stringify(sample));
-        }
         if (recent.length === 0) {
             return { ok: false, error: 'No messages to import' };
         }
@@ -542,20 +520,9 @@ function _renderHeader(theme) {
         header.appendChild(voice);
     }
 
-    // Fullscreen toggle
-    const fs = document.createElement('button');
-    fs.textContent = _fullscreen ? '⤡' : '⤢';
-    Object.assign(fs.style, {
-        background: 'transparent',
-        border: 'none',
-        color: '#fff',
-        fontSize: '1.1em',
-        cursor: 'pointer',
-    });
-    fs.title = _fullscreen ? 'Exit fullscreen' : 'Fullscreen';
-    fs.addEventListener('click', () => phoneShellModule.toggleFullscreen());
-    header.appendChild(fs);
-
+    // v0.8.5: fullscreen toggle kaldırıldı (sahne modu default).
+    // İsteyen kullanıcı settings.phone_shell.fullscreen = false yapıp
+    // split view'e geçebilir, ama UI'da toggle butonu artık yok.
     // Close (back to ST chat)
     const close = document.createElement('button');
     close.textContent = '✕';

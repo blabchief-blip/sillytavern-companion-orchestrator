@@ -453,30 +453,26 @@ export function registerAllCommands(orch) {
                 return 'Kullanım: /co platform <list|goto|back|suggest|platforms> ...';
             }
             if (sub === 'phone') {
-                // v0.8.4: /co phone <action>
-                //   /co phone on   — phone_shell'i aç (default whatsapp_style)
-                //   /co phone off  — phone_shell'i kapat
-                //   /co phone fullscreen — fullscreen toggle
+                // v0.8.5: /co phone <action>
+                //   /co phone on   — phone_shell'i aç (sahne modu, fullscreen default)
+                //   /co phone off  — phone_shell'i kapat (ST chat geri gelir)
                 //   /co phone status
+                // (fullscreen toggle kaldırıldı, artık her zaman sahne modu)
                 const action = args[1] || 'status';
                 if (action === 'on') {
                     const r = MOD.phone_shell.mount();
                     if (!r.ok) return `Hata: ${r.error}`;
-                    return `Phone shell açıldı (platform: ${MOD.phone_shell.getPlatform()}).`;
+                    return `Phone shell açıldı (sahne modu, platform: ${MOD.phone_shell.getPlatform()}).`;
                 }
                 if (action === 'off') {
                     MOD.phone_shell.unmount();
-                    return 'Phone shell kapatıldı. ST chat normal.';
-                }
-                if (action === 'fullscreen') {
-                    const r = MOD.phone_shell.toggleFullscreen();
-                    return `Fullscreen: ${r.fullscreen ? 'AÇIK (ST chat gizli)' : 'KAPALI (split view)'}`;
+                    return 'Phone shell kapatıldı. ST chat geri geldi.';
                 }
                 if (action === 'status') {
                     const i = MOD.phone_shell.getInfo();
                     return JSON.stringify(i, null, 2);
                 }
-                return 'Kullanım: /co phone <on|off|fullscreen|status>';
+                return 'Kullanım: /co phone <on|off|status>';
             }
             return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
             })();
