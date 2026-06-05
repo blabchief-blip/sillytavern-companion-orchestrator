@@ -17,6 +17,8 @@ import { scenariosModule } from './scenarios.js';
 import { promptsModule } from './prompts.js';
 import { lorebookModule } from './lorebook.js';
 import { tinderModule } from './tinder.js';
+import { antiGhostingModule } from './anti_ghosting.js';
+import { platformTransitionModule } from './platform_transition.js';
 
 const MOD = {
     memory: memoryModule,
@@ -25,6 +27,8 @@ const MOD = {
     lorebook: lorebookModule,
     prompts: promptsModule,
     tinder: tinderModule,
+    anti_ghosting: antiGhostingModule,
+    platform_transition: platformTransitionModule,
 };
 
 /**
@@ -330,6 +334,84 @@ export function registerAllCommands(orch) {
                     return MOD.tinder.resetExchange(matchId) ? `Sıfırlandı: ${matchId}` : 'Bulunamadı.';
                 }
                 return 'Kullanım: /co tinder <exchange|stage|list|reset> [matchId]';
+            }
+            if (sub === 'anti_ghosting') {
+                // v0.8.3: /co anti_ghosting <action> [args]
+                //   /co anti_ghosting list              — tüm match'lerin pulse stage'i
+                //   /co anti_ghosting pulse <matchId>   — şimdi pulse üret (göndermeden önizle)
+                //   /co anti_ghosting setseen <matchId> — lastSeenAt=now
+                //   /co anti_ghosting reset <matchId>   — state sil
+                //   /co anti_ghosting collect [tone]    — collectDue batch
+                const action = args[1] || 'list';
+                if (action === 'list') {
+                    const all = MOD.anti_ghosting.listActive();
+                    if (all.length === 0) return 'İzlenen match yok.';
+                    return all.map(e => `${e.matchId}: ${e.stage} (${e.pulseCount} pulse${e.pulseCount !== 1 ? '' : ''})`).join('\n');
+                }
+                if (action === 'pulse') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co anti_ghosting pulse <matchId>';
+                    const p = MOD.anti_ghosting.generatePulse(matchId, 'sfw');
+                    if (!p.shouldSend) return `${matchId}: fresh aşamada, pulse gönderilmez.`;
+                    return `${matchId} [${p.stage}]: ${p.message}`;
+                }
+                if (action === 'setseen') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co anti_ghosting setseen <matchId>';
+                    return MOD.anti_ghosting.setLastSeen(matchId) ? `${matchId}: lastSeenAt=now` : 'Hata.';
+                }
+                if (action === 'reset') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co anti_ghosting reset <matchId>';
+                    return MOD.anti_ghosting.reset(matchId) ? `${matchId} sıfırlandı.` : 'Bulunamadı.';
+                }
+                if (action === 'collect') {
+                    const tone = args[2] || 'sfw';
+                    const due = MOD.anti_ghosting.collectDue(tone);
+                    if (due.length === 0) return 'Gönderilecek pulse yok.';
+                    return due.map(d => `${d.matchId} [${d.pulse.stage}]: ${d.pulse.message}`).join('\n');
+                }
+                return 'Kullanım: /co anti_ghosting <list|pulse|setseen|reset|collect> [matchId] [tone]';
+            }
+            if (sub === 'platform') {
+                // v0.8.3: /co platform <action> [args]
+                //   /co platform list                              — tüm geçişler
+                //   /co platform goto <matchId> <platformKey>      — geçiş yap
+                //   /co platform back <matchId>                    — tinder'a geri dön
+                //   /co platform suggest <matchId>                 — öneri al
+                //   /co platform platforms                         — mevcut platform preset listesi
+                const action = args[1] || 'list';
+                if (action === 'list') {
+                    const all = MOD.platform_transition.listTransitions();
+                    if (all.length === 0) return 'Aktif platform geçişi yok.';
+                    return all.map(t => `${t.matchId}: ${t.platform}`).join('\n');
+                }
+                if (action === 'goto') {
+                    const matchId = args[2];
+                    const platformKey = args[3];
+                    if (!matchId || !platformKey) return 'Kullanım: /co platform goto <matchId> <platform>';
+                    const r = MOD.platform_transition.transitionTo(matchId, platformKey);
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${matchId} → ${platformKey} (cap=${r.safetyCap}, prompt injected=${r.promptInjected})`;
+                }
+                if (action === 'back') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co platform back <matchId>';
+                    const r = MOD.platform_transition.revertToTinder(matchId);
+                    return r.ok ? `${matchId} → tinder_chat` : `Hata: ${r.error}`;
+                }
+                if (action === 'suggest') {
+                    const matchId = args[2];
+                    if (!matchId) return 'Kullanım: /co platform suggest <matchId>';
+                    const r = MOD.platform_transition.suggestTransition(matchId);
+                    if (!r.suggest) return `Öneri yok (şu an: ${r.currentPlatform || 'tinder_chat'}, exchange stage: ${r.exchangeStage || '?'})`;
+                    return `Öneri: ${r.target} (${r.reason})`;
+                }
+                if (action === 'platforms') {
+                    const all = MOD.platform_transition.getAvailablePlatforms();
+                    return all.map(p => `${p.emoji} ${p.key} (${p.name}) — cap=${p.safetyCap}`).join('\n');
+                }
+                return 'Kullanım: /co platform <list|goto|back|suggest|platforms> ...';
             }
             return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
         },

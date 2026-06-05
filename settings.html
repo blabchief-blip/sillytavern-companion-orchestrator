@@ -141,6 +141,70 @@
             </div>
 
             <hr />
+
+            <!-- ============ ANTI-GHOSTING PULSE (v0.8.3) ============ -->
+            <div class="co-module-panel" data-module="anti_ghosting">
+                <h4>🫀 Anti-Ghosting Pulse</h4>
+                <p style="opacity: 0.75; font-size: 0.85em; margin: 4px 0 8px;">
+                    Aktif eşleşmelerde son kullanıcı mesajından ne kadar süre geçtiğine göre 4 aşamadan birini seçer:
+                    <strong>fresh</strong> (&lt;12h) → <strong>cooling</strong> (12-48h) → <strong>cold</strong> (3-7g) → <strong>ghosted</strong> (&gt;7g).
+                    Cooling'den itibaren kullanıcı cevap yazmadıysa nazik bir <em>pulse</em> mesajı üretilir.
+                </p>
+                <label class="checkbox_label" for="co_anti_ghosting_enabled" style="margin: 4px 0;">
+                    <input id="co_anti_ghosting_enabled" type="checkbox" checked />
+                    <span><strong>Aktif</strong> — <em style="opacity: 0.75;">Sessiz eşleşmeleri izle, pulse üret.</em></span>
+                </label>
+                <div class="co-row" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px;">
+                    <label style="flex: 1; min-width: 160px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Cooling eşiği (saat)</span>
+                        <input type="number" id="co_anti_ghosting_threshold_cooling" min="1" max="168"
+                               class="text_pole" style="width: 100%;" />
+                    </label>
+                    <label style="flex: 1; min-width: 160px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Cold eşiği (gün)</span>
+                        <input type="number" id="co_anti_ghosting_threshold_cold" min="1" max="30"
+                               class="text_pole" style="width: 100%;" />
+                    </label>
+                    <label style="flex: 1; min-width: 160px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Ghosted eşiği (gün)</span>
+                        <input type="number" id="co_anti_ghosting_threshold_ghosted" min="1" max="60"
+                               class="text_pole" style="width: 100%;" />
+                    </label>
+                </div>
+                <div style="margin-top: 8px; opacity: 0.85; font-size: 0.85em;">
+                    <span id="co_anti_ghosting_summary">—</span>
+                </div>
+                <div style="margin-top: 8px;">
+                    <button id="co_anti_ghosting_reset_all" class="menu_button" type="button">
+                        Tüm match state'lerini sıfırla
+                    </button>
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- ============ PLATFORM TRANSITION (v0.8.3) ============ -->
+            <div class="co-module-panel" data-module="platform_transition">
+                <h4>🔀 Platform Geçişi</h4>
+                <p style="opacity: 0.75; font-size: 0.85em; margin: 4px 0 8px;">
+                    Tinder eşleşmesi numara paylaşımı sonrası whatsapp / telegram / signal gibi platforma geçtiğinde
+                    karakterin iletişim tarzı otomatik değişir (kısa mesaj, sesli not, emoji yoğunluğu).
+                    Her platform için ayrı güvenlik tavanı (safety cap) uygulanır.
+                </p>
+                <div style="margin-top: 6px;">
+                    <span style="font-size: 0.85em; opacity: 0.8;">Aktif geçişler:</span>
+                    <ul id="co_platform_transition_list" style="margin: 4px 0 4px 16px; padding: 0; font-size: 0.9em;">
+                        <li style="opacity: 0.6;">Henüz geçiş yapılmamış.</li>
+                    </ul>
+                </div>
+                <div style="margin-top: 8px;">
+                    <button id="co_platform_transition_reset_all" class="menu_button" type="button">
+                        Tüm platform state'lerini sıfırla
+                    </button>
+                </div>
+            </div>
+
+            <hr />
             <!-- ============ MOOD & RELATIONSHIP UI ============ -->
             <div class="co-module-panel" data-module="mood">
                 <h4>💕 Ruh Hali &amp; İlişki</h4>

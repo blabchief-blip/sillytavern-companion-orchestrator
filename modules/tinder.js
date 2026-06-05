@@ -701,6 +701,9 @@ export const tinderModule = {
                 ? Math.round((stats.seen / total) * 100)
                 : 0;
             const remaining = stats.remaining;
+            // v0.8.3: Lazy import anti_ghosting + platform_transition modülleri
+            // side panel için. Circular import riski az — sadece callback içinde.
+            const matchesHtml = _renderTinderSidePanelExtras(orch);
             return `
                 <h4>💕 Tinder Keşif</h4>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; font-size:0.9em; margin:6px 0;">
@@ -713,6 +716,7 @@ export const tinderModule = {
                     <div style="background:#ff6b6b; height:100%; width:${progress}%; transition:width 0.3s;"></div>
                 </div>
                 <p style="font-size:0.8em; opacity:0.6;">${stats.seen} / ${total} kart görüldü (%${progress})</p>
+                ${matchesHtml}
                 <p style="font-size:0.85em; opacity:0.7; margin-top:8px;">
                     Hızlı: <code>/co tinder swipe</code> · <code>/co tinder matches</code>
                 </p>
@@ -791,6 +795,63 @@ export const tinderModule = {
         },
     },
 };
+
+// =========================================================================
+// Side panel extras: anti_ghosting badge + platform badge per match
+// =========================================================================
+//
+// v0.8.3: Side panel'de aktif eşleşmelerin her biri için:
+//   - 🫀 pulse stage badge (fresh/cooling/cold/ghosted)
+//   - 📱→💬 platform badge (tinder_chat / whatsapp / telegram / signal)
+//
+// Lazy import — circular dependency riski azaltır, anti_ghosting ve
+// platform_transition modülleri tinder.js'i import ediyor.
+
+async function _renderTinderSidePanelExtrasAsync(orch) {
+    let agMod = null, ptMod = null;
+    try {
+        const ag = await import('./anti_ghosting.js');
+        agMod = ag.antiGhostingModule;
+    } catch (_) { /* test ortamı */ }
+    try {
+        const pt = await import('./platform_transition.js');
+        ptMod = pt.platformTransitionModule;
+    } catch (_) { /* test ortamı */ }
+
+    if (!agMod || !ptMod) return '';
+
+    const agMatches = agMod.listActive();
+    const ptMatches = ptMod.listTransitions();
+    if (agMatches.length === 0 && ptMatches.length === 0) return '';
+
+    const STAGE_EMOJI = { fresh: '🟢', cooling: '🟡', cold: '🟠', ghosted: '🔴' };
+    const lines = [];
+    if (agMatches.length > 0) {
+        lines.push('<p style="font-size:0.85em; margin:6px 0 2px;"><strong>🫀 Pulse durumu:</strong></p>');
+        for (const e of agMatches) {
+            const emoji = STAGE_EMOJI[e.stage] || '⚪';
+            lines.push(`<div style="font-size:0.8em; opacity:0.85; margin-left:8px;">${emoji} <code>${e.matchId}</code> — ${e.stage}${e.pulseCount > 0 ? ` (${e.pulseCount} pulse)` : ''}</div>`);
+        }
+    }
+    if (ptMatches.length > 0) {
+        lines.push('<p style="font-size:0.85em; margin:8px 0 2px;"><strong>🔀 Platform:</strong></p>');
+        for (const t of ptMatches) {
+            const info = ptMod.getPlatformInfo(t.platform);
+            const emoji = info ? info.emoji : '⚪';
+            const name = info ? info.name : t.platform;
+            lines.push(`<div style="font-size:0.8em; opacity:0.85; margin-left:8px;">${emoji} <code>${t.matchId}</code> → ${name}</div>`);
+        }
+    }
+    return lines.join('\n');
+}
+
+// Senkron wrapper (side panel HTML'i return ediyor, async beklemek zor).
+// Side panel dispatcher _renderXxx çağrılarında await etmiyor, o yüzden
+// şu an side panel sync render kullanıyor. v0.8.4'te async dispatcher
+// ekleyebiliriz. v0.8.3: şimdilik sync fallback — boş döner.
+function _renderTinderSidePanelExtras(orch) {
+    return '';
+}
 
 // Selfie prompt presets - different outfit/pose/location combos.
 // All use the active character's existing portrait as the face
