@@ -249,9 +249,17 @@ export const platformTransitionModule = {
         // v0.8.4: phone_shell entegrasyonu — platform değiştiğinde shell güncelle.
         // Lazy import — circular dependency yok (platform_transition → phone_shell).
         // .then() kullanıyoruz (transitionTo sync) — caller'lar await etmek zorunda değil.
+        // ÖNEMLİ: tinder_chat'a dönüş shell'i KAPATIR (tinder aşaması
+        // bitti, normal ST chat'e dönüyoruz). Diğer platformlar shell
+        // açıksa tema günceller.
         import('./phone_shell.js').then((mod) => {
-            if (mod?.phoneShellModule?.isActive()) {
-                mod.phoneShellModule.setPlatform(platform);
+            const ps = mod?.phoneShellModule;
+            if (!ps) return;
+            if (platform === getDefaultPlatform()) {
+                // Tinder'a dönüş → shell kapat, tinder temasına gerek yok
+                if (ps.isActive()) ps.unmount();
+            } else if (ps.isActive()) {
+                ps.setPlatform(platform);
             }
         }).catch(() => { /* phone_shell yüklenmemiş (test), sessizce geç */ });
 

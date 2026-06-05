@@ -302,6 +302,44 @@ const phoneShellModule = {
         return { ok: true };
     },
 
+    /**
+     * v0.8.4: ST chat'ten son N mesajı çekip shell'e import et.
+     * Tinder aşamasında konuşulan mesajlar whatsapp'a geçince
+     * bağlamı koruyacak şekilde shell'de görünsün.
+     *
+     * ST API: SillyTavern.getContext().chat (array of {role, mes, name, ...})
+     *   - chat[].role: 'user' | 'assistant' | 'system'
+     *   - chat[].mes: mesaj metni
+     *
+     * Test ortamı: ST context yoksa no-op.
+     */
+    importChatHistory(count = 12) {
+        const ctx = _ctx || (typeof SillyTavern !== 'undefined' && SillyTavern.getContext
+            ? SillyTavern.getContext() : null);
+        if (!ctx) return { ok: false, error: 'ST context unavailable' };
+        const chat = ctx.chat;
+        if (!Array.isArray(chat) || chat.length === 0) {
+            return { ok: false, error: 'ST chat empty' };
+        }
+        // Son N mesajı al (system hariç)
+        const recent = chat
+            .filter(m => m && m.role && m.role !== 'system' && (m.mes || '').trim())
+            .slice(-count);
+        if (recent.length === 0) {
+            return { ok: false, error: 'No messages to import' };
+        }
+        // Mevcut shell mesajlarını temizle (tarihçe import ediyoruz)
+        _messages = [];
+        if (_messageContainer) _messageContainer.innerHTML = '';
+        let imported = 0;
+        for (const m of recent) {
+            const role = m.role === 'user' ? 'user' : 'assistant';
+            phoneShellModule.appendMessage(role, m.mes);
+            imported++;
+        }
+        return { ok: true, imported, total: chat.length };
+    },
+
     getInfo() {
         return {
             active: _active,

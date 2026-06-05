@@ -306,20 +306,80 @@ describe('helpers', () => {
 });
 
 // =========================================================================
-// Integration: scenarios.apply(phone_match) auto-mounts
+// Integration: scenarios.apply(phone_match) — shell mount etmez
 // =========================================================================
 
-describe('scenarios.apply(phone_match) auto-mounts phone_shell', () => {
-    test('phone_match apply → shell mount + whatsapp_style', async () => {
+describe('scenarios.apply(phone_match) sadece prompt değiştirir (shell auto-mount YOK)', () => {
+    test('phone_match apply → ok + shell mount OLMAMALI (tinder aşaması önce)', async () => {
         const before = phoneShellModule.isActive();
         assert.equal(before, false, 'shell başta aktif olmamalı');
         const r = await scenariosModule.apply('phone_match');
         assert.equal(r.ok, true);
-        // phone_shell otomatik mount olmalı
-        assert.equal(phoneShellModule.isActive(), true, 'phone_match → shell mount olmadı');
-        assert.equal(phoneShellModule.getPlatform(), 'whatsapp_style', 'default platform whatsapp olmalı');
+        // v0.8.4: artık phone_match → shell mount ETMİYOR.
+        // Shell sadece tinder.exchangeDetected() (numara paylaşımı) sonrası açılır.
+        assert.equal(phoneShellModule.isActive(), false,
+            'phone_match → shell mount OLMAMALI (tinder aşaması önce yaşanmalı)');
         const shell = dom.window.document.querySelector('#co-phone-shell');
-        assert.ok(shell, 'shell DOM\'a eklenmedi');
+        assert.equal(shell, null, 'shell DOM\'a eklenmemeli');
+    });
+
+    test('phone_match sonrası 2. apply → hâlâ shell mount yok', async () => {
+        await scenariosModule.apply('phone_match');
+        const r = await scenariosModule.apply('phone_match');
+        assert.equal(r.ok, true);
+        assert.equal(phoneShellModule.isActive(), false);
+    });
+});
+
+// =========================================================================
+// Integration: tinder.exchangeDetected → shell mount + whatsapp_style
+// =========================================================================
+
+describe('tinder.exchangeDetected → phone_shell mount + whatsapp_style', () => {
+    test('numara paylaşılınca _onNumberShared → platform transition + shell mount', async () => {
+        await tinderModule.init(orch);
+        // Önce exchange stage'ine getir (12 mesaj sayısı)
+        tinderModule.setMessageCount('m1', 12);
+        // Explicit exchange command → handleExchangeAttempt tetikler
+        const r = tinderModule.explicitExchangeCommand('m1', { safetyLevel: 'sfw' });
+        assert.equal(r.action, 'exchange', 'exchange gerçekleşmeli');
+        // _onNumberShared async (Promise return eder, hemen bitmeyebilir)
+        await new Promise(res => setTimeout(res, 200));
+        // phone_shell mount olmuş olmalı
+        assert.equal(phoneShellModule.isActive(), true,
+            '_onNumberShared sonrası shell mount olmalı');
+        assert.equal(phoneShellModule.getPlatform(), 'whatsapp_style',
+            'default platform whatsapp olmalı');
+    });
+
+    test('numara paylaşılınca platform_transition.transitionTo da tetiklenir', async () => {
+        await tinderModule.init(orch);
+        await platformTransitionModule.init(orch, globalThis.__stCtx);
+        tinderModule.setMessageCount('m1', 12);
+        tinderModule.explicitExchangeCommand('m1', { safetyLevel: 'sfw' });
+        await new Promise(res => setTimeout(res, 200));
+        assert.equal(platformTransitionModule.getPlatform('m1'), 'whatsapp_style');
+    });
+});
+
+// =========================================================================
+// Integration: revertToTinder → shell kapat
+// =========================================================================
+
+describe('platform_transition.revertToTinder → shell kapat', () => {
+    test('shell açıkken revertToTinder → shell kapanır', async () => {
+        await platformTransitionModule.init(orch, globalThis.__stCtx);
+        phoneShellModule.mount();
+        assert.equal(phoneShellModule.isActive(), true);
+        // whatsapp'a geçiş
+        platformTransitionModule.transitionTo('m1', 'whatsapp_style');
+        await new Promise(res => setTimeout(res, 50));
+        assert.equal(phoneShellModule.isActive(), true);
+        // geri tinder'a dön
+        platformTransitionModule.revertToTinder('m1');
+        await new Promise(res => setTimeout(res, 50));
+        assert.equal(phoneShellModule.isActive(), false,
+            'revertToTinder sonrası shell kapanmalı (tinder aşamasına dönüş)');
     });
 });
 

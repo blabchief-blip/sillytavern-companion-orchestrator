@@ -1285,6 +1285,12 @@ tinderModule.handleExchangeAttempt = function (matchId, userMessage, opts = {}) 
         const dialogs = EXCHANGE_DIALOGUES[safetyLevel] || EXCHANGE_DIALOGUES.sfw;
         const r = pickRandomVariant(dialogs, -1);
         ex.numberShared = true;
+        // v0.8.4: Numara paylaşıldı → tinder aşaması bitti, whatsapp'a geç.
+        // phone_shell mount + platform_transition.transitionTo tetikle.
+        // Lazy import (circular dependency yok: tinder → platform_transition + phone_shell).
+        tinderModule._onNumberShared(matchId).catch(e => {
+            console.warn('[tinder] _onNumberShared hook failed:', e);
+        });
         return {
             action: 'exchange',
             stage: 'exchange',
@@ -1322,6 +1328,52 @@ tinderModule.explicitExchangeCommand = function (matchId, opts = {}) {
         explicitCommand: true,
         safetyLevel: opts.safetyLevel || 'sfw',
     });
+};
+
+/**
+ * v0.8.4: Numara paylaşıldı hook'u — whatsapp'a otomatik geçiş.
+ *
+ * 3 side effect:
+ *   1. platform_transition.transitionTo(matchId, 'whatsapp_style')
+ *      — system prompt'a whatsapp mesaj stili enjekte edilir
+ *   2. phone_shell.mount() + setPlatform('whatsapp_style')
+ *      — görsel olarak whatsapp teması devreye girer
+ *   3. ST chat'ten son 12+ mesajı shell'e import et
+ *      — kullanıcı tinder'da konuştuğu bağlamı whatsapp'ta da görsün
+ *
+ * Lazy import (tinder → platform_transition + phone_shell) — circular yok.
+ * Test ortamı: module yoksa sessizce geç (return ok:false).
+ */
+tinderModule._onNumberShared = async function (matchId) {
+    if (!matchId) return { ok: false, error: 'matchId required' };
+    const results = { platformTransition: null, phoneShell: null, historyImport: null };
+    try {
+        const ptMod = (await import('./platform_transition.js')).platformTransitionModule;
+        if (ptMod?.transitionTo) {
+            results.platformTransition = ptMod.transitionTo(matchId, 'whatsapp_style');
+        }
+    } catch (e) {
+        console.warn('[tinder] platform_transition import failed:', e?.message || e);
+    }
+    try {
+        const psMod = (await import('./phone_shell.js')).phoneShellModule;
+        if (psMod?.mount) {
+            const r = psMod.mount();
+            results.phoneShell = r.ok ? 'mounted' : (r.error || 'failed');
+            // mount sonrası platform set et
+            if (r.ok && psMod.setPlatform) {
+                psMod.setPlatform('whatsapp_style');
+            }
+            // ST chat'ten son 12+ mesajı import et (tinder konuşması devamlılığı)
+            if (r.ok && psMod.importChatHistory) {
+                const imp = psMod.importChatHistory(12);
+                results.historyImport = imp;
+            }
+        }
+    } catch (e) {
+        console.warn('[tinder] phone_shell import failed:', e?.message || e);
+    }
+    return { ok: true, results };
 };
 
 /**
