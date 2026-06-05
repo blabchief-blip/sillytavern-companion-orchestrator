@@ -10,6 +10,8 @@
  */
 'use strict';
 
+import { parseLooseJsonObject } from './json_util.js';
+
 let _orch = null;
 let _ctx = null;
 
@@ -299,12 +301,11 @@ export const spiceModule = {
 
         try {
             const prompt = `You are a content classifier for a roleplay chat. Read this message and output ONLY a single JSON object, no markdown, no commentary, exactly:\n{"score": <0-4>, "tags": [<string>, ...]}\n\nScoring guide:\n0 = safe (everyday chat, no romantic/sexual content)\n1 = suggestive (romantic tension, light flirting, hand-holding, glances)\n2 = spicy (kissing, intimate touching, undressing, emotional intensity)\n3 = explicit (clearly sexual content described)\n4 = intense (heavy, prolonged, multiple participants, or non-consensual undertones)\n\nTags are short lowercase keys (1-3 words). Use ones from this library if applicable: ${Object.keys(TAG_LIBRARY).slice(0, 30).join(', ')}, or add your own. Max 5 tags per message.\n\nMessage:\n"""${text.slice(0, 1500)}"""`;
-            const reply = await ctx.generateQuietPrompt(prompt, false, false);
+            const reply = await ctx.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: false });
             if (!reply) return;
 
-            const jsonMatch = reply.match(/\{[\s\S]*?\}/);
-            if (!jsonMatch) return;
-            const parsed = JSON.parse(jsonMatch[0]);
+            const parsed = parseLooseJsonObject(reply);
+            if (!parsed) return;
             const score = Number(parsed.score) || 0;
             const tags = Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5) : [];
 

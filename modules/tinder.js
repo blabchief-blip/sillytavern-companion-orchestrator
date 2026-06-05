@@ -736,6 +736,16 @@ export const tinderModule = {
             if (!$) return;
             const { saveSettingsDebounced } = deps || {};
 
+            // v0.8.4 fix: Bu ui.mount (v0.8.2) eklendiğinde resolveUIBinding
+            // artık legacy `orch.wireTinderPanel()`'e düşmüyor (ui.mount varsa
+            // onu tercih ediyor). Sonuç: kart paneli + swipe butonları +
+            // refreshCard hiç bağlanmıyordu, kartlar görünmüyordu. Legacy
+            // card-panel wiring'ini burada açıkça çağırıyoruz ki hem kart UI'ı
+            // hem exchange-threshold UI'ı mount olsun.
+            if (typeof orch.wireTinderPanel === 'function') {
+                try { orch.wireTinderPanel(); } catch (e) { console.error('[CO] wireTinderPanel failed:', e); }
+            }
+
             // Threshold inputları
             const softInput = $('#co_tinder_threshold_soft_open');
             const exchangeInput = $('#co_tinder_threshold_exchange');
