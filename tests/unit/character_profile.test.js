@@ -243,3 +243,14 @@ describe('character_profile — buildSystemDirective', () => {
         assert.match(dir, /Aşağılama/);
     });
 });
+
+describe('character_profile — global namespace (v0.8.6 prompts coupling)', () => {
+    test('init() globalThis.__co_characterProfile set eder', () => {
+        assert.equal(globalThis.__co_characterProfile, characterProfileModule);
+    });
+
+    test('namespace üzerinden buildSystemDirective çağrılabilir', () => {
+        const dir = globalThis.__co_characterProfile.buildSystemDirective('char-1');
+        assert.match(dir, /Ses üslubu/);
+    });
+});

@@ -256,12 +256,37 @@ export const promptsModule = {
             } else {
                 _ctx.setExtensionPrompt('CO_TURKISH_PREFIX', '', 0, 0, false, 1);
             }
+            // v0.8.6: per-character NSFW profile directive inject
+            // Active characterId'yi ST context'ten al
+            this._refreshCharacterDirective();
             _orch.settings.promptsData.activePreset = key;
             save();
             return { ok: true, preset: preset.name };
         } catch (err) {
             return { ok: false, error: String(err.message || err) };
         }
+    },
+
+    /**
+     * v0.8.6: Mevcut karakterin NSFW profile directive'ini extension prompt olarak
+     * inject et. Karakter değişince (CHAT_CHANGED) senaryolar tarafından
+     * çağrılmalı.
+     */
+    _refreshCharacterDirective() {
+        if (!_ctx?.setExtensionPrompt) return;
+        const charId = _ctx.characterId || (_ctx.character && _ctx.character.name);
+        if (!charId) {
+            _ctx.setExtensionPrompt('CO_CHARACTER_NSFW', '', 0, 0);
+            return;
+        }
+        // v0.8.6: globalThis namespace pattern ile modül coupling.
+        // character_profile.init() globalThis.__co_characterProfile set eder.
+        // Bu sayede prompts.js hard import yapmaz, circular dependency olmaz.
+        const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+        const directive = (cp && cp.buildSystemDirective)
+            ? (cp.buildSystemDirective(charId) || '')
+            : '';
+        _ctx.setExtensionPrompt('CO_CHARACTER_NSFW', directive, 0, 0);
     },
 
     create({ key, name, description = '', systemAddition = '' }) {

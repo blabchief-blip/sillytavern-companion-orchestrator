@@ -127,6 +127,10 @@ export const characterProfileModule = {
         _orch = orch;
         _ctx = typeof SillyTavern !== 'undefined' ? SillyTavern.getContext() : null;
         getStore(); // seed default
+        // v0.8.6: prompts.js bu namespace'i okuyor (lazy coupling)
+        if (typeof globalThis !== 'undefined') {
+            globalThis.__co_characterProfile = this;
+        }
     },
 
     get(charId) {
