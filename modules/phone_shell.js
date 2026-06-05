@@ -35,7 +35,8 @@ const PHONE_PLATFORMS = {
         emoji: '📱',
         color: '#ff6b6b',
         bgGradient: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)',
-        wallpaper: 'linear-gradient(180deg, rgba(255,107,107,0.05) 0%, rgba(255,107,107,0.15) 100%)',
+        bgColor: '#fff5f3',  // solid base — transparan gradient'ı sızdırmaz
+        wallpaper: 'linear-gradient(180deg, rgba(255,107,107,0.05) 0%, rgba(255,107,107,0.15) 100%), #fff5f3',
         bubbleSelf: '#dcf8c6',
         bubbleOther: '#ffffff',
         textColor: '#303030',
@@ -51,6 +52,7 @@ const PHONE_PLATFORMS = {
         emoji: '💬',
         color: '#25d366',
         bgGradient: 'linear-gradient(135deg, #075e54 0%, #128c7e 100%)',
+        bgColor: '#0b141a',  // solid dark base
         wallpaper: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 8px), linear-gradient(180deg, #0b141a 0%, #1f2c34 100%)',
         bubbleSelf: '#005c4b',
         bubbleOther: '#202c33',
@@ -67,6 +69,7 @@ const PHONE_PLATFORMS = {
         emoji: '✈️',
         color: '#0088cc',
         bgGradient: 'linear-gradient(135deg, #0088cc 0%, #229ed9 100%)',
+        bgColor: '#17212b',  // solid dark base
         wallpaper: 'linear-gradient(180deg, #17212b 0%, #0e1621 100%)',
         bubbleSelf: '#2b5278',
         bubbleOther: '#182533',
@@ -83,6 +86,7 @@ const PHONE_PLATFORMS = {
         emoji: '🔒',
         color: '#3a76f0',
         bgGradient: 'linear-gradient(135deg, #1a1a2e 0%, #3a76f0 100%)',
+        bgColor: '#1c1c1c',  // solid dark base
         wallpaper: 'linear-gradient(180deg, #1c1c1c 0%, #2a2a2a 100%)',
         bubbleSelf: '#2563eb',
         bubbleOther: '#2a2a2a',
@@ -151,7 +155,10 @@ const phoneShellModule = {
         }
         try {
             _renderShell();
-            console.log('[phone_shell] mount() success, _active=' + _active);
+            // Mount sonrası shell element DOM'da mı kontrol et
+            const inDom = _shellEl && document.body.contains(_shellEl);
+            const hasSize = _shellEl && _shellEl.offsetWidth > 0 && _shellEl.offsetHeight > 0;
+            console.log('[phone_shell] mount() success, _active=' + _active + ' inDom=' + inDom + ' size=' + (_shellEl ? _shellEl.offsetWidth + 'x' + _shellEl.offsetHeight : 'null') + ' platform=' + _currentPlatform);
         } catch (e) {
             _active = false;
             console.error('[phone_shell] _renderShell failed:', e);
@@ -422,9 +429,13 @@ function _renderShell() {
         position: 'fixed',
         right: '0',
         top: '0',
+        left: _fullscreen ? '0' : 'auto',
         height: '100vh',
         width: _fullscreen ? '100vw' : '380px',
+        // Background: gradient varsa solid base + gradient, transparan alpha
+        // gradient'lar arka plandaki ST chat beyazını sızdırıyordu.
         background: theme.wallpaper,
+        backgroundColor: theme.bgColor || '#1a1a2e',  // fallback solid
         color: theme.textColor,
         fontFamily: theme.fontFamily,
         display: 'flex',
