@@ -124,7 +124,13 @@ const phoneShellModule = {
         };
         _currentPlatform = s.platform || 'tinder_chat';
         // v0.8.5: fullscreen = true default (sahne modu)
-        // Eski split view isteyen kullanıcılar settings.phone_shell.fullscreen = false yapabilir.
+        // Migration: eski settings'te fullscreen=false yazılıysa
+        // (v0.8.4 öncesi default), şimdi true'ya migrate et.
+        // İsteyen kullanıcı settings.phone_shell.fullscreen = false
+        // yapıp split view'e geçebilir, ama ilk init'te migration yap.
+        if (s.fullscreen === undefined || s.fullscreen === null) {
+            s.fullscreen = true;
+        }
         _fullscreen = s.fullscreen !== false;
         return { ok: true };
     },
