@@ -438,25 +438,34 @@ function _renderShell() {
     _shellEl.id = 'co-phone-shell';
     _shellEl.setAttribute('data-platform', _currentPlatform);
     _shellEl.setAttribute('data-fullscreen', String(_fullscreen));
-    Object.assign(_shellEl.style, {
-        position: 'fixed',
-        right: '0',
-        top: '0',
-        left: '0',  // fullscreen default: 0'dan sağa tüm genişlik
-        bottom: '0',
-        width: '100vw',
-        height: '100vh',
-        // Background: solid base + gradient overlay
-        background: theme.wallpaper,
-        backgroundColor: theme.bgColor || '#1a1a2e',  // fallback solid
-        color: theme.textColor,
-        fontFamily: theme.fontFamily,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: '99999',
-        boxShadow: 'none',
-        // transition kaldırıldı — mount anında 0x0 animasyonu önlendi
-    });
+    // ST 1.18'de position: fixed + 100vw yetmiyor, parent'ta transform varsa
+    // fixed child viewport'a göre değil parent'a göre hesaplanıyor. !important
+    // zorla. Object.assign \ syntax kabul etmiyor (style.width boş döner),
+    // setProperty kullanıyoruz.
+    const ss = _shellEl.style;
+    ss.setProperty('position', 'fixed', 'important');
+    ss.setProperty('top', '0', 'important');
+    ss.setProperty('right', '0', 'important');
+    ss.setProperty('left', '0', 'important');
+    ss.setProperty('bottom', '0', 'important');
+    ss.setProperty('width', '100vw', 'important');
+    ss.setProperty('height', '100vh', 'important');
+    ss.setProperty('min-width', '100vw', 'important');
+    ss.setProperty('min-height', '100vh', 'important');
+    ss.setProperty('max-width', '100vw', 'important');
+    ss.setProperty('max-height', '100vh', 'important');
+    ss.setProperty('z-index', '99999', 'important');
+    ss.setProperty('visibility', 'visible', 'important');
+    ss.setProperty('opacity', '1', 'important');
+    ss.setProperty('display', 'flex', 'important');
+    ss.setProperty('flex-direction', 'column', 'important');
+    ss.setProperty('box-shadow', 'none', 'important');
+    // Background: solid base + gradient overlay
+    ss.setProperty('background', theme.wallpaper);
+    ss.setProperty('background-color', theme.bgColor || '#1a1a2e', 'important');
+    ss.setProperty('color', theme.textColor);
+    ss.setProperty('font-family', theme.fontFamily);
+    ss.setProperty('overflow', 'hidden');
 
     // Header
     const header = _renderHeader(theme);
@@ -513,7 +522,11 @@ function _renderShell() {
         if (topBar) topBar.style.display = '';
     }
 
-    document.body.appendChild(_shellEl);
+    // ST 1.18'de body'de transform olabiliyor (modern UI), bu fixed child'ı
+    // viewport yerine parent'a göre boyutlandırıyor (0x0 oluyor!).
+    // documentElement (html) transform almaz, fixed child viewport'a göre boyutlanır.
+    const root = document.documentElement || document.body;
+    root.appendChild(_shellEl);
     // Force reflow — ST 1.18 mount sonrası offsetWidth 0x0 dönüyordu,
     // explicit reflow + getBoundingClientRect ile layout zorlanıyor
     void _shellEl.offsetWidth;
