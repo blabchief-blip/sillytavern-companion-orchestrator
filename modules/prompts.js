@@ -238,7 +238,15 @@ export const promptsModule = {
         if (!preset) return { ok: false, error: `Unknown preset: ${key}` };
         if (!_ctx?.setExtensionPrompt) return { ok: false, error: 'ST context unavailable' };
         try {
-            _ctx.setExtensionPrompt('CO_PROMPT_PRESET', preset.systemAddition || '', 0, 0);
+            // v0.8.5: Turkish reply prefix — DeepSeek default İngilizce yazıyor,
+            // tinder_chat senaryosu Türkçe. Setting default true.
+            // User isterse settings.promptsData.turkishReply = false yapabilir.
+            const store = getStore();
+            const prefix = (store.turkishReply !== false)
+                ? '[ÖNEMLİ: Kullanıcı Türkçe konuşuyor. Tüm yanıtlarını doğal, samimi, akıcı Türkçe yaz. İngilizce cevap verme. Writing style talimatları Türkçe çeviri üslubuna uygula.]\n\n'
+                : '';
+            const full = prefix + (preset.systemAddition || '');
+            _ctx.setExtensionPrompt('CO_PROMPT_PRESET', full, 0, 0);
             _orch.settings.promptsData.activePreset = key;
             save();
             return { ok: true, preset: preset.name };
