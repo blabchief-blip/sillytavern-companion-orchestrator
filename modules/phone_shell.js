@@ -214,6 +214,86 @@ const phoneShellModule = {
         return entry;
     },
 
+    /**
+     * v0.8.4: Send text to ST chat — fires generate() so the character
+     * responds. Used by shell input Enter/➤.
+     *
+     * Tries SillyTavern's generate() API. Falls back to direct DOM
+     * injection if generate() unavailable (e.g. test env, ST 1.17).
+     */
+    sendToST(text) {
+        const trimmed = String(text || '').trim();
+        if (!trimmed) return { ok: false, error: 'Empty message' };
+        // Try to resolve _ctx lazily (init() may not have been called with ctx)
+        const ctx = _ctx || (typeof SillyTavern !== 'undefined' && SillyTavern.getContext
+            ? SillyTavern.getContext() : null);
+        if (!ctx) return { ok: false, error: 'ST context unavailable' };
+        // Mirror the user's text into shell + ST textarea
+        try {
+            // ST 1.18: set textarea value + dispatch input event, then trigger Generate
+            const $ = (typeof window !== 'undefined' ? window.jQuery : null);
+            const ta = (typeof document !== 'undefined' ? document.querySelector('#send_textarea') : null);
+            if ($ && ta) {
+                // jQuery setters (ST uses jQuery)
+                $('#send_textarea').val(trimmed);
+                $('#send_textarea').trigger('input');
+                // Click send button (most reliable across ST versions)
+                const sendBtn = document.querySelector('#send_but');
+                if (sendBtn) {
+                    sendBtn.click();
+                    return { ok: true, sent: trimmed };
+                }
+            }
+            // Fallback: ctx.generate({ user_input: trimmed })
+            if (typeof ctx.generate === 'function') {
+                ctx.generate({ user_input: trimmed, should_stream: false });
+                return { ok: true, sent: trimmed, method: 'ctx.generate' };
+            }
+            return { ok: false, error: 'No way to send message (no textarea, no generate)' };
+        } catch (e) {
+            return { ok: false, error: String(e.message || e) };
+        }
+    },
+
+    /**
+     * v0.8.4: ST MESSAGE_RECEIVED hook — karakter cevap verdiğinde
+     * shell'e de düşsün. orchestrator.onMessageReceived bunu çağırır.
+     *
+     * data = { message: { role, mes, ... }, character: { name } }
+     */
+    onMessageReceived(orch, data) {
+        if (!_active) return; // shell kapalıysa hiçbir şey yapma
+        const msg = data?.message;
+        if (!msg) return;
+        // Sadece assistant (character) mesajlarını al
+        if (msg.role !== 'assistant' && msg.role !== 'char') return;
+        const text = String(msg.mes || '').trim();
+        if (!text) return;
+        phoneShellModule.appendMessage('assistant', text);
+        // Auto-mark previous self messages as seen (chronological sequence)
+        _markAllSeen();
+    },
+
+    /**
+     * v0.8.4: ST MESSAGE_SENT hook — kullanıcı ST chat'ten mesaj
+     * gönderdiğinde shell'e de düşsün.
+     */
+    onMessageSent(orch, data) {
+        if (!_active) return;
+        const msg = data?.message;
+        if (!msg) return;
+        if (msg.role !== 'user') return;
+        const text = String(msg.mes || '').trim();
+        if (!text) return;
+        // Skip if shell already has this (avoid double-render when sent from shell)
+        const last = _messages[_messages.length - 1];
+        if (last && last.role === 'self' && last.text === text &&
+            (Date.now() - last.timestamp) < 2000) {
+            return;
+        }
+        phoneShellModule.appendMessage('user', text);
+    },
+
     clearMessages() {
         _messages = [];
         if (_messageContainer) {
@@ -472,8 +552,11 @@ function _renderInput(theme) {
     });
     _inputEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && _inputEl.value.trim()) {
-            phoneShellModule.appendMessage('user', _inputEl.value.trim());
+            const text = _inputEl.value.trim();
             _inputEl.value = '';
+            phoneShellModule.appendMessage('user', text);
+            const r = phoneShellModule.sendToST(text);
+            if (!r.ok) console.warn('[phone_shell] sendToST:', r.error);
         }
     });
     wrap.appendChild(_inputEl);
@@ -494,8 +577,11 @@ function _renderInput(theme) {
     });
     send.addEventListener('click', () => {
         if (_inputEl && _inputEl.value.trim()) {
-            phoneShellModule.appendMessage('user', _inputEl.value.trim());
+            const text = _inputEl.value.trim();
             _inputEl.value = '';
+            phoneShellModule.appendMessage('user', text);
+            const r = phoneShellModule.sendToST(text);
+            if (!r.ok) console.warn('[phone_shell] sendToST:', r.error);
         }
     });
     wrap.appendChild(send);
@@ -546,6 +632,26 @@ function _renderMessage(entry) {
 function _scrollToBottom() {
     if (_messageContainer) {
         _messageContainer.scrollTop = _messageContainer.scrollHeight;
+    }
+}
+
+/**
+ * v0.8.4: mark all messages as seen (e.g. when assistant replies, the
+ * user's previous messages are now considered read).
+ */
+function _markAllSeen() {
+    for (const m of _messages) m.seen = true;
+    if (!_active || !_messageContainer) return;
+    // Re-render bubbles with seen indicator (cheaper than full re-render)
+    const bubbles = _messageContainer.children;
+    for (let i = 0; i < bubbles.length && i < _messages.length; i++) {
+        const bubble = bubbles[i];
+        const entry = _messages[i];
+        if (entry.role !== 'self') continue;
+        const meta = bubble.querySelector('div');
+        if (meta && !meta.textContent.includes('✓')) {
+            meta.textContent += ' ✓✓';
+        }
     }
 }
 

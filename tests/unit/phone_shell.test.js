@@ -348,3 +348,121 @@ describe('platform_transition syncs phone_shell', () => {
             'shell pasifken platform değişmemeli');
     });
 });
+
+// =========================================================================
+// v0.8.4: sendToST + onMessageReceived + onMessageSent
+// =========================================================================
+
+describe('sendToST — ST chat\'e mesaj gönder', () => {
+    test('boş text → hata', () => {
+        const r = phoneShellModule.sendToST('');
+        assert.equal(r.ok, false);
+    });
+
+    test('whitespace-only → hata', () => {
+        const r = phoneShellModule.sendToST('   ');
+        assert.equal(r.ok, false);
+    });
+
+    test('test ortamı: ST yok → hata döner, throw etmez', () => {
+        // Test mock'unda SillyTavern.getContext var ama generate/textarea yok
+        const r = phoneShellModule.sendToST('test mesaj');
+        // Ortamda send_textarea + send_but + jQuery yok, dolayısıyla
+        // ctx.generate fallback'i de yoksa hata beklenir.
+        // Önemli olan throw etmemesi.
+        if (!r.ok) {
+            assert.match(r.error, /textarea|generate|context/);
+        }
+    });
+});
+
+describe('onMessageReceived — karakter cevabı shell\'e düşer', () => {
+    test('shell pasifken hiçbir şey yapma', () => {
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'merhaba' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before);
+    });
+
+    test('shell aktif + assistant mesaj → shell\'e eklenir', () => {
+        phoneShellModule.mount();
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'selam' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
+        // 'other' rolü olarak
+        const last = phoneShellModule.getInfo().messageCount > 0
+            ? dom.window.document.querySelector('#co-phone-shell').textContent : '';
+        assert.match(last, /selam/);
+    });
+
+    test('user rolü gelirse eklenmez (zaten user mesajı için onMessageSent var)', () => {
+        phoneShellModule.mount();
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'user', mes: 'kullanıcı' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before);
+    });
+
+    test('boş mesaj eklenmez', () => {
+        phoneShellModule.mount();
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: '' } });
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: '   ' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before);
+    });
+
+    test('önceki self mesajlar seen işaretlenir', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('user', 'ilk mesaj');
+        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'cevap' } });
+        // seen=true kontrol et (internal _messages array)
+        // appendMessage yaptıktan sonra _markAllSeen çağrıldı
+        const lastSelf = phoneShellModule.getInfo();
+        // info'da seen yok, doğrudan kontrol
+        // Önceki self mesaj seen=true olmalı
+        // _messages'a doğrudan erişim yok, ama seen badge'i DOM'da görünmeli
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.match(shell.textContent, /✓✓/);
+    });
+});
+
+describe('onMessageSent — ST\'den gönderilen user mesajı shell\'e düşer', () => {
+    test('shell pasifken no-op', () => {
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageSent(orch, { message: { role: 'user', mes: 'merhaba' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before);
+    });
+
+    test('shell aktif + user mesajı → shell\'e eklenir', () => {
+        phoneShellModule.mount();
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageSent(orch, { message: { role: 'user', mes: 'shell\'e düş' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
+    });
+
+    test('assistant rolü gelirse eklenmez', () => {
+        phoneShellModule.mount();
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageSent(orch, { message: { role: 'assistant', mes: 'karakter' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before);
+    });
+
+    test('double-render koruması: 2 saniye içinde aynı mesaj → atla', () => {
+        phoneShellModule.mount();
+        // Önce shell'den gönder (appendMessage yaptı, 1 sn önce)
+        phoneShellModule.appendMessage('user', 'aynı mesaj');
+        // Hemen arkasından ST'den de aynısı geldi (kullanıcı shell'den bastı)
+        // (gerçekte ST buraya gelmez çünkü sendToST tetikliyor, ama yine de)
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageSent(orch, { message: { role: 'user', mes: 'aynı mesaj' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before,
+            'aynı mesaj 2s içinde tekrar eklenmemeli');
+    });
+
+    test('3 saniye sonra aynı mesaj → eklenir', async () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('user', 'tekrar');
+        await new Promise(r => setTimeout(r, 2100));
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageSent(orch, { message: { role: 'user', mes: 'tekrar' } });
+        assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
+    });
+});
