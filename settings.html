@@ -20,6 +20,11 @@
             <hr />
             <h4>Modüller</h4>
 
+            <label class="checkbox_label" for="co_modernUIEnabled" title="SillyTavern arayüzüne geri alınabilir modern karanlık/glass görünüm enjekte eder.">
+                <input id="co_modernUIEnabled" type="checkbox" />
+                <span><strong>✨ Modern UI (Glass)</strong> — <em style="opacity: 0.75;">ST arayüzüne modern karanlık/glass görünüm. Geri alınabilir, ST'ye dokunmaz.</em></span>
+            </label>
+
             <label class="checkbox_label" for="co_memoryEnabled" title="Karaktere özel kalıcı hafıza kayıtları (notlar, olaylar, tercihler).">
                 <input id="co_memoryEnabled" type="checkbox" checked />
                 <span><strong>Hafıza Bankası</strong> — <em style="opacity: 0.75;">Karaktere özel kalıcı hafıza kayıtları (notlar, olaylar, tercihler).</em></span>
@@ -105,6 +110,27 @@
                 </div>
                 <div style="margin-top: 6px; font-size: 0.8em; opacity: 0.7;">
                     <span id="co_content_safety_summary">—</span>
+                </div>
+            </div>
+
+            <hr />
+
+            <!-- ============ MODERN UI MODULE (v0.8.5) ============ -->
+            <div class="co-module-panel" data-module="modern_ui">
+                <h4>✨ Modern UI (Glass)</h4>
+                <p style="opacity: 0.75; font-size: 0.85em; margin: 4px 0 8px;">
+                    Yukarıdaki <strong>✨ Modern UI</strong> anahtarını açınca devreye girer. ST core'a dokunmaz,
+                    kapatınca orijinal tema anında geri gelir. Aşağıdan accent rengini seç:
+                </p>
+                <div class="co-row" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <span class="co-modern-ui-accent" data-accent="indigo" title="Indigo"
+                        style="width: 30px; height: 30px; border-radius: 8px; cursor: pointer; background: #6366f1; outline: 2px solid #fff; outline-offset: 2px;"></span>
+                    <span class="co-modern-ui-accent" data-accent="teal" title="Teal"
+                        style="width: 30px; height: 30px; border-radius: 8px; cursor: pointer; background: #14b8a6; outline: 2px solid transparent; outline-offset: 2px;"></span>
+                    <span class="co-modern-ui-accent" data-accent="rose" title="Rose"
+                        style="width: 30px; height: 30px; border-radius: 8px; cursor: pointer; background: #f43f5e; outline: 2px solid transparent; outline-offset: 2px;"></span>
+                    <span class="co-modern-ui-accent" data-accent="amber" title="Amber"
+                        style="width: 30px; height: 30px; border-radius: 8px; cursor: pointer; background: #f59e0b; outline: 2px solid transparent; outline-offset: 2px;"></span>
                 </div>
             </div>
 

@@ -36,6 +36,7 @@ import { contentSafetyModule } from './modules/content_safety.js';
 import { antiGhostingModule } from './modules/anti_ghosting.js';
 import { platformTransitionModule } from './modules/platform_transition.js';
 import { phoneShellModule } from './modules/phone_shell.js';
+import { modernUIModule } from './modules/modern_ui.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
 import { mountModularSettings, refreshAllPanelsGeneric } from './modules/ui.js';
 
@@ -116,7 +117,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule, contentSafetyModule, antiGhostingModule, platformTransitionModule, phoneShellModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule, contentSafetyModule, antiGhostingModule, platformTransitionModule, phoneShellModule, modernUIModule];
 
 const orchestrator = {
     name: MODULE_NAME,
