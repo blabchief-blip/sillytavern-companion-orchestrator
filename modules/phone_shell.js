@@ -299,13 +299,19 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
-        console.log('[phone_shell] onMessageReceived _active=' + _active + ' data.keys=' + (data ? Object.keys(data).join(',') : 'null') + ' data.message=' + (data?.message ? 'present' : 'absent'));
+        // ST 1.18'de data shape'i görmek için tüm argümanı log'la
+        let dataShape = 'null';
+        try {
+            dataShape = data ? (Array.isArray(data) ? 'array[' + data.length + ']' : 'object{' + Object.keys(data).join(',') + '}') : 'null';
+        } catch (_) {}
+        console.log('[phone_shell] onMessageReceived _active=' + _active + ' data=' + dataShape + ' JSON=' + JSON.stringify(data).slice(0, 400));
         if (!_active) return;
-        const msg = data?.message || data;  // ST 1.18 bazen data direkt msg
-        if (!msg) return;
+        // ST 1.18 bazen data direkt msg, bazen data.message wrapper, bazen data array
+        const msg = (data && data.message) || (Array.isArray(data) ? data[0] : data);
+        if (!msg || typeof msg !== 'object') return;
         if (msg.is_user === true || msg.role === 'user') return;
         if (msg.role === 'system') return;
-        const text = String(msg.mes || '').trim();
+        const text = String(msg.mes || msg.message || msg.text || '').trim();
         if (!text) return;
         console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
         phoneShellModule.appendMessage('assistant', text);
