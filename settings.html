@@ -633,9 +633,9 @@
             <hr />
             <!-- ============ v0.6.0 LLM TAGGER - SMART TAGS ============ -->
             <div class="co-module-panel" data-module="llm_tagger">
-                <h4>🎯 Akıllı Etiketçi (LLM) <span style="font-size: 0.7em; opacity: 0.7;">(OpenRouter · v0.6.0)</span></h4>
+                <h4>🎯 Akıllı Etiketçi (LLM) <span style="font-size: 0.7em; opacity: 0.7;">(DeepSeek)</span></h4>
                 <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
-                    OpenRouter LLM ile roleplay mesajından context-aware etiket çıkarımı. AutoGen tarafından tetiklenir, %95+ coverage hedefler. Key gerekli.
+                    DeepSeek LLM ile roleplay mesajından context-aware etiket çıkarımı. AutoGen tarafından tetiklenir, %95+ coverage hedefler. Key gerekli.
                 </p>
 
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;">
@@ -647,17 +647,16 @@
                 </div>
 
                 <div style="margin: 8px 0;">
-                    <label style="font-size: 0.85em; display: block; margin-bottom: 2px;">OpenRouter API Key:</label>
-                    <input type="password" id="co-llm-tagger-key" placeholder="sk-or-v1-..." style="width: 100%; padding: 4px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 3px; font-family: monospace; font-size: 0.85em;" />
+                    <label style="font-size: 0.85em; display: block; margin-bottom: 2px;">DeepSeek API Key:</label>
+                    <input type="password" id="co-llm-tagger-key" placeholder="sk-..." style="width: 100%; padding: 4px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 3px; font-family: monospace; font-size: 0.85em;" />
+                    <span style="display: block; font-size: 0.75em; opacity: 0.6; margin-top: 3px;">platform.deepseek.com → API Keys'ten al</span>
                 </div>
 
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0;">
                     <label style="font-size: 0.85em;">Model:</label>
                     <select id="co-llm-tagger-model" style="padding: 2px 6px; background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 3px;">
-                        <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (ucuz, hızlı)</option>
-                        <option value="deepseek/deepseek-v3.2">DeepSeek V3.2 (yüksek kalite)</option>
-                        <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B (ücretsiz)</option>
-                        <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+                        <option value="deepseek-chat">DeepSeek Chat (V3 — hızlı, ucuz, önerilen)</option>
+                        <option value="deepseek-reasoner">DeepSeek Reasoner (R1 — daha güçlü, yavaş)</option>
                     </select>
                 </div>
 

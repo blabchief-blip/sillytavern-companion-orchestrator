@@ -469,14 +469,16 @@ describe('llm_tagger panel', () => {
         }
     });
 
-    test('model <select> has the 4 preset models', () => {
+    test('model <select> has the DeepSeek preset models', () => {
         const sel = document.getElementById('co-llm-tagger-model');
         const opts = sel.querySelectorAll('option');
-        assert.equal(opts.length, 4);
+        assert.equal(opts.length, 2);
         const values = Array.from(opts).map(o => o.value);
-        for (const v of ['google/gemini-2.5-flash', 'deepseek/deepseek-v3.2', 'meta-llama/llama-3.1-8b-instruct', 'anthropic/claude-3.5-haiku']) {
+        for (const v of ['deepseek-chat', 'deepseek-reasoner']) {
             assert.ok(values.includes(v), `model select should include ${v}`);
         }
+        // OpenRouter-stili adlar artık olmamalı
+        assert.ok(!values.some(v => v.includes('/')), 'OpenRouter-stili model adı kalmamalı');
     });
 
     test('refresh: settings populate from default init()', () => {
@@ -503,9 +505,9 @@ describe('llm_tagger panel', () => {
     });
 
     test('refresh: select syncs to s.model when model is in preset list', () => {
-        llmTaggerModule.settings.model = 'deepseek/deepseek-v3.2';
+        llmTaggerModule.settings.model = 'deepseek-reasoner';
         orch.refreshLlmTaggerPanel();
-        assert.equal(document.getElementById('co-llm-tagger-model').value, 'deepseek/deepseek-v3.2');
+        assert.equal(document.getElementById('co-llm-tagger-model').value, 'deepseek-reasoner');
     });
 
     test('checkbox toggles mutate settings', () => {
@@ -533,9 +535,9 @@ describe('llm_tagger panel', () => {
     test('model change updates settings.model', () => {
         orch.wireLlmTaggerPanel();
         const sel = document.getElementById('co-llm-tagger-model');
-        sel.value = 'deepseek/deepseek-v3.2';
+        sel.value = 'deepseek-reasoner';
         sel.dispatchEvent(new globalThis.Event('change'));
-        assert.equal(llmTaggerModule.settings.model, 'deepseek/deepseek-v3.2');
+        assert.equal(llmTaggerModule.settings.model, 'deepseek-reasoner');
     });
 
     test('daily limit input clamps to safe range (rejects 0/10001)', () => {
@@ -555,11 +557,11 @@ describe('llm_tagger panel', () => {
 
     test('refresh does not overwrite select when model is not in preset list', () => {
         llmTaggerModule.settings.model = 'custom/my-unlisted-model';
-        // Pre-set select to something else — refresh should NOT clobber it
+        // Pre-set select to a valid preset — refresh should NOT clobber it
         const sel = document.getElementById('co-llm-tagger-model');
-        sel.value = 'google/gemini-2.5-flash';
+        sel.value = 'deepseek-reasoner';
         orch.refreshLlmTaggerPanel();
-        assert.equal(sel.value, 'google/gemini-2.5-flash',
+        assert.equal(sel.value, 'deepseek-reasoner',
             'select should keep its current value when model not in preset list');
     });
 

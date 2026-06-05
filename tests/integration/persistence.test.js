@@ -156,17 +156,17 @@ describe('persistence: API key / preset round-trip', () => {
 
         test('model select change persists + reloads', async () => {
             const ctx = makeStCtx();
-            const orch = makeOrch({ llm_tagger: { apiKey: 'sk-x', model: 'google/gemini-2.5-flash' } });
+            const orch = makeOrch({ llm_tagger: { apiKey: 'sk-x', model: 'deepseek-chat' } });
             await llmTaggerModule.init(orch);
-            assert.equal(llmTaggerModule.settings.model, 'google/gemini-2.5-flash');
-            // User picks another model
-            llmTaggerModule.settings.model = 'anthropic/claude-3.5-haiku';
+            assert.equal(llmTaggerModule.settings.model, 'deepseek-chat');
+            // User picks another DeepSeek model
+            llmTaggerModule.settings.model = 'deepseek-reasoner';
             // Reload
             const q = `?reload3=${Math.random()}`;
             const fresh = (await import(`${root}/modules/llm_tagger.js${q}`)).llmTaggerModule;
             const orch2 = makeOrch({ llm_tagger: llmTaggerModule.settings });
             await fresh.init(orch2);
-            assert.equal(fresh.settings.model, 'anthropic/claude-3.5-haiku');
+            assert.equal(fresh.settings.model, 'deepseek-reasoner');
         });
     });
 

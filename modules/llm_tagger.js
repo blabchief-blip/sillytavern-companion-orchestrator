@@ -194,6 +194,21 @@ class LLMTagger {
       if (orch.settings.llm_tagger.retryDelayMs === undefined) {
         orch.settings.llm_tagger.retryDelayMs = 1000;
       }
+      // v0.8.5: OpenRouter → DeepSeek migration. Eski kayıtlarda model
+      // OpenRouter-stili (`deepseek/deepseek-v3.2`, `google/...`, vb.) ya da
+      // endpoint openrouter.ai olabilir. DeepSeek'in kendi API'si bu adları
+      // kabul etmez (deepseek-chat / deepseek-reasoner ister). Düzelt.
+      const t = orch.settings.llm_tagger;
+      const VALID = ['deepseek-chat', 'deepseek-reasoner'];
+      if (t.model && (t.model.includes('/') || !VALID.includes(t.model))) {
+        t.model = DEFAULT_MODEL; // deepseek-chat
+      }
+      if (t.endpoint && /openrouter\.ai/i.test(t.endpoint)) {
+        t.endpoint = DEFAULT_API_URL; // api.deepseek.com
+      }
+      if (t.fallbackModel && (t.fallbackModel.includes('/') || !VALID.includes(t.fallbackModel))) {
+        t.fallbackModel = FALLBACK_MODEL;
+      }
     }
     if (!orch.settings.llm_tagger) {
       orch.settings.llm_tagger = {

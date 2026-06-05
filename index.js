@@ -171,6 +171,10 @@ const orchestrator = {
         // refactor sırasında atlanmış. Manuel çağırıyoruz; test suite etkilenmez.
         try { this.wireScenarioPanel(); } catch (e) { console.warn('[CO] wireScenarioPanel failed:', e); }
         try { this.wirePresetPanel(); } catch (e) { console.warn('[CO] wirePresetPanel failed:', e); }
+        // translation paneli modules array'inde modül objesi olmayan tek panel
+        // (sadece Magic Translation köprüsü). Dispatcher onu görmediği için
+        // manuel wire ediyoruz (kendi içinde refresh çağırıyor).
+        try { this.wireTranslationPanel(); } catch (e) { console.warn('[CO] wireTranslationPanel failed:', e); }
     },
 
     // ===== Module-specific UI wiring =====
@@ -687,7 +691,12 @@ const orchestrator = {
             const mt = ctx.extensionSettings?.magicTranslation || {};
             $lang.val(mt.targetLanguage || 'tr');
             $auto.val(mt.autoMode || 'none');
-            const profile = mt.profile || '(none)';
+            // mt.profile ST bağlantı profili id'si (UUID). Ham UUID yerine
+            // "seçili mi" göster — profil yönetimi Magic Translation'ın kendi
+            // panelinde yapılıyor.
+            const profile = mt.profile
+                ? `✓ seçili (…${String(mt.profile).slice(-6)})`
+                : '(yok)';
             $('#co_mt_profile').text(profile);
         };
         refresh();
@@ -1475,7 +1484,7 @@ const orchestrator = {
             try {
                 const r = await llmTaggerModule.testKey(key);
                 if (r?.ok) {
-                    self.toast(`✅ Key geçerli (${r.model || 'model ok'} · ${r.latencyMs}ms)`);
+                    self.toast(`✅ Key geçerli (${r.model || 'model ok'} · ${r.latency}ms)`);
                 } else {
                     self.toast(`❌ Key geçersiz: ${r?.error || 'bilinmeyen hata'}`, 'error');
                 }
@@ -1653,7 +1662,7 @@ const orchestrator = {
     },
 
     // -----------------------------------------------------------
-    // v0.6.0 LLM Tagger Panel (OpenRouter Smart Tags)
+    // v0.6.0 LLM Tagger Panel (DeepSeek Smart Tags)
     // -----------------------------------------------------------
     wireLLMTaggerPanel() {
         const $ = window.jQuery;
@@ -1720,7 +1729,7 @@ const orchestrator = {
                 return;
             }
             $testBtn.prop('disabled', true).text('⏳ Test ediliyor...');
-            $status.text('⏳ OpenRouter\'a istek gönderiliyor...');
+            $status.text('⏳ DeepSeek\'e istek gönderiliyor...');
             try {
                 const result = await llmMod.testKey(key);
                 if (result.ok) {

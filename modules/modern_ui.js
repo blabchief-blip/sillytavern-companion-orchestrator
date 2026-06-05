@@ -271,6 +271,206 @@ function refreshTheme() {
     if (enabled) applyTheme(true);
 }
 
+// =========================================================================
+// Settings Drawer Enhancer — CO panellerini akordeon + arama haline getirir.
+// Glass temadan BAĞIMSIZ; her zaman çalışır (kendi panelimizi düzenler).
+// =========================================================================
+
+const DRAWER_STYLE_ID = 'co-drawer-enhance';
+
+// Yapısal CSS — nötr (ST'nin default temasında da çalışır). Glass tema açıkken
+// renkler onun üzerine biner.
+const DRAWER_CSS = `
+.co-drawer-enhanced > hr { display: none; }
+.co-drawer-toolbar {
+    position: sticky; top: 0; z-index: 6;
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px 0; margin-bottom: 6px;
+    background: var(--SmartThemeBlurTintColor, rgba(20,22,34,0.92));
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.co-drawer-search {
+    flex: 1; min-width: 0; padding: 7px 11px;
+    border-radius: 9px; border: 1px solid rgba(148,163,184,0.25);
+    background: rgba(127,127,127,0.10); color: inherit; font-size: 0.9em;
+}
+.co-drawer-search:focus { outline: none; border-color: var(--co-accent, #7a7fb0); }
+.co-drawer-btn {
+    padding: 6px 10px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+    border: 1px solid rgba(148,163,184,0.22); background: rgba(127,127,127,0.08);
+    color: inherit; font-size: 0.82em; transition: background 150ms, border-color 150ms;
+}
+.co-drawer-btn:hover { background: rgba(127,127,127,0.16); border-color: var(--co-accent, #7a7fb0); }
+
+.co-acc {
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 12px; margin: 8px 0; overflow: hidden;
+    background: rgba(127,127,127,0.04);
+    transition: border-color 160ms, box-shadow 160ms;
+}
+.co-acc:hover { border-color: rgba(148,163,184,0.28); }
+.co-acc.co-acc-open { border-color: rgba(148,163,184,0.30); box-shadow: 0 8px 24px -18px rgba(0,0,0,0.7); }
+.co-acc-head {
+    cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 !important; padding: 11px 13px !important;
+    font-size: 1em !important; transition: background 150ms;
+}
+.co-acc-head:hover { background: rgba(127,127,127,0.08); }
+.co-acc-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.co-acc-chevron { opacity: 0.55; transition: transform 200ms; font-size: 0.85em; }
+.co-acc.co-acc-open .co-acc-chevron { transform: rotate(90deg); }
+
+/* Başlık içi enable switch (checkbox → iOS-style toggle) */
+.co-head-switch { display: inline-flex; align-items: center; margin: 0; }
+.co-head-switch input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; margin: 0;
+    width: 34px; height: 19px; border-radius: 999px; cursor: pointer;
+    background: rgba(148,163,184,0.32); position: relative;
+    transition: background 160ms; flex: 0 0 auto;
+}
+.co-head-switch input[type="checkbox"]::before {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 15px; height: 15px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: transform 160ms;
+}
+.co-head-switch input[type="checkbox"]:checked { background: var(--co-accent, #7a7fb0); }
+.co-head-switch input[type="checkbox"]:checked::before { transform: translateX(15px); }
+.co-acc.co-acc-off { opacity: 0.72; }
+.co-acc.co-acc-off .co-acc-head { opacity: 0.85; }
+.co-acc-body {
+    max-height: 0; overflow: hidden; padding: 0 13px;
+    transition: max-height 260ms ease, padding 260ms ease;
+}
+.co-acc.co-acc-open .co-acc-body { max-height: 2200px; padding: 2px 13px 14px; }
+.co-acc-hidden { display: none !important; }
+.co-drawer-empty { opacity: 0.55; font-size: 0.85em; padding: 12px 4px; text-align: center; }
+`;
+
+function injectDrawerCss(d) {
+    if (d.getElementById(DRAWER_STYLE_ID)) return;
+    const style = d.createElement('style');
+    style.id = DRAWER_STYLE_ID;
+    style.textContent = DRAWER_CSS;
+    d.head.appendChild(style);
+}
+
+/**
+ * CO settings drawer'ını akordeon + arama + aç/kapa toolbar haline getirir.
+ * Idempotent (tekrar çağrılınca çoğaltmaz). Panel iç wiring'ine dokunmaz —
+ * sadece her .co-module-panel'i katlanabilir bir karta sarar.
+ */
+function enhanceDrawer($, orch) {
+    const d = doc();
+    if (!d) return;
+    injectDrawerCss(d);
+
+    const $content = $('.companion-orchestrator-settings .inline-drawer-content');
+    if (!$content.length || $content.data('co-enhanced')) return;
+    $content.data('co-enhanced', true).addClass('co-drawer-enhanced');
+
+    const $panels = $content.find('.co-module-panel');
+    if (!$panels.length) return;
+
+    // name → toggleKey haritası (settings.html'deki checkbox id'lerine
+    // güvenmiyoruz; çoğu eksik/uyumsuz). Doğrudan modül tanımından alıyoruz.
+    const keyByName = {};
+    (orch?.modules || []).forEach(m => { keyByName[m.name] = m.toggleKey || `${m.name}Enabled`; });
+    const saveFn = () => {
+        const ctx = (typeof SillyTavern !== 'undefined') ? SillyTavern.getContext?.() : null;
+        if (ctx?.saveSettingsDebounced) ctx.saveSettingsDebounced();
+    };
+
+    // Her paneli akordeona çevir: ilk <h4> başlık olur, gerisi katlanır gövde.
+    // Başlığa modüle özel enable switch'i eklenir (orch.settings[toggleKey],
+    // varsayılan AÇIK = `!== false`).
+    $panels.each(function () {
+        const $p = $(this);
+        if ($p.data('co-acc')) return;
+        const $h = $p.children('h4').first();
+        if (!$h.length) return;
+        $p.data('co-acc', true).addClass('co-acc');
+        $h.addClass('co-acc-head');
+        // h4'ten sonraki tüm kardeşleri gövdeye taşı
+        const $body = $('<div class="co-acc-body"></div>');
+        $h.nextAll().each(function () { $body.append(this); });
+        $p.append($body);
+
+        // Sağ grup: enable switch + chevron
+        const $right = $('<span class="co-acc-right"></span>');
+        const name = $p.attr('data-module');
+        const key = keyByName[name] || (name ? `${name}Enabled` : null);
+        if (key && orch) {
+            const on = orch.settings[key] !== false; // default-on konvansiyonu
+            const $sw = $('<label class="co-head-switch" title="Modülü aç/kapa"><input type="checkbox" /></label>');
+            const $cb = $sw.find('input');
+            $cb.prop('checked', on);
+            $p.toggleClass('co-acc-off', !on);
+            // Switch tıklaması akordeonu açıp kapatmasın
+            $sw.on('click.co_acc', (e) => e.stopPropagation());
+            $cb.on('change.co_acc', () => {
+                const checked = $cb.prop('checked');
+                const m = (orch.modules || []).find(x => x.name === name);
+                if (m && typeof m.setEnabled === 'function') {
+                    m.setEnabled(checked);          // örn. modern_ui: temayı da uygular
+                } else {
+                    orch.settings[key] = checked;
+                }
+                $p.toggleClass('co-acc-off', !checked);
+                saveFn();
+                if (typeof orch.refreshAllPanels === 'function') orch.refreshAllPanels();
+            });
+            $right.append($sw);
+        }
+        $right.append('<span class="co-acc-chevron">▶</span>');
+        $h.append($right);
+        $h.on('click.co_acc', () => $p.toggleClass('co-acc-open'));
+    });
+
+    // Üstteki uzun modül toggle listesini kaldır (artık her switch başlıkta).
+    // Master enable + debug logging korunur.
+    const keep = new Set(['co_enabled', 'co_debugLogging']);
+    $content.children('label.checkbox_label').each(function () {
+        const id = $(this).find('input').attr('id');
+        if (!keep.has(id)) $(this).remove();
+    });
+    $content.children('h4').each(function () {
+        if (($(this).text() || '').trim() === 'Modüller') $(this).remove();
+    });
+
+    // Toolbar: arama + tümünü aç/kapa — ilk akordeonun önüne ekle.
+    const $first = $content.find('.co-acc').first();
+    if ($first.length && !$content.find('.co-drawer-toolbar').length) {
+        const $bar = $(`
+            <div class="co-drawer-toolbar">
+                <input type="text" class="co-drawer-search" placeholder="🔍 Modül ara…" />
+                <button type="button" class="co-drawer-btn" data-act="expand">Tümünü Aç</button>
+                <button type="button" class="co-drawer-btn" data-act="collapse">Tümünü Kapa</button>
+            </div>
+        `);
+        $first.before($bar);
+
+        const filter = () => {
+            const q = String($bar.find('.co-drawer-search').val() || '').toLowerCase().trim();
+            let shown = 0;
+            $content.find('.co-acc').each(function () {
+                const $a = $(this);
+                const txt = ($a.find('.co-acc-head').text() || '').toLowerCase();
+                const hit = !q || txt.includes(q);
+                $a.toggleClass('co-acc-hidden', !hit);
+                if (hit) { shown++; if (q) $a.addClass('co-acc-open'); }
+            });
+            $content.find('.co-drawer-empty').remove();
+            if (q && shown === 0) {
+                $bar.after('<div class="co-drawer-empty">Eşleşen modül yok.</div>');
+            }
+        };
+        $bar.find('.co-drawer-search').on('input.co_acc', filter);
+        $bar.find('[data-act="expand"]').on('click.co_acc', () => $content.find('.co-acc:not(.co-acc-hidden)').addClass('co-acc-open'));
+        $bar.find('[data-act="collapse"]').on('click.co_acc', () => $content.find('.co-acc').removeClass('co-acc-open'));
+    }
+}
+
 export const modernUIModule = {
     name: 'modern_ui',
     displayName: 'Modern UI (Glass)',
@@ -307,6 +507,11 @@ export const modernUIModule = {
             const $ = deps?.$ || (typeof window !== 'undefined' ? window.jQuery : null);
             if (!$) return;
             const { saveSettingsDebounced } = deps || {};
+
+            // CO settings drawer'ını akordeon + arama haline getir (glass
+            // temadan bağımsız, her zaman). modern_ui modules array'de son
+            // olduğu için bu noktada tüm paneller DOM'da + wire edilmiş durumda.
+            try { enhanceDrawer($, orch); } catch (e) { console.warn('[CO] drawer enhance failed:', e); }
 
             // Master toggle (generic loop da bağlıyor; burada tema uygulamasını
             // ekliyoruz ki anlık aç/kapa görsel olarak da yansısın).

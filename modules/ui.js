@@ -32,12 +32,21 @@ function resolveUIBinding(orch, mod) {
             signature: 'new',
         };
     }
-    // Fallback: modülün ismine göre orch üzerindeki eski wireXxxPanel'i bul
-    const wireFn = orch[`wire${cap(mod.name)}Panel`];
-    const refreshFn = orch[`refresh${cap(mod.name)}Panel`];
+    // Fallback: modülün ismine göre orch üzerindeki eski wireXxxPanel'i bul.
+    // İsim varyantları: PascalCase (snake_case'i alt çizgiden bölüp birleştir,
+    // örn. `llm_tagger` → `LlmTagger` → wireLlmTaggerPanel) ve basit cap.
+    // Bu olmadan snake_case isimli ~11 legacy modül (stmb_bridge, kazuma_bridge,
+    // auto_gen, ...) hiç wire edilmiyordu (panel statik default'ta kalıyordu →
+    // "Yükleniyor..." / boş kontroller).
+    const variants = [pascal(mod.name), cap(mod.name)];
+    let wireFn = null, refreshFn = null;
+    for (const v of variants) {
+        if (!wireFn && typeof orch[`wire${v}Panel`] === 'function') wireFn = orch[`wire${v}Panel`];
+        if (!refreshFn && typeof orch[`refresh${v}Panel`] === 'function') refreshFn = orch[`refresh${v}Panel`];
+    }
     return {
-        mount: typeof wireFn === 'function' ? wireFn : null,
-        refresh: typeof refreshFn === 'function' ? refreshFn : null,
+        mount: wireFn,
+        refresh: refreshFn,
         hasCustomUI: false,
         signature: 'legacy',
     };
@@ -45,6 +54,11 @@ function resolveUIBinding(orch, mod) {
 
 function cap(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// snake_case → PascalCase  (llm_tagger → LlmTagger, stmb_bridge → StmbBridge)
+function pascal(s) {
+    return String(s).split('_').map(p => p ? p.charAt(0).toUpperCase() + p.slice(1) : '').join('');
 }
 
 /**
