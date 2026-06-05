@@ -76,6 +76,15 @@ function getProfile(charId) {
 
 function save() {
     if (_ctx?.saveSettingsDebounced) _ctx.saveSettingsDebounced();
+    // v0.8.6: Trust/voice/kinks değişti → aktif character directive'i
+    // hemen yeniden hesapla. Aktif preset yoksa no-op (prompts._refresh
+    // kendisi guard eder).
+    try {
+        const p = (typeof globalThis !== 'undefined' && globalThis.__co_prompts);
+        if (p && typeof p._refreshCharacterDirective === 'function') {
+            p._refreshCharacterDirective();
+        }
+    } catch (_) { /* best-effort — extension prompt refresh, kritik değil */ }
 }
 
 function validateProfile(profile) {

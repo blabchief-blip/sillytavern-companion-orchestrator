@@ -214,6 +214,15 @@ export const scenariosModule = {
             // (Önceki v0.8.4'te burası otomatik mount ediyordu — kaldırıldı,
             // user feedback: "direkt whatsapp'ta başlıyor, tinder aşaması yok")
             save();
+            // v0.8.6: Senaryo apply = niyet değişimi → trust +1
+            // (Karakter sözleşmesine girildi, escalation eşiği yaklaşıyor)
+            try {
+                const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+                if (cp && typeof cp.incrementTrust === 'function') {
+                    const charId = _ctx.characterId;
+                    if (charId) cp.incrementTrust(charId, 1);
+                }
+            } catch (_) { /* best-effort */ }
             return { ok: true, scenario: scenario.name };
         } catch (err) {
             return { ok: false, error: String(err.message || err) };

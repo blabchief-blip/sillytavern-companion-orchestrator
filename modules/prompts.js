@@ -191,6 +191,9 @@ export const promptsModule = {
         _orch = orch;
         _ctx = SillyTavern.getContext();
         getStore();
+        // v0.8.6: character_profile.set/incrementTrust'ın hook'laması
+        // için namespace expose et. Circular import riskini önler.
+        try { globalThis.__co_prompts = this; } catch (_) {}
     },
 
     list() {

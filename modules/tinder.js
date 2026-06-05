@@ -1323,6 +1323,23 @@ tinderModule.handleExchangeAttempt = function (matchId, userMessage, opts = {}) 
         const dialogs = EXCHANGE_DIALOGUES[safetyLevel] || EXCHANGE_DIALOGUES.sfw;
         const r = pickRandomVariant(dialogs, -1);
         ex.numberShared = true;
+        // v0.8.6: Numara paylaşımı = büyük güven olayı → trust +3.
+        // Karakter profili varsa incrementTrust ile otomatik escalation yolunda.
+        try {
+            const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+            if (cp && typeof cp.incrementTrust === 'function') {
+                // ST context'ten aktif karakter ID'sini al (match objesinde yok).
+                let charId = ex.charId;
+                if (!charId) {
+                    try {
+                        const st = (typeof globalThis !== 'undefined' && globalThis.SillyTavern);
+                        const ctx = st?.getContext?.();
+                        charId = ctx?.characterId;
+                    } catch (_) { /* best-effort */ }
+                }
+                if (charId) cp.incrementTrust(charId, 3);
+            }
+        } catch (_) { /* best-effort */ }
         // v0.8.4: Numara paylaşıldı → tinder aşaması bitti, whatsapp'a geç.
         // phone_shell mount + platform_transition.transitionTo tetikle.
         // Lazy import (circular dependency yok: tinder → platform_transition + phone_shell).

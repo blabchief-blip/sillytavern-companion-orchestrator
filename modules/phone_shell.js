@@ -235,6 +235,9 @@ const phoneShellModule = {
     /**
      * ST MESSAGE_SENT/RECEIVED'ten mesaj ekle.
      * role: 'user' | 'assistant' (ST'den)
+     *
+     * v0.8.6: Her assistant mesajında character_profile.incrementTrust(charId, 0.1)
+     * — uzun konuşma doğal trust birikimi sağlar. maxTrust cap'ine takılır.
      */
     appendMessage(role, text) {
         const entry = {
@@ -247,6 +250,18 @@ const phoneShellModule = {
         if (_active && _messageContainer) {
             _renderMessage(entry);
             _scrollToBottom();
+        }
+        // v0.8.6: assistant mesajında trust biriktir
+        if (role === 'assistant' || role !== 'user') {
+            try {
+                const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+                if (cp && typeof cp.incrementTrust === 'function') {
+                    const st = (typeof globalThis !== 'undefined' && globalThis.SillyTavern);
+                    const ctx = st?.getContext?.();
+                    const charId = ctx?.characterId;
+                    if (charId) cp.incrementTrust(charId, 0.1);
+                }
+            } catch (_) { /* best-effort */ }
         }
         return entry;
     },
