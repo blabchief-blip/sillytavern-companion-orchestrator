@@ -230,6 +230,19 @@ describe('tinder modülü ui: { mount, refresh } (settings panel)', () => {
             'side panel panel() callback de olmalı');
     });
 
+    test('REGRESSION: mount kart panelini de bağlar (wireTinderPanel çağrılır)', () => {
+        // v0.8.2'de eklenen ui.mount, resolveUIBinding'in legacy
+        // wireTinderPanel'e düşmesini engelliyordu → kart paneli + swipe
+        // butonları hiç bağlanmıyor, kartlar görünmüyordu. ui.mount artık
+        // orch.wireTinderPanel()'i açıkça çağırmalı.
+        const $ = makeJqueryShim(dom.window);
+        let wired = 0;
+        orch.wireTinderPanel = function () { wired++; };
+        tinderModule.ui.mount(orch, ctx, { $, saveSettingsDebounced: () => {} });
+        assert.equal(wired, 1,
+            'tinder.ui.mount kart panelini render etmek için orch.wireTinderPanel() çağırmalı');
+    });
+
     test('mount: threshold soft_open değişimi settings.tinder.thresholds.soft_open\'a yazar', () => {
         const $ = makeJqueryShim(dom.window);
         tinderModule.ui.mount(orch, ctx, { $, saveSettingsDebounced: () => {} });
