@@ -299,13 +299,15 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
+        console.log('[phone_shell] onMessageReceived _active=' + _active + ' data.keys=' + (data ? Object.keys(data).join(',') : 'null') + ' data.message=' + (data?.message ? 'present' : 'absent'));
         if (!_active) return;
-        const msg = data?.message;
+        const msg = data?.message || data;  // ST 1.18 bazen data direkt msg
         if (!msg) return;
         if (msg.is_user === true || msg.role === 'user') return;
         if (msg.role === 'system') return;
         const text = String(msg.mes || '').trim();
         if (!text) return;
+        console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
         phoneShellModule.appendMessage('assistant', text);
         // Auto-mark previous self messages as seen (chronological sequence)
         _markAllSeen();
