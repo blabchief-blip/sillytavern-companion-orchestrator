@@ -201,16 +201,25 @@ export const slashCommands = {
 };
 
 export function registerAllCommands(orch) {
-    const { SlashCommandParser } = SillyTavern.getContext();
+    let ctx;
+    try {
+        ctx = SillyTavern.getContext();
+    } catch (e) {
+        console.error('[Companion Orchestrator] SillyTavern.getContext() failed:', e);
+        return;
+    }
+    const { SlashCommandParser, SlashCommand } = ctx;
+    if (!SlashCommandParser) {
+        console.error('[Companion Orchestrator] SlashCommandParser not available');
+        return;
+    }
+    console.log('[Companion Orchestrator] registerAllCommands: SlashCommandParser OK, SlashCommand:', typeof SlashCommand);
 
-    SlashCommandParser.addCommandObject({
+    const cmdProps = {
         name: 'co',
         aliases: ['companion'],
         help: 'Companion Orchestrator — hafıza, ruh hali, senaryo, stil ve lorebook yönetimi. Alt komutlar için /co help.',
         // Add a renderHelpItem method so ST's autocomplete dropdown doesn't crash.
-        // ST calls `this.command.renderHelpItem(this.name)` when /co is typed in the chat input.
-        // Without this, you get "TypeError: this.command.renderHelpItem is not a function"
-        // and the slash command silently fails to parse/execute.
         renderHelpItem() {
             const li = document.createElement('li');
             li.classList.add('item');
@@ -246,8 +255,12 @@ export function registerAllCommands(orch) {
             frag.append(div);
             return frag;
         },
-        callback: (args) => {
-            console.log('[Companion Orchestrator] /co callback args:', JSON.stringify(args), 'typeof:', typeof args);
+        callback: (namedArgs, unnamedArgs) => {
+            console.log('[Companion Orchestrator] /co callback namedArgs:', namedArgs, 'unnamedArgs:', unnamedArgs);
+            // ST 1.18: callback(namedArguments, unnamedArguments).
+            // UnnamedArguments string array olarak gelir: ['tinder', 'exchange', 'm1']
+            const args = Array.isArray(unnamedArgs) ? unnamedArgs
+                : (typeof unnamedArgs === 'string' ? unnamedArgs.split(/\s+/).filter(Boolean) : []);
             const sub = args[0];
             if (!sub || sub === 'help') return slashCommands.help();
             if (sub === 'status') return slashCommands.status(orch);
@@ -445,7 +458,19 @@ export function registerAllCommands(orch) {
             return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
         },
         namedArguments: [],
-    });
+    };
+
+    // ST 1.18: fromProps ile sarmalanmış SlashCommand örneği bekle.
+    // fromProps yoksa doğrudan addCommandObject de çalışabilir (1.17'de olduğu gibi).
+    let finalCmd = cmdProps;
+    if (typeof SlashCommand === 'function' && typeof SlashCommand.fromProps === 'function') {
+        try {
+            finalCmd = SlashCommand.fromProps(cmdProps);
+        } catch (e) {
+            console.warn('[Companion Orchestrator] fromProps failed, using raw object:', e);
+        }
+    }
+    SlashCommandParser.addCommandObject(finalCmd);
 
     console.log('[Companion Orchestrator] Slash command /co registered.');
 }
