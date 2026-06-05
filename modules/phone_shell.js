@@ -262,17 +262,19 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
-        if (!_active) return; // shell kapalıysa hiçbir şey yapma
+        if (!_active) return; // shell kapaliysa hiçbir şey yapma
         const msg = data?.message;
         if (!msg) return;
         // Debug log: hangi role geldiğini gör (ST 1.18'de farklı olabilir)
         if (typeof console !== 'undefined') {
-            console.log('[phone_shell] onMessageReceived role=' + JSON.stringify(msg.role) + ' textLen=' + (msg.mes || '').length);
+            console.log('[phone_shell] onMessageReceived role=' + JSON.stringify(msg.role) + ' is_user=' + JSON.stringify(msg.is_user) + ' textLen=' + (msg.mes || '').length);
         }
-        // Sadece assistant (character) mesajlarını al
-        // ST 1.18 farklı role adları kullanıyor olabilir: 'assistant', 'char', 'model', 'character', 'bot'
-        const r = msg.role;
-        if (r !== 'assistant' && r !== 'char' && r !== 'model' && r !== 'character' && r !== 'bot') return;
+        // ST 1.18'de role undefined olabilir. Fallback sırası:
+        //   1. is_user === true VEYA role === 'user' → user (atla, onMessageSent halleder)
+        //   2. role string ve 'system' ise → atla
+        //   3. Diğer her şey (role undefined dahil) → assistant
+        if (msg.is_user === true || msg.role === 'user') return;
+        if (msg.role === 'system') return;
         const text = String(msg.mes || '').trim();
         if (!text) return;
         phoneShellModule.appendMessage('assistant', text);
@@ -328,13 +330,24 @@ const phoneShellModule = {
             return { ok: false, error: 'ST chat empty' };
         }
         // Son N mesajı al (system hariç)
+        // ST 1.18 bazı mesajlarda m.role set etmeyebilir — fallback:
+        // m.name === 'You' → user, diğer → assistant
         const recent = chat
-            .filter(m => m && m.role && m.role !== 'system' && (m.mes || '').trim())
+            .filter(m => m && (m.mes || '').trim() && m.is_system !== true)
+            .filter(m => m.role !== 'system')
             .slice(-count);
         if (typeof console !== 'undefined') {
             const roles = {};
-            for (const m of recent) roles[m.role] = (roles[m.role] || 0) + 1;
-            console.log('[phone_shell] importChatHistory recent roles=' + JSON.stringify(roles) + ' total=' + chat.length);
+            for (const m of recent) roles[m.role ?? '<undefined>'] = (roles[m.role ?? '<undefined>'] || 0) + 1;
+            // İlk 3 chat mesajının role + mes başlangıcı log'la (debug)
+            const sample = chat.slice(0, 3).map(m => ({
+                role: m.role ?? '<undefined>',
+                name: m.name ?? '<no name>',
+                is_user: m.is_user,
+                is_system: m.is_system,
+                mesStart: String(m.mes || '').slice(0, 40),
+            }));
+            console.log('[phone_shell] importChatHistory recent roles=' + JSON.stringify(roles) + ' total=' + chat.length + ' sample=' + JSON.stringify(sample));
         }
         if (recent.length === 0) {
             return { ok: false, error: 'No messages to import' };
@@ -344,8 +357,14 @@ const phoneShellModule = {
         if (_messageContainer) _messageContainer.innerHTML = '';
         let imported = 0;
         for (const m of recent) {
-            // ST 1.18 farklı role adları: 'user' | 'assistant' | 'model' | 'char' | 'system'
-            const role = (m.role === 'user') ? 'user' : 'assistant';
+            // ST 1.18'de m.role undefined olabilir. Fallback sırası:
+            //   1. m.is_user === true → user
+            //   2. m.role === 'user' → user
+            //   3. m.role string ve user/assistant/char/model/character/bot değilse → assistant
+            //   4. m.role undefined ve is_user false/undefined → assistant
+            // (name === 'You' ST'nin user ismi, ama is_user daha güvenilir)
+            const isUser = (m.is_user === true) || (m.role === 'user');
+            const role = isUser ? 'user' : 'assistant';
             phoneShellModule.appendMessage(role, m.mes);
             imported++;
         }
