@@ -399,3 +399,98 @@ describe('tinder exchange: handleExchangeAttemptAsync (content_safety auto-detec
         assert.ok(hasExplicitSignal);
     });
 });
+
+// =========================================================================
+// v0.8.4: msgCount otomatik artırma + activeMatchId
+// =========================================================================
+
+describe('v0.8.4: onMessageSent ile msgCount otomatik artırma', () => {
+    let mockOrch;
+    beforeEach(async () => {
+        await tinderModule.init({ settings: {} });
+        mockOrch = {
+            settings: {
+                tinder: {
+                    activeMatchId: 'm_test',
+                    matches: [{ id: 'm_test', name: 'Test Girl' }],
+                },
+            },
+            save: () => {},
+        };
+    });
+
+    test('onMessageSent: msgCount artar', () => {
+        const before = tinderModule.getExchangeStage('m_test');
+        tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: 'merhaba' } });
+        const after = tinderModule.getExchangeStage('m_test');
+        // locked → locked (1 mesaj, 5'ten az)
+        assert.equal(after, 'locked');
+        // msgCount 1 olmalı
+        const ex = tinderModule.getExchangeInfo('m_test');
+        assert.equal(ex.msgCount, 1);
+    });
+
+    test('onMessageSent: 12 mesaj → exchange stage', () => {
+        for (let i = 0; i < 12; i++) {
+            tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: `msg ${i}` } });
+        }
+        assert.equal(tinderModule.getExchangeStage('m_test'), 'exchange');
+    });
+
+    test('onMessageSent: activeMatchId yoksa no-op', () => {
+        mockOrch.settings.tinder.activeMatchId = null;
+        tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: 'merhaba' } });
+        const ex = tinderModule.getExchangeInfo('m_test');
+        assert.equal(ex, null, 'exchange state oluşmamalı');
+    });
+
+    test('onMessageSent: boş mesaj → no-op', () => {
+        tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: '' } });
+        tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: '   ' } });
+        const ex = tinderModule.getExchangeInfo('m_test');
+        assert.equal(ex, null, 'boş mesaj msgCount artırmamalı');
+    });
+});
+
+describe('v0.8.4: onMessageReceived → auto-detect exchange', () => {
+    let mockOrch;
+    beforeEach(async () => {
+        await tinderModule.init({ settings: {} });
+        mockOrch = {
+            settings: {
+                tinder: {
+                    activeMatchId: 'm_test',
+                    matches: [{ id: 'm_test', name: 'Test Girl' }],
+                },
+            },
+        };
+    });
+
+    test('karakter numara paylaşırsa → otomatik exchange', () => {
+        // Önce 12 mesaj biriktir (locked → soft_open → exchange)
+        for (let i = 0; i < 12; i++) {
+            tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: `msg ${i}` } });
+        }
+        assert.equal(tinderModule.getExchangeStage('m_test'), 'exchange');
+        // Karakter numara paylaşımı ifade ediyor (Türkçe keyword)
+        tinderModule.onMessageReceived(mockOrch, {
+            message: { role: 'assistant', mes: 'Tabii ki, numaramı verebilirim' },
+        });
+        // handleExchangeAttempt otomatik tetiklendi, _onNumberShared async
+        // (test'te _onNumberShared Lazy import + import chain çalışmaz,
+        // bu yüzden sadece numberShared flag'i kontrol ediyoruz)
+        const ex = tinderModule.getExchangeInfo('m_test');
+        assert.equal(ex.numberShared, true, 'numara paylaşımı flag set edilmeli');
+    });
+
+    test('numara yoksa exchange tetiklenmez', () => {
+        for (let i = 0; i < 12; i++) {
+            tinderModule.onMessageSent(mockOrch, { message: { role: 'user', mes: `msg ${i}` } });
+        }
+        tinderModule.onMessageReceived(mockOrch, {
+            message: { role: 'assistant', mes: 'Güzel hava bugün!' },
+        });
+        const ex = tinderModule.getExchangeInfo('m_test');
+        assert.equal(ex.numberShared, false);
+    });
+});

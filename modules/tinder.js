@@ -1396,6 +1396,102 @@ tinderModule.handleExchangeAttemptAsync = async function (matchId, userMessage, 
     });
 };
 
+// =========================================================================
+// v0.8.4: ST MESSAGE_SENT/RECEIVED hook'ları
+// =========================================================================
+//
+// ST chat'e yazılan her mesajda msgCount otomatik artmalı. Aksi halde
+// kullanıcı 12+ mesaj yazsa bile exchange tetiklenmez çünkü
+// `classifyStage(msgCount)` hep 0 görür → stage='locked' kalır.
+//
+// onMessageSent: kullanıcı mesajı → msgCount++ + stage güncelle.
+//   (Sadece aktif matchId için artır — yoksa her chat yazışında tüm
+//   match'ler artar, anlamsız.)
+//
+// onMessageReceived: karakter cevabı → eğer kullanıcı "numara istemişse"
+//   otomatik exchange tetikle (tinder.exchangeCommand) — bu en kritik
+//   trigger, çünkü karakter genelde kendi paylaşır.
+//
+// Public API:
+tinderModule.onMessageSent = function (orch, data) {
+    // Aktif matchId yoksa no-op. Active match tracking settings.tinder.activeMatchId.
+    const matchId = orch?.settings?.tinder?.activeMatchId;
+    if (!matchId) return;
+    const text = String(data?.message?.mes || '').trim();
+    if (!text) return;
+    tinderModule.incrementMessageCount(matchId);
+    // Stage güncellendi, persist et
+    if (orch?.save) orch.save();
+};
+
+tinderModule.onMessageReceived = function (orch, data) {
+    const matchId = orch?.settings?.tinder?.activeMatchId;
+    if (!matchId) return;
+    const text = String(data?.message?.mes || '').trim();
+    if (!text) return;
+    // Karakterin cevabında numara paylaşımı var mı? Otomatik exchange tetikle.
+    // detectExchangeRequest() keyword heuristic kullanıyor.
+    if (tinderModule.detectExchangeRequest(text)) {
+        console.log('[tinder] Auto-detected exchange request in character reply');
+        const r = tinderModule.handleExchangeAttempt(matchId, text, { safetyLevel: 'sfw' });
+        if (r.action === 'exchange') {
+            // _onNumberShared otomatik tetiklenecek (handleExchangeAttempt içinde)
+            console.log('[tinder] Auto-exchange succeeded:', r.dialogue);
+        }
+    }
+};
+
 tinderModule.EXCHANGE_KEYWORDS = EXCHANGE_KEYWORDS;
 tinderModule.STAGE_THRESHOLDS = STAGE_THRESHOLDS;
+
+// =========================================================================
+// v0.8.4: onChatChanged — karakter değişince activeMatchId güncelle
+// =========================================================================
+//
+// ST'de karakter değiştirildiğinde ST 'CHAT_CHANGED' event'i fırlatır.
+// Orchestrator bu event'i yakalayıp tüm modüllerin onChatChanged
+// callback'ini iterate eder.
+//
+// Burada: eğer aktif karakterin adı tinder matches listesinde varsa,
+// settings.tinder.activeMatchId o match'e ayarlanır. Böylece sonraki
+// mesajlarda onMessageSent ile msgCount otomatik artar.
+//
+// Match listesi [_cardCache.keys()] veya settings.tinder.matches'ten alınır.
+
+tinderModule.onChatChanged = function (orch) {
+    if (!orch?.settings?.tinder) return;
+    // Aktif karakter adı
+    let charName = null;
+    try {
+        if (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) {
+            const ctx = SillyTavern.getContext();
+            charName = ctx?.characterId || ctx?.character?.name || null;
+        }
+    } catch (_) { /* test ortamı */ }
+    if (!charName) {
+        // Match yoksa activeMatchId temizle
+        if (orch.settings.tinder.activeMatchId) {
+            orch.settings.tinder.activeMatchId = null;
+        }
+        return;
+    }
+    // Tinder matches listesinde bu karakteri bul
+    const matches = orch.settings.tinder.matches || [];
+    let foundMatchId = null;
+    for (const m of matches) {
+        // m: { id, name, ... }
+        if (m.id === charName || m.name === charName) {
+            foundMatchId = m.id;
+            break;
+        }
+    }
+    if (foundMatchId) {
+        if (orch.settings.tinder.activeMatchId !== foundMatchId) {
+            console.log('[tinder] Active match changed →', foundMatchId);
+            orch.settings.tinder.activeMatchId = foundMatchId;
+        }
+    } else if (orch.settings.tinder.activeMatchId) {
+        orch.settings.tinder.activeMatchId = null;
+    }
+};
 tinderModule.STAGE_NAMES = STAGE_NAMES;

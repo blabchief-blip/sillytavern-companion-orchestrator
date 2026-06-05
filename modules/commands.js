@@ -247,6 +247,7 @@ export function registerAllCommands(orch) {
             return frag;
         },
         callback: (args) => {
+            console.log('[Companion Orchestrator] /co callback args:', JSON.stringify(args), 'typeof:', typeof args);
             const sub = args[0];
             if (!sub || sub === 'help') return slashCommands.help();
             if (sub === 'status') return slashCommands.status(orch);
