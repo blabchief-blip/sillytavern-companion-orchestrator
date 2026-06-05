@@ -155,10 +155,19 @@ const phoneShellModule = {
         }
         try {
             _renderShell();
-            // Mount sonrası shell element DOM'da mı kontrol et
-            const inDom = _shellEl && document.body.contains(_shellEl);
-            const hasSize = _shellEl && _shellEl.offsetWidth > 0 && _shellEl.offsetHeight > 0;
-            console.log('[phone_shell] mount() success, _active=' + _active + ' inDom=' + inDom + ' size=' + (_shellEl ? _shellEl.offsetWidth + 'x' + _shellEl.offsetHeight : 'null') + ' platform=' + _currentPlatform);
+            // requestAnimationFrame sonrası ölç — ST 1.18 sync mount sırasında 0x0 dönüyor
+            const raf = (typeof window !== 'undefined' && window.requestAnimationFrame)
+                || (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : null);
+            const onLayout = () => {
+                if (!_shellEl) return;
+                const inDom = document.body.contains(_shellEl);
+                const size = _shellEl.offsetWidth + 'x' + _shellEl.offsetHeight;
+                const rect = _shellEl.getBoundingClientRect();
+                console.log('[phone_shell] post-mount check: inDom=' + inDom + ' size=' + size + ' rect=' + rect.width + 'x' + rect.height + ' platform=' + _currentPlatform + ' computed-display=' + (typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(_shellEl).display : 'n/a'));
+            };
+            if (raf) raf(onLayout);
+            else setTimeout(onLayout, 0);
+            console.log('[phone_shell] mount() success, _active=' + _active);
         } catch (e) {
             _active = false;
             console.error('[phone_shell] _renderShell failed:', e);
@@ -429,11 +438,11 @@ function _renderShell() {
         position: 'fixed',
         right: '0',
         top: '0',
-        left: _fullscreen ? '0' : 'auto',
+        left: '0',  // fullscreen default: 0'dan sağa tüm genişlik
+        bottom: '0',
+        width: '100vw',
         height: '100vh',
-        width: _fullscreen ? '100vw' : '380px',
-        // Background: gradient varsa solid base + gradient, transparan alpha
-        // gradient'lar arka plandaki ST chat beyazını sızdırıyordu.
+        // Background: solid base + gradient overlay
         background: theme.wallpaper,
         backgroundColor: theme.bgColor || '#1a1a2e',  // fallback solid
         color: theme.textColor,
@@ -441,8 +450,8 @@ function _renderShell() {
         display: 'flex',
         flexDirection: 'column',
         zIndex: '99999',
-        boxShadow: _fullscreen ? 'none' : '-4px 0 16px rgba(0,0,0,0.4)',
-        transition: 'width 0.3s ease',
+        boxShadow: 'none',
+        // transition kaldırıldı — mount anında 0x0 animasyonu önlendi
     });
 
     // Header
@@ -501,6 +510,10 @@ function _renderShell() {
     }
 
     document.body.appendChild(_shellEl);
+    // Force reflow — ST 1.18 mount sonrası offsetWidth 0x0 dönüyordu,
+    // explicit reflow + getBoundingClientRect ile layout zorlanıyor
+    void _shellEl.offsetWidth;
+    void _shellEl.getBoundingClientRect();
     _scrollToBottom();
 }
 

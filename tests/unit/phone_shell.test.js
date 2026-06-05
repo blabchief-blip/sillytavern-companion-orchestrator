@@ -267,14 +267,17 @@ describe('toggleFullscreen', () => {
         assert.equal(r.fullscreen, true);
     });
 
-    test('shell aktifken width style değişir (false: 380px, true: 100vw)', () => {
+    test('shell aktifken her zaman fullscreen (split view kaldırıldı)', () => {
+        // v0.8.5: shell artık her zaman fullscreen (sahne modu)
+        // toggleFullscreen() sadece state değiştirir, width sabit 100vw
         phoneShellModule.mount();
-        // Default fullscreen=true → 100vw
         const shell = dom.window.document.querySelector('#co-phone-shell');
         assert.equal(shell.style.width, '100vw');
-        phoneShellModule.toggleFullscreen();
+        phoneShellModule.toggleFullscreen();  // fullscreen=false olur
         const newShell = dom.window.document.querySelector('#co-phone-shell');
-        assert.equal(newShell.style.width, '380px');
+        // Width sabit 100vw (split view kaldırıldı)
+        assert.equal(newShell.style.width, '100vw');
+        assert.equal(phoneShellModule.getInfo().fullscreen, false);
     });
 });
 
