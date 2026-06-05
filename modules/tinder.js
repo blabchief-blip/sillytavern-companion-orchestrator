@@ -667,10 +667,13 @@ export const tinderModule = {
             'identical faces, similar faces',
         ].join(', ');
 
-        // Use the same CSRF flow as importMatch. ComfyUI lives at a
-        // configurable URL; we read it from global settings (set by the
-        // extension host) or fall back to a local default.
-        const comfyUrl = window.CO_COMFYUI_URL || 'http://192.168.68.67:8001';
+        // ComfyUI URL — image_gen modülünün ayarladığı URL'i kullan (tek yerden
+        // yapılandırılsın), yoksa global, yoksa local default. Eskiden selfie
+        // farklı bir hardcoded IP (.67) kullanıyordu, image_gen ise .66 →
+        // tutarsızdı.
+        const comfyUrl = _orch?.settings?.image_gen?.comfyuiUrl
+            || window.CO_COMFYUI_URL
+            || 'http://127.0.0.1:8188';
         try {
             const result = await submitSelfieToComfyUI({
                 comfyUrl,
@@ -924,6 +927,36 @@ function _substituteWildcards(obj, subs) {
     return obj;
 }
 
+// Eşleşilen tinder karakterinin yüz görselini ComfyUI'nin input/ klasörüne
+// yükler. IP-Adapter FaceID'nin yüz referansı budur. ST'den PNG'yi blob olarak
+// çekip ComfyUI'nin POST /upload/image endpoint'ine multipart gönderiyoruz.
+// Dönen ad LoadImage node'unun *refimage* yerine konur.
+async function uploadRefImageToComfyUI(comfyUrl, baseName) {
+    const pngUrl = absUrl(`/characters/tinder-batch/${baseName}.png`);
+    const imgResp = await fetch(pngUrl, { credentials: 'include' });
+    if (!imgResp.ok) {
+        throw new Error(`Referans görsel ST'den alınamadı: ${pngUrl} (${imgResp.status})`);
+    }
+    const blob = await imgResp.blob();
+    const form = new FormData();
+    form.append('image', new File([blob], `${baseName}.png`, { type: 'image/png' }));
+    form.append('overwrite', 'true');
+    form.append('type', 'input');
+    let up;
+    try {
+        up = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form });
+    } catch (e) {
+        throw new Error(`ComfyUI'ye ulaşılamıyor (${comfyUrl}): ${e?.message || e}`);
+    }
+    if (!up.ok) {
+        const t = await up.text().catch(() => '');
+        throw new Error(`ComfyUI /upload/image ${up.status}: ${t.slice(0, 150)}`);
+    }
+    const j = await up.json().catch(() => ({}));
+    // ComfyUI dönüşü: { name, subfolder, type }. subfolder boşsa sadece name.
+    return j.name || `${baseName}.png`;
+}
+
 // Submit a selfie generation request to ComfyUI.
 // Loads tinder-selfie-workflow.json from the extension's settings
 // directory, fills wildcards, POSTs to /prompt, waits for completion,
@@ -944,12 +977,17 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
     try { template = JSON.parse(templateText); }
     catch (e) { return { ok: false, error: `Workflow template is not valid JSON: ${e?.message || e}` }; }
 
-    // ComfyUI's LoadImage needs a filename it can find in its input
-    // directory. We uploaded the reference PNG earlier to the same
-    // tinder-batch folder; ComfyUI's LoadImage just needs the basename
-    // (no subfolder). We pass the full ID and rely on the user-side
-    // `image_upload` flow that the ComfyUI extension already provides.
-    const refImageBase = refImage; // e.g. tinder_0001_daria_vancouver.png
+    // ComfyUI's LoadImage node reads the reference face from ComfyUI's own
+    // `input/` directory. The tinder PNG lives in ST's data dir, NOT in
+    // ComfyUI — so we must UPLOAD it to ComfyUI first, otherwise LoadImage
+    // fails and IP-Adapter FaceID has no face to work from. (This upload was
+    // the missing link: the old code just assumed the file was already there.)
+    let refImageBase;
+    try {
+        refImageBase = await uploadRefImageToComfyUI(comfyUrl, baseName);
+    } catch (e) {
+        return { ok: false, error: `Referans yüz ComfyUI'ye yüklenemedi: ${e?.message || e}` };
+    }
 
     const seed = Math.abs(Math.floor(Math.random() * 2 ** 31));
     const substitutions = {
