@@ -5,6 +5,8 @@
  */
 'use strict';
 
+import { parseLooseJsonObject } from './json_util.js';
+
 let _orch = null;
 let _ctx = null;
 
@@ -130,13 +132,12 @@ export const moodModule = {
         try {
             // Ask LLM to classify the user message's emotional tone
             const prompt = `You are an emotional tone classifier. Read this in-character user message and output ONLY a single JSON object, no markdown, no commentary, exactly:\n{"affinity_delta": <-2 to +2>, "trust_delta": <-2 to +2>, "mood": "one of: ${(_orch.settings.mood.presets || []).slice(0, 8).join(', ')}"}\n\nUser message:\n"""${text.slice(0, 1500)}"""`;
-            const reply = await ctx.generateQuietPrompt(prompt, false, false);
+            const reply = await ctx.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: false });
             if (!reply) return;
 
-            // Try to extract JSON robustly
-            const jsonMatch = reply.match(/\{[\s\S]*?\}/);
-            if (!jsonMatch) return;
-            const parsed = JSON.parse(jsonMatch[0]);
+            // Extract JSON robustly (tolerates unquoted keys / fences / single quotes)
+            const parsed = parseLooseJsonObject(reply);
+            if (!parsed) return;
             const affDelta = Number(parsed.affinity_delta) || 0;
             const trDelta = Number(parsed.trust_delta) || 0;
             const moodName = (parsed.mood || '').toString().toLowerCase().trim();
