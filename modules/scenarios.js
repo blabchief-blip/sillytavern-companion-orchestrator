@@ -171,7 +171,7 @@ export const scenariosModule = {
         return { ok: true };
     },
 
-    apply(key) {
+    async apply(key) {
         const scenario = this.get(key);
         if (!scenario) return { ok: false, error: `Unknown scenario: ${key}` };
         if (!_ctx?.setExtensionPrompt || !_ctx?.setExtensionPrompt) {
@@ -206,6 +206,21 @@ export const scenariosModule = {
             // seed etmeyebilir. Defensive init:
             if (!_orch.settings.scenarios) _orch.settings.scenarios = {};
             _orch.settings.scenarios.lastUsed = key;
+            // v0.8.4: phone_match senaryosu otomatik phone_shell tetikler.
+            // Lazy import — circular dependency riski (scenarios ↔ phone_shell).
+            if (key === 'phone_match') {
+                try {
+                    const { phoneShellModule } = await import('./phone_shell.js');
+                    if (typeof phoneShellModule.mount === 'function') {
+                        phoneShellModule.mount();
+                        // Default platform: whatsapp_style (telefon uygulaması hissi için).
+                        phoneShellModule.setPlatform('whatsapp_style');
+                        log('[Companion Orchestrator] phone_shell auto-mounted (phone_match scenario)');
+                    }
+                } catch (e) {
+                    console.warn('[Companion Orchestrator] phone_shell auto-mount failed:', e);
+                }
+            }
             save();
             return { ok: true, scenario: scenario.name };
         } catch (err) {

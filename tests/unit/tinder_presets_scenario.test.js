@@ -131,8 +131,8 @@ describe('phone_match scenario', () => {
         assert.match(sc.authorNote, /phone|number|exchange/i);
     });
 
-    test('apply(phone_match) injects system + authorNote', () => {
-        const r = scenariosModule.apply('phone_match');
+    test('apply(phone_match) injects system + authorNote', async () => {
+        const r = await scenariosModule.apply('phone_match');
         assert.equal(r.ok, true);
         // apply() injects via setExtensionPrompt under 'CO_SCENARIO_*' keys.
         // Mock ST records all calls; verify both keys received non-empty content.

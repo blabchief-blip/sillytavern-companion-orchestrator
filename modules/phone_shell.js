@@ -1,0 +1,552 @@
+/**
+ * Phone Shell — v0.8.4 Phone-Mode UI
+ *
+ * Telefon uygulaması hissi yaratmak için ST chat'in yanına (veya
+ * üstüne) platform-themed bir chat shell mount eder.
+ *
+ * Mimari:
+ *   - Split view (default): ST chat solda, phone shell sağda (380px)
+ *   - Fullscreen mode: ST gizli, sadece phone shell
+ *   - 3 platform teması: whatsapp (🟢 yeşil), telegram (✈️ mavi),
+ *     signal (🔒 mor)
+ *
+ * Aktivasyon:
+ *   - phone_match senaryosu apply edildiğinde OTOMATIK tetiklenir
+ *   - suggestTransition() exchange stage'de whatsapp önerir, kullanıcı
+ *     /co platform goto ile geçtiğinde shell güncellenir
+ *   - /co platform back → shell kapanır
+ *
+ * Public API:
+ *   - init(orch, ctx)              - başlat
+ *   - mount()                       - DOM mount
+ *   - unmount()                     - DOM kaldır
+ *   - setPlatform(platformKey)      - tema değiştir (tinder_chat/wa/tg/signal)
+ *   - getPlatform()                 - aktif platform
+ *   - isActive()                    - shell açık mı
+ *   - toggleFullscreen()            - fullscreen mode aç/kapa
+ *   - appendMessage(role, text)     - mesaj ekle (ST MESSAGE_SENT/RECEIVED'den)
+ *   - clearMessages()               - tüm mesajları sil
+ *   - getInfo()                     - debug info
+ */
+
+const PHONE_PLATFORMS = {
+    tinder_chat: {
+        name: 'Tinder',
+        emoji: '📱',
+        color: '#ff6b6b',
+        bgGradient: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)',
+        wallpaper: 'linear-gradient(180deg, rgba(255,107,107,0.05) 0%, rgba(255,107,107,0.15) 100%)',
+        bubbleSelf: '#dcf8c6',
+        bubbleOther: '#ffffff',
+        textColor: '#303030',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        showVoice: false,
+        showVideo: false,
+        showCamera: true, // selfies still
+        showSeen: false,
+        showTyping: false,
+    },
+    whatsapp_style: {
+        name: 'WhatsApp',
+        emoji: '💬',
+        color: '#25d366',
+        bgGradient: 'linear-gradient(135deg, #075e54 0%, #128c7e 100%)',
+        wallpaper: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 8px), linear-gradient(180deg, #0b141a 0%, #1f2c34 100%)',
+        bubbleSelf: '#005c4b',
+        bubbleOther: '#202c33',
+        textColor: '#e9edef',
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+        showVoice: true,
+        showVideo: true,
+        showCamera: true,
+        showSeen: true,    // ✓✓
+        showTyping: true,
+    },
+    telegram_style: {
+        name: 'Telegram',
+        emoji: '✈️',
+        color: '#0088cc',
+        bgGradient: 'linear-gradient(135deg, #0088cc 0%, #229ed9 100%)',
+        wallpaper: 'linear-gradient(180deg, #17212b 0%, #0e1621 100%)',
+        bubbleSelf: '#2b5278',
+        bubbleOther: '#182533',
+        textColor: '#f5f5f5',
+        fontFamily: '"SF Pro Display", system-ui, sans-serif',
+        showVoice: true,
+        showVideo: true,
+        showCamera: true,
+        showSeen: true,    // ✓✓
+        showTyping: true,
+    },
+    signal_style: {
+        name: 'Signal',
+        emoji: '🔒',
+        color: '#3a76f0',
+        bgGradient: 'linear-gradient(135deg, #1a1a2e 0%, #3a76f0 100%)',
+        wallpaper: 'linear-gradient(180deg, #1c1c1c 0%, #2a2a2a 100%)',
+        bubbleSelf: '#2563eb',
+        bubbleOther: '#2a2a2a',
+        textColor: '#f1f1f1',
+        fontFamily: '"Inter", system-ui, sans-serif',
+        showVoice: true,
+        showVideo: false,
+        showCamera: true,
+        showSeen: false,   // Signal: no read receipts by default
+        showTyping: true,
+    },
+};
+
+let _orch = null;
+let _ctx = null;
+let _currentPlatform = 'tinder_chat';
+let _active = false;
+let _fullscreen = false;
+let _messages = []; // {role, text, timestamp, seen}
+let _shellEl = null;
+let _messageContainer = null;
+let _inputEl = null;
+let _typingTimer = null;
+
+// Public API
+const phoneShellModule = {
+    name: 'phone_shell',
+    PHONE_PLATFORMS,
+
+    init(orch, ctx) {
+        _orch = orch;
+        // ctx is optional — fall back to SillyTavern.getContext() in mount()
+        if (ctx) _ctx = ctx;
+        // Restore active state from settings
+        const s = orch.settings.phone_shell = orch.settings.phone_shell || {
+            active: false,
+            platform: 'tinder_chat',
+            fullscreen: false,
+        };
+        _currentPlatform = s.platform || 'tinder_chat';
+        _fullscreen = !!s.fullscreen;
+        return { ok: true };
+    },
+
+    /**
+     * Shell'i mount et. Phone-mode aktif olur.
+     */
+    mount() {
+        if (_active) return { ok: true, alreadyActive: true };
+        if (typeof document === 'undefined' || !document.body) {
+            return { ok: false, error: 'document.body unavailable' };
+        }
+        _active = true;
+        if (_orch?.settings?.phone_shell) {
+            _orch.settings.phone_shell.active = true;
+        }
+        _renderShell();
+        return { ok: true, platform: _currentPlatform };
+    },
+
+    /**
+     * Shell'i kaldır. Phone-mode kapanır, ST chat normal kalır.
+     */
+    unmount() {
+        if (!_active) return { ok: true, alreadyClosed: true };
+        if (_shellEl && _shellEl.parentNode) {
+            _shellEl.parentNode.removeChild(_shellEl);
+        }
+        _shellEl = null;
+        _messageContainer = null;
+        _inputEl = null;
+        _active = false;
+        if (_orch?.settings?.phone_shell) {
+            _orch.settings.phone_shell.active = false;
+        }
+        return { ok: true };
+    },
+
+    /**
+     * Aktif platform'u değiştir. Shell açıksa anında tema güncellenir.
+     */
+    setPlatform(platformKey) {
+        if (!PHONE_PLATFORMS[platformKey]) {
+            return { ok: false, error: `Unknown platform: ${platformKey}` };
+        }
+        _currentPlatform = platformKey;
+        if (_orch?.settings?.phone_shell) {
+            _orch.settings.phone_shell.platform = platformKey;
+        }
+        if (_active) {
+            _renderShell();
+        }
+        return { ok: true, platform: platformKey };
+    },
+
+    getPlatform() {
+        return _currentPlatform;
+    },
+
+    isActive() {
+        return _active;
+    },
+
+    toggleFullscreen() {
+        _fullscreen = !_fullscreen;
+        if (_orch?.settings?.phone_shell) {
+            _orch.settings.phone_shell.fullscreen = _fullscreen;
+        }
+        if (_active) _renderShell();
+        return { ok: true, fullscreen: _fullscreen };
+    },
+
+    /**
+     * ST MESSAGE_SENT/RECEIVED'ten mesaj ekle.
+     * role: 'user' | 'assistant' (ST'den)
+     */
+    appendMessage(role, text) {
+        const entry = {
+            role: role === 'user' ? 'self' : 'other',
+            text: String(text || '').trim(),
+            timestamp: Date.now(),
+            seen: false,
+        };
+        _messages.push(entry);
+        if (_active && _messageContainer) {
+            _renderMessage(entry);
+            _scrollToBottom();
+        }
+        return entry;
+    },
+
+    clearMessages() {
+        _messages = [];
+        if (_messageContainer) {
+            _messageContainer.innerHTML = '';
+        }
+        return { ok: true };
+    },
+
+    getInfo() {
+        return {
+            active: _active,
+            platform: _currentPlatform,
+            fullscreen: _fullscreen,
+            messageCount: _messages.length,
+            hasShell: !!_shellEl,
+        };
+    },
+
+    /**
+     * List available platform keys (for testing / UI).
+     */
+    getAvailablePlatforms() {
+        return Object.keys(PHONE_PLATFORMS);
+    },
+
+    getPlatformInfo(platformKey) {
+        return PHONE_PLATFORMS[platformKey] || null;
+    },
+
+    _resetForTests() {
+        _orch = null;
+        _ctx = null;
+        _active = false;
+        _fullscreen = false;
+        _currentPlatform = 'tinder_chat';
+        _messages = [];
+        if (_shellEl && _shellEl.parentNode) {
+            _shellEl.parentNode.removeChild(_shellEl);
+        }
+        _shellEl = null;
+        _messageContainer = null;
+        _inputEl = null;
+    },
+};
+
+// ============================
+// Internal render helpers
+// ============================
+
+function _renderShell() {
+    // Re-render strategy: remove existing, create fresh
+    if (_shellEl && _shellEl.parentNode) {
+        _shellEl.parentNode.removeChild(_shellEl);
+    }
+    const theme = PHONE_PLATFORMS[_currentPlatform];
+    _shellEl = document.createElement('div');
+    _shellEl.id = 'co-phone-shell';
+    _shellEl.setAttribute('data-platform', _currentPlatform);
+    _shellEl.setAttribute('data-fullscreen', String(_fullscreen));
+    Object.assign(_shellEl.style, {
+        position: 'fixed',
+        right: '0',
+        top: '0',
+        height: '100vh',
+        width: _fullscreen ? '100vw' : '380px',
+        background: theme.wallpaper,
+        color: theme.textColor,
+        fontFamily: theme.fontFamily,
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: '9998',
+        boxShadow: _fullscreen ? 'none' : '-4px 0 16px rgba(0,0,0,0.4)',
+        transition: 'width 0.3s ease',
+    });
+
+    // Header
+    const header = _renderHeader(theme);
+    _shellEl.appendChild(header);
+
+    // Message container
+    _messageContainer = document.createElement('div');
+    Object.assign(_messageContainer.style, {
+        flex: '1',
+        overflowY: 'auto',
+        padding: '12px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+    });
+    _shellEl.appendChild(_messageContainer);
+    // Re-render existing messages
+    for (const m of _messages) _renderMessage(m);
+
+    // Input area
+    const input = _renderInput(theme);
+    _shellEl.appendChild(input);
+
+    // Fullscreen: hide ST chat, split: keep both
+    if (_fullscreen) {
+        const stChat = document.querySelector('#chat, #sheld, #rightSendForm');
+        if (stChat?.parentElement) {
+            stChat.parentElement.style.display = 'none';
+        }
+    } else {
+        // Restore ST chat if it was hidden
+        const stChat = document.querySelector('#chat, #sheld');
+        if (stChat?.parentElement) {
+            stChat.parentElement.style.display = '';
+        }
+    }
+
+    document.body.appendChild(_shellEl);
+    _scrollToBottom();
+}
+
+function _renderHeader(theme) {
+    const header = document.createElement('div');
+    Object.assign(header.style, {
+        background: theme.bgGradient,
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        color: '#fff',
+        flexShrink: '0',
+    });
+    const onlineDot = document.createElement('span');
+    Object.assign(onlineDot.style, {
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        background: theme.color,
+        boxShadow: `0 0 6px ${theme.color}`,
+    });
+    onlineDot.title = 'online';
+
+    const title = document.createElement('strong');
+    title.style.fontSize = '1.1em';
+    title.textContent = `${theme.emoji} ${theme.name}`;
+
+    const subtitle = document.createElement('span');
+    subtitle.style.fontSize = '0.8em';
+    subtitle.style.opacity = '0.85';
+    subtitle.textContent = 'online';
+
+    const spacer = document.createElement('div');
+    spacer.style.flex = '1';
+
+    // Action buttons
+    if (theme.showVideo) {
+        const vid = document.createElement('button');
+        vid.textContent = '📹';
+        Object.assign(vid.style, {
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            fontSize: '1.2em',
+            cursor: 'pointer',
+        });
+        vid.title = 'Video call';
+        header.appendChild(vid);
+    }
+    if (theme.showVoice) {
+        const voice = document.createElement('button');
+        voice.textContent = '📞';
+        Object.assign(voice.style, {
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            fontSize: '1.2em',
+            cursor: 'pointer',
+        });
+        voice.title = 'Voice call';
+        header.appendChild(voice);
+    }
+
+    // Fullscreen toggle
+    const fs = document.createElement('button');
+    fs.textContent = _fullscreen ? '⤡' : '⤢';
+    Object.assign(fs.style, {
+        background: 'transparent',
+        border: 'none',
+        color: '#fff',
+        fontSize: '1.1em',
+        cursor: 'pointer',
+    });
+    fs.title = _fullscreen ? 'Exit fullscreen' : 'Fullscreen';
+    fs.addEventListener('click', () => phoneShellModule.toggleFullscreen());
+    header.appendChild(fs);
+
+    // Close (back to ST chat)
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    Object.assign(close.style, {
+        background: 'transparent',
+        border: 'none',
+        color: '#fff',
+        fontSize: '1.2em',
+        cursor: 'pointer',
+    });
+    close.title = 'Phone mode kapat (ST chat\'e dön)';
+    close.addEventListener('click', () => phoneShellModule.unmount());
+    header.appendChild(close);
+
+    // Layout
+    header.insertBefore(onlineDot, header.firstChild);
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    header.appendChild(spacer);
+    return header;
+}
+
+function _renderInput(theme) {
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, {
+        background: theme.bgGradient,
+        padding: '8px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexShrink: '0',
+    });
+
+    // Attachment + emoji + voice/camera buttons
+    const iconBtn = (emoji, title) => {
+        const b = document.createElement('button');
+        b.textContent = emoji;
+        b.title = title;
+        Object.assign(b.style, {
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            fontSize: '1.3em',
+            cursor: 'pointer',
+            padding: '0 4px',
+        });
+        return b;
+    };
+    wrap.appendChild(iconBtn('😊', 'Emoji'));
+    if (theme.showCamera) wrap.appendChild(iconBtn('📷', 'Camera'));
+    if (theme.showVoice) wrap.appendChild(iconBtn('🎙', 'Voice note'));
+
+    // Text input
+    _inputEl = document.createElement('input');
+    _inputEl.type = 'text';
+    _inputEl.placeholder = 'Mesaj...';
+    Object.assign(_inputEl.style, {
+        flex: '1',
+        background: 'rgba(255,255,255,0.95)',
+        color: '#000',
+        border: 'none',
+        borderRadius: '20px',
+        padding: '8px 14px',
+        fontSize: '0.95em',
+        outline: 'none',
+    });
+    _inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && _inputEl.value.trim()) {
+            phoneShellModule.appendMessage('user', _inputEl.value.trim());
+            _inputEl.value = '';
+        }
+    });
+    wrap.appendChild(_inputEl);
+
+    // Send button
+    const send = document.createElement('button');
+    send.textContent = '➤';
+    send.title = 'Gönder';
+    Object.assign(send.style, {
+        background: theme.color,
+        border: 'none',
+        color: '#fff',
+        fontSize: '1.1em',
+        cursor: 'pointer',
+        borderRadius: '50%',
+        width: '36px',
+        height: '36px',
+    });
+    send.addEventListener('click', () => {
+        if (_inputEl && _inputEl.value.trim()) {
+            phoneShellModule.appendMessage('user', _inputEl.value.trim());
+            _inputEl.value = '';
+        }
+    });
+    wrap.appendChild(send);
+    return wrap;
+}
+
+function _renderMessage(entry) {
+    if (!_messageContainer) return;
+    const theme = PHONE_PLATFORMS[_currentPlatform];
+    const isSelf = entry.role === 'self';
+    const bubble = document.createElement('div');
+    Object.assign(bubble.style, {
+        alignSelf: isSelf ? 'flex-end' : 'flex-start',
+        maxWidth: '75%',
+        background: isSelf ? theme.bubbleSelf : theme.bubbleOther,
+        color: theme.textColor,
+        padding: '8px 12px',
+        borderRadius: '14px',
+        borderTopRightRadius: isSelf ? '2px' : '14px',
+        borderTopLeftRadius: isSelf ? '14px' : '2px',
+        fontSize: '0.95em',
+        lineHeight: '1.35',
+        wordBreak: 'break-word',
+        boxShadow: '0 1px 1px rgba(0,0,0,0.18)',
+        position: 'relative',
+    });
+    bubble.textContent = entry.text;
+
+    // Timestamp + seen
+    const meta = document.createElement('div');
+    Object.assign(meta.style, {
+        fontSize: '0.7em',
+        opacity: '0.7',
+        marginTop: '4px',
+        textAlign: 'right',
+    });
+    const time = new Date(entry.timestamp);
+    const hh = String(time.getHours()).padStart(2, '0');
+    const mm = String(time.getMinutes()).padStart(2, '0');
+    meta.textContent = `${hh}:${mm}`;
+    if (theme.showSeen && isSelf) {
+        meta.textContent += ' ✓✓';
+    }
+    bubble.appendChild(meta);
+    _messageContainer.appendChild(bubble);
+}
+
+function _scrollToBottom() {
+    if (_messageContainer) {
+        _messageContainer.scrollTop = _messageContainer.scrollHeight;
+    }
+}
+
+export { phoneShellModule, PHONE_PLATFORMS };

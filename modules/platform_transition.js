@@ -245,6 +245,16 @@ export const platformTransitionModule = {
         }
 
         save();
+
+        // v0.8.4: phone_shell entegrasyonu — platform değiştiğinde shell güncelle.
+        // Lazy import — circular dependency yok (platform_transition → phone_shell).
+        // .then() kullanıyoruz (transitionTo sync) — caller'lar await etmek zorunda değil.
+        import('./phone_shell.js').then((mod) => {
+            if (mod?.phoneShellModule?.isActive()) {
+                mod.phoneShellModule.setPlatform(platform);
+            }
+        }).catch(() => { /* phone_shell yüklenmemiş (test), sessizce geç */ });
+
         return {
             ok: true,
             platform,

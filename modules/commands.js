@@ -19,6 +19,7 @@ import { lorebookModule } from './lorebook.js';
 import { tinderModule } from './tinder.js';
 import { antiGhostingModule } from './anti_ghosting.js';
 import { platformTransitionModule } from './platform_transition.js';
+import { phoneShellModule } from './phone_shell.js';
 
 const MOD = {
     memory: memoryModule,
@@ -29,6 +30,7 @@ const MOD = {
     tinder: tinderModule,
     anti_ghosting: antiGhostingModule,
     platform_transition: platformTransitionModule,
+    phone_shell: phoneShellModule,
 };
 
 /**
@@ -412,6 +414,32 @@ export function registerAllCommands(orch) {
                     return all.map(p => `${p.emoji} ${p.key} (${p.name}) — cap=${p.safetyCap}`).join('\n');
                 }
                 return 'Kullanım: /co platform <list|goto|back|suggest|platforms> ...';
+            }
+            if (sub === 'phone') {
+                // v0.8.4: /co phone <action>
+                //   /co phone on   — phone_shell'i aç (default whatsapp_style)
+                //   /co phone off  — phone_shell'i kapat
+                //   /co phone fullscreen — fullscreen toggle
+                //   /co phone status
+                const action = args[1] || 'status';
+                if (action === 'on') {
+                    const r = MOD.phone_shell.mount();
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `Phone shell açıldı (platform: ${MOD.phone_shell.getPlatform()}).`;
+                }
+                if (action === 'off') {
+                    MOD.phone_shell.unmount();
+                    return 'Phone shell kapatıldı. ST chat normal.';
+                }
+                if (action === 'fullscreen') {
+                    const r = MOD.phone_shell.toggleFullscreen();
+                    return `Fullscreen: ${r.fullscreen ? 'AÇIK (ST chat gizli)' : 'KAPALI (split view)'}`;
+                }
+                if (action === 'status') {
+                    const i = MOD.phone_shell.getInfo();
+                    return JSON.stringify(i, null, 2);
+                }
+                return 'Kullanım: /co phone <on|off|fullscreen|status>';
             }
             return `Bilinmeyen alt komut: ${sub}. Şunu dene: /co help`;
         },
