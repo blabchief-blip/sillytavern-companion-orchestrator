@@ -262,17 +262,20 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
-        if (!_active) return; // shell kapaliysa hiçbir şey yapma
+        // Debug: her tetiklendiğinde detay log'la (v0.8.5'te kaldırılacak)
+        if (typeof console !== 'undefined') {
+            const keys = data?.message ? Object.keys(data.message) : [];
+            console.log('[phone_shell] onMessageReceived _active=' + _active + ' data.keys=' + JSON.stringify(data ? Object.keys(data) : []) + ' msg.keys=' + JSON.stringify(keys) + ' role=' + JSON.stringify(data?.message?.role) + ' is_user=' + JSON.stringify(data?.message?.is_user) + ' textLen=' + (data?.message?.mes || '').length);
+        }
+        if (!_active) {
+            // _active false → shell mount edilmemiş. Ama data geldikten sonra
+            // belki henüz mount tamamlanmamıştır — ST generate sonrası race condition.
+            // Burada append etmek yerine bir "pending" kuyruğuna al ve mount
+            // olunca flush etmek ideal olur, ama şimdilik sadece log.
+            return;
+        }
         const msg = data?.message;
         if (!msg) return;
-        // Debug log: hangi role geldiğini gör (ST 1.18'de farklı olabilir)
-        if (typeof console !== 'undefined') {
-            console.log('[phone_shell] onMessageReceived role=' + JSON.stringify(msg.role) + ' is_user=' + JSON.stringify(msg.is_user) + ' textLen=' + (msg.mes || '').length);
-        }
-        // ST 1.18'de role undefined olabilir. Fallback sırası:
-        //   1. is_user === true VEYA role === 'user' → user (atla, onMessageSent halleder)
-        //   2. role string ve 'system' ise → atla
-        //   3. Diğer her şey (role undefined dahil) → assistant
         if (msg.is_user === true || msg.role === 'user') return;
         if (msg.role === 'system') return;
         const text = String(msg.mes || '').trim();
