@@ -354,11 +354,14 @@ describe('tinder exchange: reset + list', () => {
 // =========================================================================
 
 describe('tinder exchange: explicitExchangeCommand (slash /tinder exchange)', () => {
-    test('forces request even without keyword', () => {
+    test('forces request even without keyword (bypasses stage to exchange)', () => {
+        // v0.8.4 update: explicitExchangeCommand stage'i exchange'e zorlar.
+        // Önceden locked'ta refuse dönüyordu, şimdi threshold altında bile
+        // user override olarak numara paylaşımı tetikler (test + debug).
         tinderModule.setMessageCount('matchA', 1);
         const r = tinderModule.explicitExchangeCommand('matchA', { safetyLevel: 'sfw' });
-        assert.equal(r.action, 'refuse');
-        assert.equal(r.stage, 'locked');
+        assert.equal(r.action, 'exchange');
+        assert.equal(r.stage, 'exchange');
     });
 
     test('at exchange stage → gives number', () => {

@@ -163,11 +163,14 @@ describe('phone_match scenario', () => {
 // =========================================================================
 
 describe('/co tinder subcommand (via scenariosModule dispatch logic)', () => {
-    test('tinderModule.explicitExchangeCommand returns refuse at locked', async () => {
+    test('tinderModule.explicitExchangeCommand bypasses stage to exchange (user override)', async () => {
+        // v0.8.4 update: explicitExchangeCommand stage'i exchange'e zorlar.
+        // Önceden locked'ta refuse dönüyordu. Şimdi user override olarak
+        // threshold altında bile numara paylaşımı tetikler.
         tinderModule.setMessageCount('test_match', 0);
         const r = tinderModule.explicitExchangeCommand('test_match', { safetyLevel: 'sfw' });
-        assert.equal(r.action, 'refuse');
-        assert.equal(r.stage, 'locked');
+        assert.equal(r.action, 'exchange');
+        assert.equal(r.stage, 'exchange');
     });
 
     test('tinderModule.explicitExchangeCommand returns exchange at 10+ msg', async () => {

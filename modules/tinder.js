@@ -1321,9 +1321,22 @@ tinderModule.handleExchangeAttempt = function (matchId, userMessage, opts = {}) 
 
 /**
  * /tinder exchange slash komutu handler'ı.
+ * Stage'i doğrudan 'exchange'e yükseltir (test + user override).
+ * Normal LLM akışında ise threshold'a takılır.
  */
 tinderModule.explicitExchangeCommand = function (matchId, opts = {}) {
     if (!matchId) return { ok: false, error: 'matchId required' };
+    const ex = getOrCreateExchange(matchId);
+    // Force upgrade: stage'i exchange'e çek ki _onNumberShared tetiklensin.
+    // Threshold (12+ mesaj) zaten soft_open'tan geçerken aşılmış olabilir
+    // ama handleExchangeAttempt refuse/soften dönüyor — biz bunu bypass edip
+    // doğrudan exchange path'ine giriyoruz.
+    if (ex.stage !== 'exchange') {
+        ex.stage = 'exchange';
+        if (ex.msgCount < 12) {
+            ex.msgCount = 12; // threshold altındaysa yükselt
+        }
+    }
     return tinderModule.handleExchangeAttempt(matchId, '', {
         explicitCommand: true,
         safetyLevel: opts.safetyLevel || 'sfw',
