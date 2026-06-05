@@ -242,11 +242,20 @@ export const promptsModule = {
             // tinder_chat senaryosu Türkçe. Setting default true.
             // User isterse settings.promptsData.turkishReply = false yapabilir.
             const store = getStore();
-            const prefix = (store.turkishReply !== false)
-                ? '[ÖNEMLİ: Kullanıcı Türkçe konuşuyor. Tüm yanıtlarını doğal, samimi, akıcı Türkçe yaz. İngilizce cevap verme. Writing style talimatları Türkçe çeviri üslubuna uygula.]\n\n'
-                : '';
-            const full = prefix + (preset.systemAddition || '');
+            const full = (preset.systemAddition || '');
             _ctx.setExtensionPrompt('CO_PROMPT_PRESET', full, 0, 0);
+            // v0.8.5 fix: Türkçe prefix'i ayrı extension prompt olarak inject et
+            // (position=0 system, role=USER). USER role system'den sonra gelir
+            // ama talimat olarak model önce işler, Writing style'dan önce.
+            // Senaryo system (CO_SCENARIO_SYSTEM) tarafından override edilmez
+            // çünkü farklı key.
+            if (store.turkishReply !== false) {
+                _ctx.setExtensionPrompt('CO_TURKISH_PREFIX',
+                    '[SYSTEM OVERRIDE: Kullanıcı Türkçe konuşuyor. Tüm yanıtlarını doğal, samimi, akıcı TÜRKÇE yaz. İngilizce cümle kurma. Writing style talimatları Türkçe üsluba uygula. Cevap dili: Türkçe.]',
+                    0, 0, false, 1 /* USER role */);
+            } else {
+                _ctx.setExtensionPrompt('CO_TURKISH_PREFIX', '', 0, 0, false, 1);
+            }
             _orch.settings.promptsData.activePreset = key;
             save();
             return { ok: true, preset: preset.name };
