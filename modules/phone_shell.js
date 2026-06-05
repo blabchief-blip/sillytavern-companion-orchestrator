@@ -265,8 +265,14 @@ const phoneShellModule = {
         if (!_active) return; // shell kapalıysa hiçbir şey yapma
         const msg = data?.message;
         if (!msg) return;
+        // Debug log: hangi role geldiğini gör (ST 1.18'de farklı olabilir)
+        if (typeof console !== 'undefined') {
+            console.log('[phone_shell] onMessageReceived role=' + JSON.stringify(msg.role) + ' textLen=' + (msg.mes || '').length);
+        }
         // Sadece assistant (character) mesajlarını al
-        if (msg.role !== 'assistant' && msg.role !== 'char') return;
+        // ST 1.18 farklı role adları kullanıyor olabilir: 'assistant', 'char', 'model', 'character', 'bot'
+        const r = msg.role;
+        if (r !== 'assistant' && r !== 'char' && r !== 'model' && r !== 'character' && r !== 'bot') return;
         const text = String(msg.mes || '').trim();
         if (!text) return;
         phoneShellModule.appendMessage('assistant', text);
@@ -325,6 +331,11 @@ const phoneShellModule = {
         const recent = chat
             .filter(m => m && m.role && m.role !== 'system' && (m.mes || '').trim())
             .slice(-count);
+        if (typeof console !== 'undefined') {
+            const roles = {};
+            for (const m of recent) roles[m.role] = (roles[m.role] || 0) + 1;
+            console.log('[phone_shell] importChatHistory recent roles=' + JSON.stringify(roles) + ' total=' + chat.length);
+        }
         if (recent.length === 0) {
             return { ok: false, error: 'No messages to import' };
         }
@@ -333,7 +344,8 @@ const phoneShellModule = {
         if (_messageContainer) _messageContainer.innerHTML = '';
         let imported = 0;
         for (const m of recent) {
-            const role = m.role === 'user' ? 'user' : 'assistant';
+            // ST 1.18 farklı role adları: 'user' | 'assistant' | 'model' | 'char' | 'system'
+            const role = (m.role === 'user') ? 'user' : 'assistant';
             phoneShellModule.appendMessage(role, m.mes);
             imported++;
         }
