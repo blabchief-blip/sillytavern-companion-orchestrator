@@ -414,7 +414,7 @@ function _renderShell() {
         fontFamily: theme.fontFamily,
         display: 'flex',
         flexDirection: 'column',
-        zIndex: '9998',
+        zIndex: '99999',
         boxShadow: _fullscreen ? 'none' : '-4px 0 16px rgba(0,0,0,0.4)',
         transition: 'width 0.3s ease',
     });
@@ -443,16 +443,35 @@ function _renderShell() {
 
     // Fullscreen: hide ST chat, split: keep both
     if (_fullscreen) {
-        const stChat = document.querySelector('#chat, #sheld, #rightSendForm');
-        if (stChat?.parentElement) {
-            stChat.parentElement.style.display = 'none';
+        // ST 1.18'de #chat'in parent'ı gizlemek yetmiyor, kendisini de gizle.
+        // Birden çok selector dene: #chat, #sheld, form#send_form, body > #chat
+        const chatSelectors = ['#chat', '#sheld', '#rightSendForm', '#form_import_chat', '#send_textarea'];
+        for (const sel of chatSelectors) {
+            const el = document.querySelector(sel);
+            if (el) {
+                if (el.parentElement && el.parentElement.id !== 'sheld') {
+                    el.parentElement.style.display = 'none';
+                }
+                el.style.display = 'none';
+            }
         }
+        // Sider bar'ı da gizle (topbar) — ST chat header
+        const topBar = document.querySelector('#top-bar, #topbar, .top-bar');
+        if (topBar) topBar.style.display = 'none';
     } else {
         // Restore ST chat if it was hidden
-        const stChat = document.querySelector('#chat, #sheld');
-        if (stChat?.parentElement) {
-            stChat.parentElement.style.display = '';
+        const chatSelectors = ['#chat', '#sheld', '#rightSendForm', '#form_import_chat', '#send_textarea'];
+        for (const sel of chatSelectors) {
+            const el = document.querySelector(sel);
+            if (el) {
+                el.style.display = '';
+                if (el.parentElement && el.parentElement.id !== 'sheld') {
+                    el.parentElement.style.display = '';
+                }
+            }
         }
+        const topBar = document.querySelector('#top-bar, #topbar, .top-bar');
+        if (topBar) topBar.style.display = '';
     }
 
     document.body.appendChild(_shellEl);
