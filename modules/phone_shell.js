@@ -155,18 +155,22 @@ const phoneShellModule = {
         }
         try {
             _renderShell();
-            // requestAnimationFrame sonrası ölç — ST 1.18 sync mount sırasında 0x0 dönüyor
-            const raf = (typeof window !== 'undefined' && window.requestAnimationFrame)
-                || (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : null);
-            const onLayout = () => {
-                if (!_shellEl) return;
-                const inDom = document.body.contains(_shellEl);
-                const size = _shellEl.offsetWidth + 'x' + _shellEl.offsetHeight;
-                const rect = _shellEl.getBoundingClientRect();
-                console.log('[phone_shell] post-mount check: inDom=' + inDom + ' size=' + size + ' rect=' + rect.width + 'x' + rect.height + ' platform=' + _currentPlatform + ' computed-display=' + (typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(_shellEl).display : 'n/a'));
-            };
-            if (raf) raf(onLayout);
-            else setTimeout(onLayout, 0);
+            // requestAnimationFrame sonrası ölç — ST 1.18 sync mount sırasında 0x0 dönüyor.
+            // Hata olursa mount yine de başarılı kabul edilir (log optional).
+            try {
+                const raf = (typeof window !== 'undefined' && window.requestAnimationFrame)
+                    || (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : null);
+                const onLayout = () => {
+                    if (!_shellEl) return;
+                    if (typeof document === 'undefined' || !document.body) return; // test ortamında document scope dışı olabilir
+                    const inDom = document.body.contains(_shellEl);
+                    const size = _shellEl.offsetWidth + 'x' + _shellEl.offsetHeight;
+                    const rect = _shellEl.getBoundingClientRect();
+                    console.log('[phone_shell] post-mount check: inDom=' + inDom + ' size=' + size + ' rect=' + rect.width + 'x' + rect.height + ' platform=' + _currentPlatform);
+                };
+                if (raf) raf(onLayout);
+                else if (typeof setTimeout !== 'undefined') setTimeout(onLayout, 0);
+            } catch (_) { /* layout log is best-effort */ }
             console.log('[phone_shell] mount() success, _active=' + _active);
         } catch (e) {
             _active = false;
