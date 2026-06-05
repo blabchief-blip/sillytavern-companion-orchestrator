@@ -185,3 +185,177 @@
     0%, 100% { box-shadow: 0 2px 8px rgba(193, 78, 155, 0.4); }
     50% { box-shadow: 0 2px 16px rgba(193, 78, 155, 0.8); }
 }
+
+/* ===== v0.6 — Side Panel (Yol C) ===== */
+
+.co-side-panel {
+    position: fixed;
+    top: 60px;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    background: rgba(20, 20, 20, 0.95);
+    color: #e0e0e0;
+    z-index: 9998;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(127, 127, 127, 0.3);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transform: translateX(0);
+    transition: transform 0.25s ease;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+.co-side-panel.closed {
+    transform: translateX(100%);
+}
+
+.co-side-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+    background: rgba(40, 40, 40, 0.5);
+}
+.co-side-title {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.co-side-collapse {
+    background: none;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 1.4em;
+    line-height: 1;
+    padding: 0 4px;
+    user-select: none;
+}
+.co-side-collapse:hover {
+    color: #fff;
+}
+
+.co-side-tabs {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+    background: rgba(30, 30, 30, 0.5);
+}
+.co-side-tabs::-webkit-scrollbar { height: 4px; }
+.co-side-tabs::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.3);
+    border-radius: 2px;
+}
+
+.co-side-tab {
+    background: none;
+    border: none;
+    color: #aaa;
+    padding: 8px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85em;
+    transition: color 0.1s ease, border-color 0.1s ease;
+}
+.co-side-tab:hover {
+    color: #fff;
+}
+.co-side-tab.active {
+    color: var(--SmartThemeQuoteColor, #ff7e36);
+    border-bottom-color: var(--SmartThemeQuoteColor, #ff7e36);
+}
+.co-side-tab-icon {
+    font-size: 1.1em;
+}
+
+.co-side-bodies {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+.co-side-bodies::-webkit-scrollbar { width: 6px; }
+.co-side-bodies::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.3);
+    border-radius: 3px;
+}
+
+.co-side-body {
+    /* her body display: block/none; ile yönetiliyor */
+}
+.co-side-body-content {
+    /* modülün ui.panel() çıktısı buraya yazılır */
+}
+.co-side-body-content > *:first-child {
+    margin-top: 0;
+}
+.co-side-body-content h4 {
+    margin: 4px 0 6px 0;
+    font-size: 0.95em;
+    color: var(--SmartThemeQuoteColor, #ff7e36);
+}
+.co-side-body-content p {
+    margin: 4px 0;
+}
+.co-side-body-content code {
+    background: rgba(127, 127, 127, 0.15);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.9em;
+}
+
+.co-side-footer {
+    border-top: 1px solid rgba(127, 127, 127, 0.2);
+    padding: 6px 12px;
+    background: rgba(30, 30, 30, 0.5);
+    font-size: 0.8em;
+    color: #888;
+}
+
+.co-side-toggle {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: rgba(20, 20, 20, 0.85);
+    color: #fff;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-right: none;
+    border-radius: 14px 0 0 14px;
+    padding: 14px 14px;
+    cursor: pointer;
+    z-index: 9997;
+    font-size: 1.6em;
+    line-height: 1;
+    user-select: none;
+    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.5);
+    transition: transform 0.15s ease, background 0.2s ease;
+    min-width: 48px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.co-side-toggle:hover {
+    background: rgba(40, 40, 40, 0.95);
+    transform: translateY(-50%) scale(1.08);
+    box-shadow: -2px 0 16px rgba(100, 150, 255, 0.4);
+}
+
+.co-side-toggle:active {
+    transform: translateY(-50%) scale(0.98);
+}
+
+/* Mobile responsive — küçük ekranda tam genişlik */
+@media (max-width: 768px) {
+    .co-side-panel {
+        width: 100%;
+    }
+}

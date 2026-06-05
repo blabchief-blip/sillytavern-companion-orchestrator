@@ -30,10 +30,13 @@ import { customTagsModule } from './modules/custom_tags.js';
 import { spiceIntensifyModule } from './modules/spice_intensify.js';
 import { charLoraProfilesModule } from './modules/char_lora_profiles.js';
 import { promptTemplatesModule } from './modules/prompt_templates.js';
+import { tinderModule } from './modules/tinder.js';
+import { booruPromptModule } from './modules/booru_prompt.js';
 import { slashCommands, registerAllCommands } from './modules/commands.js';
+import { mountModularSettings, refreshAllPanelsGeneric } from './modules/ui.js';
 
 const MODULE_NAME = 'companion_orchestrator';
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 
 const defaultSettings = Object.freeze({
     enabled: true,
@@ -51,6 +54,7 @@ const defaultSettings = Object.freeze({
     avatarDescEnabled: true,
     kazumaBridgeEnabled: true,
     autoGenEnabled: true,
+    booruPromptEnabled: true,
     // Global
     debugLogging: false,
     autoSaveInterval: 30, // seconds
@@ -108,7 +112,7 @@ function log(...args) {
     }
 }
 
-const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule];
+const modules = [memoryModule, moodModule, scenariosModule, lorebookModule, promptsModule, ioModule, spiceModule, limitsModule, aftercareModule, stmbBridgeModule, imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule, llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule, charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule];
 
 const orchestrator = {
     name: MODULE_NAME,
@@ -146,89 +150,22 @@ const orchestrator = {
 
     async mountSettingsUI() {
         const ctx = SillyTavern.getContext();
-        const templateData = {
-            version: VERSION,
-        };
-        const html = await ctx.renderExtensionTemplateAsync(
-            'third-party/companion-orchestrator',
-            'settings',
-            templateData
-        );
-        $('#extensions_settings2').append(html);
-
-        // Inject floating spice badge (chat'te sağ üst köşe) — v0.4.1
-        if ($('#co_spice_badge').length === 0) {
-            $('body').append(`
-                <div id="co_spice_badge" class="co-floating-badge" title="Spice / Heat — Companion Orchestrator">
-                    <span class="co-badge-emoji">🟢</span>
-                    <span class="co-badge-text">güvenli</span>
-                </div>
-            `);
-            // Click → drawer'ı aç
-            $('#co_spice_badge').on('click', () => {
-                const drawer = Array.from(document.querySelectorAll('.inline-drawer-toggle'))
-                    .find(el => el.textContent.includes('Companion Orchestrator'));
-                if (drawer) drawer.click();
-            });
-        }
-
-        // Hydrate UI from current settings
-        $('#co_enabled').prop('checked', !!this.settings.enabled);
-        $('#co_debugLogging').prop('checked', !!this.settings.debugLogging);
-        for (const mod of this.modules) {
-            const key = mod.toggleKey || `${mod.name}Enabled`;
-            $(`#co_${key}`).prop('checked', !!this.settings[key]);
-        }
-
-        // Wire toggles
-        $('#co_enabled').on('change', () => {
-            this.settings.enabled = $('#co_enabled').prop('checked');
-            saveSettings();
-            this.refreshAllPanels();
+        // Generic dispatcher (modules/ui.js). Modülün `ui.mount` objesini
+        // kullanır; yoksa legacy `wireXxxPanel` fallback'ini çağırır.
+        // Yol A refactor: 19 wireXxxPanel + ~150 satır wiring kodu generic
+        // dispatch loop'a taşındı.
+        await mountModularSettings(this, ctx, {
+            $,
+            jQuery,
+            saveSettings,
+            getCurrentCharName: () => this.getCurrentCharName(),
         });
-        for (const mod of this.modules) {
-            const key = mod.toggleKey || `${mod.name}Enabled`;
-            const el = $(`#co_${key}`);
-            if (el.length) {
-                el.on('change', () => {
-                    this.settings[key] = el.prop('checked');
-                    saveSettings();
-                    this.refreshAllPanels();
-                });
-            }
-        }
-        $('#co_debugLogging').on('change', () => {
-            this.settings.debugLogging = $('#co_debugLogging').prop('checked');
-            saveSettings();
-        });
-
-        // Wire module-specific interactive UI
-        this.wireMoodPanel();
-        this.wireScenarioPanel();
-        this.wirePresetPanel();
-        this.wireMemoryPanel();
-        this.wireLorebookPanel();
-        this.wireTranslationPanel();
-        this.wireExportImport();
-        this.wireSpicePanel();
-        this.wireLimitsPanel();
-        this.wireAftercarePanel();
-        this.wireStmbBridgePanel();
-        this.wireImageGenPanel();
-        this.wireKazumaBridgePanel();
-        this.wireAutoGenPanel();
-        this.wireLLMTaggerPanel();
-        this.wirePosePresetsPanel();
-        this.wireCustomTagsPanel();
-        this.wireSpiceIntensifyPanel();
-
-        // Wire refresh on chat change
-        const refreshBound = () => this.refreshAllPanels();
-        eventSource.on(event_types.CHAT_CHANGED, refreshBound);
-        eventSource.on(event_types.MESSAGE_RECEIVED, refreshBound);
-
-        // Initial population
-        this.refreshAllPanels();
+        // Yol A not: scenarios + prompts modülleri yalnızca `ui: { panel }`
+        // (side panel) export ediyor; settings drawer’daki <select>
+        // populate’ı legacy `wireXxxPanel` üzerinden çalışıyor. Bu iki satır
+        // refactor sırasında atlanmış. Manuel çağırıyoruz; test suite etkilenmez.
+        try { this.wireScenarioPanel(); } catch (e) { console.warn('[CO] wireScenarioPanel failed:', e); }
+        try { this.wirePresetPanel(); } catch (e) { console.warn('[CO] wirePresetPanel failed:', e); }
     },
 
     // ===== Module-specific UI wiring =====
@@ -1096,33 +1033,10 @@ const orchestrator = {
     },
 
     refreshAllPanels() {
-        // Status bar
-        const charName = this.getCurrentCharName();
-        const enabledMods = this.modules.filter(m => {
-            const k = m.toggleKey || `${m.name}Enabled`;
-            return this.settings[k];
-        }).map(m => m.displayName || m.name).join(', ');
-        $('#co_status_bar').html(
-            `<strong>${charName || 'Karakter yok'}</strong> · ${enabledMods || 'hepsi kapalı'}`
-        );
-
-        if (this.settings.moodEnabled !== false) this.refreshMoodPanel();
-        if (this.settings.scenariosEnabled !== false) this.refreshScenarioPanel();
-        if (this.settings.promptsEnabled !== false) this.refreshPresetPanel();
-        if (this.settings.memoryEnabled !== false) this.refreshMemoryPanel();
-        if (this.settings.spiceEnabled !== false) this.refreshSpicePanel();
-        if (this.settings.limitsEnabled !== false) this.refreshLimitsPanel();
-        if (this.settings.aftercareEnabled !== false) this.refreshAftercarePanel();
-        if (this.settings.stmbBridgeEnabled !== false) this.refreshStmbBridgePanel();
-        if (this.settings.imageGenEnabled !== false) this.refreshImageGenPanel();
-        if (this.settings.avatarDescEnabled !== false) this.refreshImageGenPanel();
-        if (this.settings.kazumaBridgeEnabled !== false) this.refreshKazumaBridgePanel();
-        if (this.settings.autoGenEnabled !== false) this.refreshAutoGenPanel();
-        if (this.settings.llmTaggerEnabled !== false) this.refreshLLMTaggerPanel();
-        if (this.settings.posePresetsEnabled !== false) this.refreshPosePresetsPanel();
-        if (this.settings.customTagsEnabled !== false) this.refreshCustomTagsPanel();
-        this.refreshSpiceIntensifyPanel();
-        this.refreshSpiceBadge();
+        // Generic dispatcher (modules/ui.js). Her modülün
+        // `ui.refresh` callback'ini çağırır; yoksa legacy
+        // `refreshXxxPanel` fallback'ini çağırır.
+        refreshAllPanelsGeneric(this);
     },
 
     // ===== v0.4.1 — Floating Spice Badge =====
@@ -1313,6 +1227,16 @@ const orchestrator = {
             }
         });
 
+        // v0.8.1: NSFW tag toggle — booru prompt'ına explicit + NSFW phraseleri
+        $('#co_img_nsfw').on('change', function() {
+            const ctx = SillyTavern.getContext();
+            const ig = ctx.extensionSettings?.companion_orchestrator?.image_gen;
+            if (ig) {
+                ig.nsfw = this.checked;
+                self.toast(`NSFW tag'leri ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            }
+        });
+
         // Quick generate
         $('#co_img_quick').on('click', async () => {
             const prompt = $('#co_img_quick_prompt').val().trim() || 'masterpiece, best quality, 1girl, detailed background';
@@ -1352,6 +1276,7 @@ const orchestrator = {
 
         $('#co_img_url').val(cfg.comfyuiUrl || 'http://192.168.68.66:8001');
         $('#co_img_enabled').prop('checked', !!cfg.enabled);
+        $('#co_img_nsfw').prop('checked', !!cfg.nsfw);  // v0.8.1: NSFW toggle state
         $('#co_img_workflow_status').html(
             cfg.workflow
                 ? `✅ Workflow yüklü (${Object.keys(cfg.workflow).length} node)`
@@ -1488,6 +1413,97 @@ const orchestrator = {
             const time = new Date(h.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             $box.append(`<div style="padding: 3px 0; border-bottom: 1px dashed rgba(127,127,127,0.2);"><strong>${time}</strong> · +${h.partsAdded} tag<br><em style="opacity: 0.6; font-size: 0.9em;">${h.enriched}</em></div>`);
         });
+    },
+
+    // ===== v0.6.0 — LLM Tagger wiring =====
+    wireLlmTaggerPanel() {
+        const self = this;
+        if (!this.modules.find(m => m.name === 'llm_tagger')) return;
+
+        // Master toggle (separate from module toggle — this is the "enable LLM"
+        // checkbox inside the panel that drives settings.llm_tagger.enabled)
+        $('#co-llm-tagger-enabled').on('change', function() {
+            llmTaggerModule.settings.enabled = this.checked;
+            self.toast(`Akıllı Etiketçi ${this.checked ? 'açıldı' : 'kapatıldı'}`);
+            self.refreshLlmTaggerPanel();
+        });
+
+        // API key
+        $('#co-llm-tagger-key').on('input', function() {
+            llmTaggerModule.settings.apiKey = this.value.trim();
+        });
+        $('#co-llm-tagger-key').on('blur', function() {
+            self.refreshLlmTaggerPanel();
+        });
+
+        // Model
+        $('#co-llm-tagger-model').on('change', function() {
+            llmTaggerModule.settings.model = this.value;
+            self.toast(`Model: ${this.value}`);
+        });
+
+        // Companion context toggle
+        $('#co-llm-tagger-context').on('change', function() {
+            llmTaggerModule.settings.useCompanionContext = this.checked;
+        });
+
+        // Debug toggle
+        $('#co-llm-tagger-debug').on('change', function() {
+            llmTaggerModule.settings.debug = this.checked;
+        });
+
+        // Daily limit
+        $('#co-llm-tagger-daily-limit').on('change', function() {
+            const v = parseInt(this.value, 10);
+            llmTaggerModule.settings.maxDailyCalls = (Number.isFinite(v) && v >= 1 && v <= 10000) ? v : 200;
+            self.toast(`Günlük limit: ${llmTaggerModule.settings.maxDailyCalls}`);
+        });
+
+        // Key test button
+        $('#co-llm-tagger-test-btn').on('click', async () => {
+            const key = $('#co-llm-tagger-key').val().trim();
+            if (!key) {
+                self.toast('Önce bir API key gir', 'warn');
+                return;
+            }
+            self.toast('Key test ediliyor…');
+            try {
+                const r = await llmTaggerModule.testKey(key);
+                if (r?.ok) {
+                    self.toast(`✅ Key geçerli (${r.model || 'model ok'} · ${r.latencyMs}ms)`);
+                } else {
+                    self.toast(`❌ Key geçersiz: ${r?.error || 'bilinmeyen hata'}`, 'error');
+                }
+            } catch (e) {
+                self.toast(`❌ Test başarısız: ${e.message}`, 'error');
+            }
+            self.refreshLlmTaggerPanel();
+        });
+    },
+
+    refreshLlmTaggerPanel() {
+        if (!this.modules.find(m => m.name === 'llm_tagger')) return;
+        const s = llmTaggerModule.settings;
+        if (!s) return;
+
+        $('#co-llm-tagger-enabled').prop('checked', !!s.enabled);
+        $('#co-llm-tagger-key').val(s.apiKey || '');
+        // Don't overwrite the select if the model isn't in the preset list — keep current value
+        const sel = $('#co-llm-tagger-model');
+        const optExists = sel.find(`option[value="${s.model}"]`).length > 0;
+        if (optExists) sel.val(s.model);
+        $('#co-llm-tagger-context').prop('checked', s.useCompanionContext !== false);
+        $('#co-llm-tagger-debug').prop('checked', !!s.debug);
+        $('#co-llm-tagger-daily-limit').val(s.maxDailyCalls || 200);
+
+        // Status line
+        const stats = s.stats || {};
+        const lastCall = s.lastCallTs ? new Date(s.lastCallTs).toLocaleTimeString('tr-TR') : '—';
+        const summary = llmTaggerModule.summary();
+        $('#co-llm-tagger-status').html(
+            `model: <strong>${s.model}</strong> · calls: ${stats.totalCalls || 0} · errors: ${stats.errors || 0} · son: ${lastCall}<br>` +
+            `<span style="opacity:0.7;">${summary}</span>`
+        );
     },
 
     // ================================================================
@@ -2030,6 +2046,346 @@ const orchestrator = {
             if (mod.onGenerationEnded) {
                 try { mod.onGenerationEnded(this); } catch (e) { console.error(e); }
             }
+        }
+    },
+
+    formatRelativeTime(ts) {
+        if (!ts) return '';
+        const diff = Date.now() - ts;
+        if (diff < 60_000) return 'az önce';
+        if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} dk önce`;
+        if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} sa önce`;
+        return `${Math.floor(diff / 86_400_000)} gün önce`;
+    },
+
+    wireTinderPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const mod = this.modules.find(m => m.name === 'tinder');
+        if (!mod) return;
+
+        const showToast = (msg, color = 'rgba(80,220,120,0.25)') => {
+            const toast = $(`<div class="co-tinder-toast">${msg}</div>`);
+            toast.css({
+                position: 'fixed', top: '80px', right: '20px', zIndex: 99999,
+                padding: '12px 18px', background: color, color: '#fff',
+                borderRadius: '8px', fontSize: '0.95em', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                maxWidth: '320px',
+            });
+            $('body').append(toast);
+            setTimeout(() => toast.fadeOut(400, () => toast.remove()), 2200);
+        };
+
+        // v0.8.1: refreshCard’ı da this üzerinden aç, böylece companion dış
+        // refreshTinderPanel() (side panel dispatcher vs.) çağırabilir.
+        this._refreshTinderCard = async () => {};
+
+        const refreshCard = async () => {
+            const card = await mod.current();
+            const stats = mod.stats();
+            $('#co_tinder_total').text(stats.totalCards);
+            $('#co_tinder_seen').text(stats.seen);
+            $('#co_tinder_matches').text(stats.matches);
+            $('#co_tinder_passed').text(stats.passed);
+            $('#co_tinder_super').text(stats.superLikes);
+            $('#co_tinder_remaining').text(stats.remaining);
+
+            if (!card) {
+                $('#co_tinder_name').text('—');
+                $('#co_tinder_age').text('');
+                $('#co_tinder_meta').text('Tüm kartlar tükendi!');
+                $('#co_tinder_bio').text('Desteği sıfırlamak için aşağıdaki butonu kullan.');
+                $('#co_tinder_appearance').text('');
+                $('#co_tinder_interests').empty();
+                $('#co_tinder_avatar').attr('src', '');
+                return;
+            }
+
+            $('#co_tinder_name').text(card.name);
+            $('#co_tinder_age').text(card.age);
+            $('#co_tinder_meta').text(
+                `${card.occupation} · ${card.city}${card.country ? ', ' + card.country : ''} · ${card.personality_key}`
+            );
+            $('#co_tinder_bio').text(card.bio || '—');
+            const appearanceParts = [
+                card.hair_color && `${card.hair_color} hair (${card.hair_style || ''})`,
+                card.eye_color && `${card.eye_color} eyes`,
+                card.body_type && `${card.body_type} build`,
+                card.bust && card.bust,
+                card.style && `${card.style} style`,
+            ].filter(Boolean);
+            $('#co_tinder_appearance').text(appearanceParts.join(' · '));
+
+            const $ints = $('#co_tinder_interests').empty();
+            for (const i of (card.interests || []).slice(0, 6)) {
+                $ints.append(`<span style="background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 10px; font-size: 0.82em;">${i}</span>`);
+            }
+
+            // Convert the on-disk pngPath (e.g. /Users/.../characters/tinder-batch/xyz.png)
+            // into ST's HTTP-served URL. The characters/tinder-batch/ segment is
+            // the only piece ST exposes; everything before it is local-only.
+            const imgUrl = (() => {
+                if (!card.pngPath) return '';
+                const i = card.pngPath.indexOf('characters/tinder-batch/');
+                if (i >= 0) return '/' + card.pngPath.slice(i);
+                // Fallback: try the more common characters/ path
+                const j = card.pngPath.indexOf('characters/');
+                if (j >= 0) return '/' + card.pngPath.slice(j);
+                return '';
+            })();
+            $('#co_tinder_avatar').attr('src', imgUrl).attr('alt', card.name);
+            $('#co_tinder_avatar').on('error', () => {
+                $('#co_tinder_avatar').attr('src', '');
+                $('#co_tinder_avatar').css('background', 'linear-gradient(135deg, #c850c0, #4158d0)');
+            });
+        };
+        // v0.8.1: Companion orchestrator'ın public refreshTinderPanel()’ı
+        // dışarıdan çağrıldığında bu fonksiyonu da tetiklesin. (Yol A refactor
+        // sonrası public method sadece stats’ları dolduruyor, kart boş
+        // kalıyordu.)
+        this._refreshTinderCard = refreshCard;
+
+        const refreshMatches = () => {
+            const matches = mod.matches();
+            $('#co_tinder_matches_count').text(`(${matches.length})`);
+            const $list = $('#co_tinder_matches_list').empty();
+            if (matches.length === 0) {
+                $list.append('<em style="opacity: 0.6;">Henüz eşleşme yok. Sağa kaydır!</em>');
+                return;
+            }
+            for (const m of matches) {
+                const star = m.superLike ? '⭐' : '💚';
+                const ago = this.formatRelativeTime(m.matchedAt);
+                $list.append(`
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <span style="font-size: 1.1em;">${star}</span>
+                        <div style="flex: 1; min-width: 0;">
+                            <strong>${m.name}</strong>
+                            <div style="font-size: 0.82em; opacity: 0.7;">${m.occupation} · ${m.city} · ${ago}</div>
+                        </div>
+                        <button class="menu_button co_tinder_import" data-match-id="${m.id}" style="font-size: 0.82em; padding: 3px 10px;">İçe Aktar</button>
+                    </div>
+                `);
+            }
+        };
+
+        if ($('#co_tinder_pass').data('wired') !== true) {
+            $('#co_tinder_pass').data('wired', true).on('click', async () => {
+                const r = await mod.swipeLeft();
+                if (r.ok) { refreshCard(); }
+            });
+            $('#co_tinder_like').data('wired', true).on('click', async () => {
+                const r = await mod.swipeRight();
+                if (r.ok) {
+                    showToast(`💚 ${r.card.name} ile eşleştin!`);
+                    refreshCard();
+                    refreshMatches();
+                }
+            });
+            $('#co_tinder_super').data('wired', true).on('click', async () => {
+                const r = await mod.superLike();
+                if (r.ok) {
+                    showToast(`⭐ ${r.card.name} — Super Like!`, 'rgba(80,160,255,0.35)');
+                    refreshCard();
+                    refreshMatches();
+                }
+            });
+            $('#co_tinder_message').data('wired', true).on('click', async () => {
+                const card = await mod.current();
+                if (card) {
+                    showToast(`📝 ${card.name}: ${card.first_mes ? card.first_mes.substring(0, 80) + '...' : 'Mesaj atmak için sağa kaydır.'}`, 'rgba(255,200,80,0.3)');
+                }
+            });
+            $('#co_tinder_reset').data('wired', true).on('click', async () => {
+                if (confirm('Tüm geçilenleri ve eşleşmeleri sıfırla?')) {
+                    await mod.reset();
+                    refreshCard();
+                    refreshMatches();
+                    showToast('🔄 Desteği sıfırlandı');
+                }
+            });
+            $('#co_tinder_matches_list').on('click', '.co_tinder_import', async (ev) => {
+                const matchId = $(ev.currentTarget).data('match-id');
+                const $btn = $(ev.currentTarget);
+                $btn.prop('disabled', true).text('İçe aktarılıyor…');
+                const r = await mod.importMatch(matchId);
+                if (r.ok) {
+                    showToast(`✅ ${r.charName} ST'ye aktarıldı. Sohbet açılıyor…`);
+                    $btn.text('✓ İçe aktarıldı');
+                    // ST sometimes keeps the previous characterId after
+                    // import, so the new chat doesn't open reliably.
+                    // A short reload reliably lands the user on the
+                    // freshly imported chat with the new first_mes
+                    // and avatar visible.
+                    if (r.shouldReload !== false) {
+                        setTimeout(() => {
+                            try {
+                                location.reload();
+                            } catch (_) { /* in tests */ }
+                        }, 1200);
+                    }
+                } else {
+                    showToast(`❌ Hata: ${r.error}`, 'rgba(255,80,80,0.35)');
+                    $btn.prop('disabled', false).text('Tekrar dene');
+                }
+            });
+            // Selfie button — generates a face-consistent portrait
+            // of the active character using IP-Adapter FaceID.
+            if ($('#co_tinder_selfie_btn').data('wired') !== true) {
+                $('#co_tinder_selfie_btn').data('wired', true).on('click', async () => {
+                    const preset = $('#co_tinder_selfie_preset').val() || 'casual_selfie';
+                    const $status = $('#co_tinder_selfie_status');
+                    $status.text('Üretiliyor… ~30-60s').css('opacity', '0.9');
+                    const $btn = $('#co_tinder_selfie_btn');
+                    $btn.prop('disabled', true);
+                    try {
+                        const r = await mod.generateSelfie({ preset });
+                        if (r.ok) {
+                            $status.text(`✅ ${r.charName} (${preset}) hazır.`)
+                                .css('opacity', '0.7');
+                            // Insert the selfie into the chat as a new
+                            // assistant message so the user sees it inline
+                            try {
+                                await this._insertSelfieIntoChat(r.imageUrl, r.charName, preset);
+                            } catch (e) {
+                                console.warn('[Tinder] Insert selfie into chat failed:', e);
+                            }
+                        } else {
+                            $status.text(`❌ ${r.error}`).css('opacity', '0.9');
+                        }
+                    } finally {
+                        $btn.prop('disabled', false);
+                    }
+                });
+            }
+
+            // Filter bar: search input, chip filters, sort dropdown
+            if ($('#co_tinder_search').data('wired') !== true) {
+                const updateFilterStatus = () => {
+                    try {
+                        const n = mod.countMatching();
+                        $('#co_tinder_filter_status').text(`— ${n} kart`);
+                    } catch (_) { /* ignore */ }
+                };
+                const applyAndRefresh = async (opts) => {
+                    mod.setFilter(opts);
+                    updateFilterStatus();
+                    await refreshCard();
+                };
+
+                $('#co_tinder_search').data('wired', true).on('input', (ev) => {
+                    // debounce by reading the value at submit time
+                    clearTimeout(window.__coTinderSearchT);
+                    window.__coTinderSearchT = setTimeout(() => {
+                        const v = (ev.target.value || '').trim();
+                        applyAndRefresh({ search: v });
+                    }, 220);
+                });
+                $('#co_tinder_search_clear').data('wired', true).on('click', () => {
+                    $('#co_tinder_search').val('');
+                    applyAndRefresh({ search: '' });
+                });
+                $('#co_tinder_sort').data('wired', true).on('change', (ev) => {
+                    applyAndRefresh({ sort: ev.target.value });
+                });
+                $('#co_tinder_chips').on('click', '.co-chip', async (ev) => {
+                    const $chip = $(ev.currentTarget);
+                    const filter = $chip.data('filter');
+                    $('#co_tinder_chips .co-chip').removeClass('active').css({
+                        background: 'rgba(255,255,255,0.06)',
+                        borderColor: 'rgba(255,255,255,0.15)',
+                    });
+                    $chip.addClass('active').css({
+                        background: 'rgba(80,160,255,0.25)',
+                        borderColor: 'rgba(80,160,255,0.5)',
+                    });
+                    await applyAndRefresh({ chip: filter });
+                });
+
+                // Initial filter status
+                updateFilterStatus();
+            }
+        }
+
+        refreshCard();
+        refreshMatches();
+    },
+
+    /**
+     * Insert a generated selfie into the active chat as a new
+     * assistant message. The image is uploaded to ST's image
+     * directory so the message has a persistent attachment, and
+     * the caption is appended as plain text.
+     */
+    async _insertSelfieIntoChat(imageBlobUrl, charName, preset) {
+        const ctx = SillyTavern.getContext();
+        if (!ctx?.chat?.length && !Array.isArray(ctx?.chat)) return;
+        // Fetch the blob and convert to a File so ST can attach it
+        const r = await fetch(imageBlobUrl);
+        if (!r.ok) throw new Error(`Failed to fetch selfie blob: ${r.status}`);
+        const blob = await r.blob();
+        const file = new File([blob], `tinder_selfie_${preset}.png`, { type: 'image/png' });
+        const caption = `*${charName} sends a selfie (${preset})*`;
+        // Use ST's message API. We add an assistant message with the image.
+        try {
+            if (typeof ctx.addOneMessage === 'function') {
+                // Many ST versions accept {name, role, content, image} payloads
+                await ctx.addOneMessage({
+                    name: charName,
+                    role: 'assistant',
+                    content: caption,
+                    image: file,
+                });
+            } else if (typeof window.addOneMessage === 'function') {
+                await window.addOneMessage({
+                    name: charName,
+                    role: 'assistant',
+                    content: caption,
+                    image: file,
+                });
+            } else {
+                console.warn('[Tinder] No message-insertion API available; selfie generated but not added to chat.');
+            }
+        } finally {
+            // Free the blob URL — ST now holds the file
+            try { URL.revokeObjectURL(imageBlobUrl); } catch (_) {}
+        }
+    },
+
+    refreshTinderPanel() {
+        const $ = window.jQuery;
+        if (!$) return;
+        const mod = this.modules.find(m => m.name === 'tinder');
+        if (!mod) return;
+        const stats = mod.stats();
+        $('#co_tinder_total').text(stats.totalCards);
+        $('#co_tinder_seen').text(stats.seen);
+        $('#co_tinder_matches').text(stats.matches);
+        $('#co_tinder_passed').text(stats.passed);
+        $('#co_tinder_super').text(stats.superLikes);
+        $('#co_tinder_remaining').text(stats.remaining);
+
+        // v0.8.1: Asıl kart (avatar + isim + bio vs.) alanları da render et.
+        // Yol A refactor’da unutulmuş — sadece istatistikler güncelleniyor,
+        // büyük kart alanı boş kalıyordu. `wireTinderPanel`’daki local
+        // `refreshCard`’ı external panele açıktan sonra çağırıyoruz; böylece
+        // tek satır tekrar render tetikler, kod duplication yok.
+        if (typeof this._refreshTinderCard === 'function') {
+            this._refreshTinderCard();
+        } else {
+            // wireTinderPanel henüz çalışmamışsa (ilk açılış), fallback:
+            // async current() ile kartı çek, minimum alanları doldur.
+            mod.current().then((card) => {
+                if (!card) {
+                    $('#co_tinder_avatar').attr('src', '');
+                    $('#co_tinder_name').text('—');
+                    $('#co_tinder_age').text('');
+                    $('#co_tinder_meta').text('—');
+                    $('#co_tinder_bio').text('—');
+                    $('#co_tinder_appearance').text('—');
+                    $('#co_tinder_interests').empty();
+                }
+            }).catch((e) => console.warn('[CO] refreshTinderPanel fallback failed:', e));
         }
     },
 };

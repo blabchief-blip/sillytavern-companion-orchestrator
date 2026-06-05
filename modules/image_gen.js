@@ -22,6 +22,8 @@
  */
 'use strict';
 
+import { booruPromptModule } from './booru_prompt.js';
+
 let _orch = null;
 let _ctx = null;
 
@@ -50,6 +52,7 @@ function getStore() {
             loras: DEFAULT_LORAS.slice(),
             lorawts: DEFAULT_LORAWTS.slice(),
             history: [],
+            nsfw: false,  // v0.8.1: NSFW tag toggle (default OFF, kullanıcı açar)
             defaults: {
                 negative: DEFAULT_NEGATIVE,
                 prefix: DEFAULT_PREFIX,
@@ -72,6 +75,7 @@ function getStore() {
     if (!s.defaults) s.defaults = {};
     if (s.defaults.negative == null) s.defaults.negative = DEFAULT_NEGATIVE;
     if (s.defaults.prefix == null) s.defaults.prefix = DEFAULT_PREFIX;
+    if (s.nsfw == null) s.nsfw = false;  // v0.8.1: NSFW toggle migrate
     return s;
 }
 
@@ -101,15 +105,20 @@ function applyOverrides(workflow, overrides) {
 }
 
 /**
- * Prompt oluştur: prefix + avatar description + scene context + suffix (negatif değil)
+ * Prompt oluştur: prefix + avatar description + scene context + style
+ *
+ * v0.8.1: Doğal dil paragrafları yerine booru tag formatına dönüştürülür.
+ * Bu, Pony Diffusion V6 XL'in beklentisiyle uyumlu ve CLIP token bütçesini
+ * korur. Çok parçalı prompt'lar (avatar + sahne + style) booru_prompt.js
+ * üzerinden sıralanıp budanır.
  */
-function buildPrompt({ avatarDesc = '', scene = '', style = '' } = {}) {
-    const cfg = getStore();
-    const parts = [cfg.defaults.prefix];
-    if (avatarDesc) parts.push(avatarDesc);
-    if (scene) parts.push(scene);
-    if (style) parts.push(style);
-    return parts.join(', ');
+function buildPrompt({ avatarDesc = '', scene = '', style = '', allowNsfw = false } = {}) {
+    return booruPromptModule.buildBooruPrompt({
+        prefix: ['masterpiece', 'best_quality', 'amazing_quality'],
+        avatar: avatarDesc,
+        scenario: scene,
+        subject: style,
+    }, { allowNsfw: !!allowNsfw });
 }
 
 /**
@@ -286,10 +295,18 @@ export const imageGenModule = {
 
         // Prompt oluştur
         let positive, negative;
+        // v0.8.1: NSFW toggle — opts veya cfg’den oku, default false
+        const allowNsfw = !!(opts.allowNsfw ?? cfg.nsfw ?? cfg.allowNsfw ?? false);
         if (opts.prompt) {
-            positive = cfg.defaults.prefix + opts.prompt;
+            // v0.8.1: Raw prompt da booru formatına dönüştürülür.
+            // Kullanıcı natural language prompt girse bile kısa sıralı tag'lere
+            // çevrilir; bu CLIP token bütçesini korur.
+            positive = booruPromptModule.format(opts.prompt, {
+                prefixTags: ['masterpiece', 'best_quality', 'amazing_quality'],
+                allowNsfw,
+            });
         } else {
-            positive = buildPrompt(opts);
+            positive = buildPrompt({ ...opts, allowNsfw });
         }
         negative = opts.negativeOverride || cfg.defaults.negative;
 
@@ -380,4 +397,66 @@ export const imageGenModule = {
         if (!cfg.workflow) return 'image_gen: workflow yüklenmemiş';
         return `image_gen: ${cfg.enabled ? 'açık' : 'kapalı'} | ${cfg.comfyuiUrl} | ${cfg.history.length} üretim`;
     },
+
+    // ===== Yol C — Side Panel integration =====
+    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // ui.panel: ComfyUI bağlantı durumu + son 3 üretim önizlemesi.
+    ui: {
+        panel(orch, mod) {
+            const cfg = getStore();
+            const enabled = cfg.enabled;
+            const workflowLoaded = !!cfg.workflow;
+            const comfyUrl = cfg.comfyuiUrl || 'http://127.0.0.1:8188';
+            const history = (cfg.history || []).slice(0, 3);
+            const statusColor = enabled && workflowLoaded ? '#6bcf6b' : '#e36363';
+            const statusText = enabled
+                ? (workflowLoaded ? 'Hazır' : 'Workflow yüklenmemiş')
+                : 'Kapalı';
+            const historyRows = history.length === 0
+                ? '<p style="font-size:0.85em; opacity:0.5;">Henüz üretim yok.</p>'
+                : history.map(h => `
+                    <li style="font-size:0.85em; margin-bottom:4px;">
+                        <code>${escapeHtml((h.prompt || '').slice(0, 60))}${h.prompt?.length > 60 ? '…' : ''}</code>
+                        <br><span style="font-size:0.75em; opacity:0.5;">${formatAge(h.ts)}</span>
+                    </li>
+                `).join('');
+            return `
+                <h4>🎨 Görsel Üretimi</h4>
+                <p style="font-size:0.9em;">
+                    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${statusColor}; margin-right:6px;"></span>
+                    <strong>${statusText}</strong>
+                </p>
+                <p style="font-size:0.8em; opacity:0.6;">ComfyUI: <code>${escapeHtml(comfyUrl)}</code></p>
+                <p style="font-size:0.85em; opacity:0.7; margin-top:4px;">
+                    Son üretimler (${cfg.history?.length || 0}):
+                </p>
+                <ul style="list-style:none; padding-left:0;">${historyRows}</ul>
+                <p style="font-size:0.85em; opacity:0.7; margin-top:8px;">
+                    Hızlı: <code>/co imagegen</code>
+                </p>
+            `;
+        },
+        // v0.8.1 audit: mount/refresh no-op stub kaldırıldı. ui objesi
+        // sadece side panel  callback'i içeriyor. Settings drawer
+        // mount’u dispatcher tarafından otomatik legacy 
+        // fallback’ine düşer (index.js içinde tanımlı, kapsamlı).
+    },
 };
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function formatAge(ts) {
+    if (!ts) return '—';
+    const diff = Date.now() - ts;
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return 'şimdi';
+    if (min < 60) return `${min} dk önce`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} sa önce`;
+    const day = Math.floor(hr / 24);
+    return `${day} gün önce`;
+}

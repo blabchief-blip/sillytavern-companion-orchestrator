@@ -161,4 +161,82 @@ export const moodModule = {
             }
         }
     },
+
+    // ===== Yol C — Side Panel integration =====
+    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // Mevcut wireMoodPanel / refreshMoodPanel (settings drawer) hâlâ
+    // legacy fallback yolundan çalışıyor; bu ui objesi side panel için.
+    ui: {
+        /**
+         * Side panel içeriği — aktif karakterin mood/affinity/trust durumu.
+         * @param {object} orch — orchestrator
+         * @param {object} mod  — bu modül
+         * @returns {string} HTML
+         */
+        panel(orch, mod) {
+            // Aktif karakter yoksa uyarı
+            const ctx = SillyTavern.getContext();
+            const charId = ctx.characterId;
+            const charName = ctx.characters?.[charId]?.name;
+            if (charId === undefined || charId === null) {
+                return '<em style="opacity:0.5;">Aktif karakter yok.</em>';
+            }
+            // Bucket oku — moodModül internal _currentCid tutmaz; doğrudan
+            // settings.mood.state'den oku. Eğer set/get henüz çağrılmadıysa
+            // bucket undefined olabilir → empty state göster.
+            const state = orch.settings.mood?.state || {};
+            const bucket = state[charId];
+            if (!bucket) {
+                return `
+                    <h4>💗 ${escapeHtml(charName || 'Karakter')}</h4>
+                    <p style="opacity:0.6; font-size:0.9em;">
+                        Bu karakter için henüz mood verisi yok. <code>/co mood set</code>
+                        veya chat’te bir-iki mesaj geçtikten sonra burada görünür.
+                    </p>
+                `;
+            }
+            // Mood preset listesini çek (TR label mapping)
+            const moodLabels = {
+                neutral: 'nötr', happy: 'mutlu', sad: 'üzgün',
+                flirty: 'flörtöz', playful: 'şımarık', angry: 'kızgın',
+                anxious: 'kaygılı', shy: 'utangaç', confident: 'kendinden emin',
+                tired: 'yorgun',
+            };
+            const moodTr = moodLabels[bucket.mood] || bucket.mood;
+            const lastUpdate = bucket.lastUpdated
+                ? new Date(bucket.lastUpdated).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                : '—';
+            const note = bucket.history?.[0]?.note || '';
+            return `
+                <h4>💗 ${escapeHtml(charName || 'Karakter')}</h4>
+                <p><strong>Mood:</strong> <code>${escapeHtml(moodTr)}</code></p>
+                <p><strong>Affinity:</strong> ${bucket.affinity}/10
+                   <span style="opacity:0.6;">(${visualBar(bucket.affinity, 10)})</span></p>
+                <p><strong>Trust:</strong> ${bucket.trust}/10
+                   <span style="opacity:0.6;">(${visualBar(bucket.trust, 10)})</span></p>
+                <p style="font-size:0.8em; opacity:0.5;">Son güncelleme: ${lastUpdate}</p>
+                ${note ? `<p style="font-size:0.85em; border-left: 2px solid rgba(127,127,127,0.4); padding-left: 6px;"><em>${escapeHtml(note)}</em></p>` : ''}
+                <p style="font-size:0.85em; opacity:0.7; margin-top: 8px;">
+                    Hızlı: <code>/co mood set happy</code> · <code>/co mood bump +1</code>
+                </p>
+            `;
+        },
+
+        // mount/refresh şu an side panel tarafından kullanılmıyor
+        // (panel() her seferinde yeniden render ediliyor), ve v0.8.1 audit:
+        // legacy `wireMoodPanel()` index.js içinde daha kapsamlı, onu
+        // kullanmak için buradaki no-op stub’ları kaldırıyoruz. mount yoksa
+        // dispatcher `orch.wireMoodPanel` legacy fallback’ini otomatik çağırır.
+    },
 };
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function visualBar(value, max) {
+    const filled = Math.round((value / max) * 5);
+    return '▓'.repeat(filled) + '░'.repeat(5 - filled);
+}

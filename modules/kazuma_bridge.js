@@ -5,6 +5,12 @@
  * prompt'una enjekte eder. Kazuma zaten her mesaj sonrası ComfyUI'a üretim yapar;
  * biz sadece ondan ÖNCE prompt zenginleştirme yaparız.
  *
+ * v0.8.1: Enrichment artık doğal dil yerine booru tag formatına dönüştürülür.
+ * Kazuma'nın LLM çıktısı + scenario preview + avatar_desc + mood + spice
+ * hepsi `booru_prompt.js` üzerinden Pony Diffusion V6 XL'in beklediği kısa
+ * sıralı tag listesine çevrilir. Bu, CLIP token bütçesini korur ve modelin
+ * degradation eğrisini erken tetiklemesini önler.
+ *
  * Storage: orch.settings.kazuma_bridge = {
  *   enabled: true,                  // master toggle
  *   injectAvatarDesc: true,         // avatar fiziksel profil ekle
@@ -20,6 +26,8 @@
 
 let _orch = null;
 let _ctx = null;
+
+import { booruPromptModule } from './booru_prompt.js';
 
 function getStore() {
     if (!_orch.settings.kazuma_bridge) {
@@ -140,33 +148,58 @@ function buildEnrichmentParts() {
  * Orijinal prompt'u al, Companion state'iyle zenginleştir.
  * Kazuma'nın `*input*` placeholder'ına yerleştirilecek metin.
  *
+ * v0.8.1: Booru tag formatına dönüştürülür. Doğal dil yerine kısa, sıralı
+ * tag'ler. CLIP token bütçesini korur, Pony Diffusion V6 XL'in booru
+ * format beklentisiyle uyumlu hale getirir.
+ *
  * @param {string} originalPrompt - Kazuma'nın LLM'den aldığı prompt
- * @returns {string} Zenginleştirilmiş prompt
+ * @returns {string} Zenginleştirilmiş booru prompt
  */
 function enrichPrompt(originalPrompt) {
     const store = getStore();
     if (!store.enabled) return originalPrompt;
 
+    // 1. Companion state parts topla (avatar + mood + spice + scenario)
     const parts = buildEnrichmentParts();
-    if (parts.length === 0) return originalPrompt;
 
-    // Booru-style format: virgülle ayrılmış tag'ler
-    // Orijinal prompt + state prefix
-    const enriched = [...parts, originalPrompt].join(', ');
+    // 2. Booru modülüne yapılandırılmış parts ver
+    const structured = {};
+    if (parts.length > 0) {
+        // Heuristic: parts sırası buildEnrichmentParts'tan: avatar, mood, spice.lighting, spice.mood, scenario
+        // 4 parts varsa: avatar(0), mood(1), spice.lighting(2), spice.mood(3)
+        // 5 parts varsa: avatar(0), mood(1), spice.lighting(2), spice.mood(3), scenario(4)
+        if (store.injectAvatarDesc && parts.length > 0) structured.avatar = parts[0];
+        if (store.injectMood && parts.length > 1) structured.mood = parts[1];
+        if (store.injectSpice) {
+            if (parts.length > 2) structured.spiceLighting = parts[2];
+            if (parts.length > 3) structured.spiceMood = parts[3];
+        }
+        if (store.injectScenario && parts.length > 4) structured.scenario = parts[4];
+    }
+    if (originalPrompt) structured.subject = originalPrompt;
 
-    // Logla
-    store.lastPrompt = enriched;
+    // 3. Booru formatına dönüştür (Pony quality prefix otomatik eklenir)
+    const enriched = booruPromptModule.buildBooruPrompt(structured);
+
+    // 4. Eğer booru dönüşümü boş dönerse (edge case), en azından original'ı koru
+    const finalPrompt = enriched && enriched.length > 0
+        ? enriched
+        : (originalPrompt || '');
+
+    // 5. Logla
+    store.lastPrompt = finalPrompt;
     store.lastInjectTime = Date.now();
     store.history.unshift({
         ts: Date.now(),
-        original: originalPrompt.slice(0, 100),
-        enriched: enriched.slice(0, 200),
+        original: (originalPrompt || '').slice(0, 100),
+        enriched: finalPrompt.slice(0, 200),
+        enrichedTokens: booruPromptModule.estimateTokens(finalPrompt),
         partsAdded: parts.length,
     });
     if (store.history.length > 10) store.history = store.history.slice(0, 10);
     save();
 
-    return enriched;
+    return finalPrompt;
 }
 
 export const kazumaBridgeModule = {

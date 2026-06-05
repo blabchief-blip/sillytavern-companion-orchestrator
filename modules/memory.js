@@ -137,4 +137,77 @@ export const memoryModule = {
             // TODO: LLM-based fact extraction. Skipped in v0.1.
         }
     },
+
+    // ===== Yol C — Side Panel integration =====
+    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // ui.panel: son 5 memory entry'sini liste + hızlı ekleme bağlantısı.
+    ui: {
+        panel(orch, mod) {
+            const ctx = SillyTavern.getContext();
+            const charId = ctx.characterId;
+            const charName = ctx.characters?.[charId]?.name;
+            if (charId === undefined || charId === null) {
+                return '<em style="opacity:0.5;">Aktif karakter yok.</em>';
+            }
+            const entries = orch.settings.memory?.entries?.[charId] || [];
+            if (entries.length === 0) {
+                return `
+                    <h4>🧠 ${escapeHtml(charName || 'Karakter')}</h4>
+                    <p style="opacity:0.6; font-size:0.9em;">
+                        Bu karakter için henüz hafıza kaydı yok. <code>/co memory add "fakt"</code>
+                        veya chat’te bir-iki tur geçtikten sonra otomatik dolar.
+                    </p>
+                `;
+            }
+            const last = entries.slice(0, 5);
+            const kindIcon = { fact: '📌', event: '⚡', preference: '⭐', note: '📝' };
+            const rows = last.map(e => {
+                const icon = kindIcon[e.kind] || '•';
+                const age = formatAge(e.ts);
+                const tagStr = (e.tags || []).slice(0, 3)
+                    .map(t => `<span style="background:rgba(127,127,127,0.15); padding:0 4px; border-radius:3px; font-size:0.8em;">${escapeHtml(t)}</span>`)
+                    .join(' ');
+                return `
+                    <li style="margin-bottom:6px; line-height:1.3;">
+                        <span title="${escapeHtml(e.kind)} (imp ${e.importance}/10)">${icon}</span>
+                        <span style="font-size:0.9em;">${escapeHtml(e.content.slice(0, 120))}${e.content.length > 120 ? '…' : ''}</span>
+                        <br>
+                        <span style="font-size:0.75em; opacity:0.5;">${age}${tagStr ? ' · ' + tagStr : ''}</span>
+                    </li>
+                `;
+            }).join('');
+            const total = entries.length;
+            return `
+                <h4>🧠 ${escapeHtml(charName || 'Karakter')} <span style="opacity:0.4; font-size:0.7em; font-weight:normal;">(${total} kayıt)</span></h4>
+                <ul style="list-style:none; padding-left:0; margin:4px 0;">${rows}</ul>
+                ${total > 5 ? `<p style="font-size:0.8em; opacity:0.6;">+${total - 5} eski kayıt — <code>/co memory list</code></p>` : ''}
+                <p style="font-size:0.85em; opacity:0.7; margin-top:8px;">
+                    Hızlı: <code>/co memory add "fakt"</code> · <code>/co memory search kelime</code>
+                </p>
+            `;
+        },
+        // v0.8.1 audit: mount/refresh no-op stub kaldırıldı. ui objesi
+        // sadece side panel  callback'i içeriyor. Settings drawer
+        // mount’u dispatcher tarafından otomatik legacy 
+        // fallback’ine düşer (index.js içinde tanımlı, kapsamlı).
+    },
 };
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function formatAge(ts) {
+    if (!ts) return '—';
+    const diff = Date.now() - ts;
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return 'şimdi';
+    if (min < 60) return `${min} dk önce`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} sa önce`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day} gün önce`;
+    return new Date(ts).toLocaleDateString('tr-TR');
+}

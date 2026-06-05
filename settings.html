@@ -744,6 +744,16 @@
                 </div>
 
                 <hr style="margin: 10px 0; opacity: 0.3;" />
+                <h5 style="margin: 0 0 4px 0;">🔞 İçerik / Rating</h5>
+                <label class="checkbox_label" for="co_img_nsfw" style="margin-top: 4px; cursor: pointer;">
+                    <input id="co_img_nsfw" type="checkbox" />
+                    <span><strong>NSFW tag'leri aktif</strong> — <em style="opacity: 0.7;">booru prompt'una nsfw/explicit rating + yetişkin phraseleri (kissing, lingerie, on_bed, sex vs.) ekler. ComfyUI/Pony Diffusion modellerinde çalışır.</em></span>
+                </label>
+                <div style="font-size: 0.8em; opacity: 0.7; margin-top: 4px; padding-left: 22px;">
+                    ⚠️ NSFW içerik üreteceği için kendi sorumluluğundadır. Default <strong>kapalı</strong> (safe).
+                </div>
+
+                <hr style="margin: 10px 0; opacity: 0.3;" />
                 <h5 style="margin: 0 0 4px 0;">🧬 Avatar Profili (otomatik)</h5>
                 <div id="co_img_avatar_desc" style="font-size: 0.85em; opacity: 0.85; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px;">
                     <i>(profil çıkarılıyor…)</i>
@@ -844,6 +854,96 @@
             <div class="co-help" style="font-size: 0.85em; opacity: 0.85; line-height: 1.5;">
                 <strong>İpucu:</strong> Yukarıdaki tüm kontroller aynı zamanda <code>/co</code> slash komutları olarak da kullanılabilir.
                 Sohbete <code>/co help</code> yaz.
+            </div>
+
+            <hr />
+            <h4>🎯 Tinder — Karakter Keşfi</h4>
+            <p class="co-help" style="font-size: 0.85em; opacity: 0.85; line-height: 1.5;">
+                500 benzersiz karakter kartı arasından swipe ederek eşleş. Eşleştiklerin ST'ye import edilip tinder_flow senaryosuyla sohbet edilebilir.
+            </p>
+            <div id="co_tinder_panel" style="margin-top: 10px;">
+                <div id="co_tinder_stats" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.9em;">
+                    <span class="co-stat">📊 Yüklü: <strong id="co_tinder_total">0</strong></span>
+                    <span class="co-stat">👀 Görülen: <strong id="co_tinder_seen">0</strong></span>
+                    <span class="co-stat">💚 Eşleşme: <strong id="co_tinder_matches">0</strong></span>
+                    <span class="co-stat">👎 Geçilen: <strong id="co_tinder_passed">0</strong></span>
+                    <span class="co-stat">⭐ Super: <strong id="co_tinder_super">0</strong></span>
+                    <span class="co-stat">🃏 Kalan: <strong id="co_tinder_remaining">0</strong></span>
+                </div>
+
+                <div id="co_tinder_filters" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding: 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(0,0,0,0.12);">
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <input id="co_tinder_search" type="text" placeholder="🔍 İsim, şehir, etiket ara..." class="text_pole" style="flex: 1;" />
+                        <button id="co_tinder_search_clear" class="menu_button" style="padding: 2px 8px; min-width: 0;" title="Aramayı temizle">×</button>
+                    </div>
+                    <div id="co_tinder_chips" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <button class="co-chip active" data-filter="all" style="padding: 3px 10px; border-radius: 12px; font-size: 0.82em; background: rgba(80,160,255,0.25); border: 1px solid rgba(80,160,255,0.5); color: inherit; cursor: pointer;">Tümü</button>
+                        <button class="co-chip" data-filter="super" style="padding: 3px 10px; border-radius: 12px; font-size: 0.82em; background: rgba(90,209,255,0.12); border: 1px solid rgba(90,209,255,0.3); color: inherit; cursor: pointer;">⭐ Süper</button>
+                        <button class="co-chip" data-filter="unseen" style="padding: 3px 10px; border-radius: 12px; font-size: 0.82em; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: inherit; cursor: pointer;">👀 Görülmemiş</button>
+                        <button class="co-chip" data-filter="unmatched" style="padding: 3px 10px; border-radius: 12px; font-size: 0.82em; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: inherit; cursor: pointer;">🆕 Yeni</button>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center; font-size: 0.85em;">
+                        <span style="opacity: 0.7;">Sırala:</span>
+                        <select id="co_tinder_sort" class="text_pole" style="flex: 0 0 auto; padding: 2px 6px;">
+                            <option value="random">🎲 Rastgele</option>
+                            <option value="newest">🆕 Yeni kartlar (SÃO Paulo kuralı)</option>
+                            <option value="name">A-Z İsim</option>
+                            <option value="city">🌍 Şehir</option>
+                            <option value="age">Yaş</option>
+                        </select>
+                        <span id="co_tinder_filter_status" style="opacity: 0.6; margin-left: auto; font-size: 0.85em;">— 0 kart</span>
+                    </div>
+                </div>
+
+                <div id="co_tinder_card" style="display: flex; gap: 16px; padding: 14px; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; background: rgba(255,255,255,0.04); margin-bottom: 12px;">
+                    <div style="flex: 0 0 140px;">
+                        <img id="co_tinder_avatar" src="" alt="avatar" style="width: 140px; height: 186px; object-fit: cover; border-radius: 8px; background: rgba(255,255,255,0.08);" />
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+                            <h3 id="co_tinder_name" style="margin: 0; font-size: 1.3em;">—</h3>
+                            <span id="co_tinder_age" style="opacity: 0.7; font-size: 1em;"></span>
+                            <span id="co_tinder_super_badge" style="display: none; color: #5ad1ff; font-size: 0.85em;">⭐</span>
+                        </div>
+                        <div id="co_tinder_meta" style="font-size: 0.9em; opacity: 0.8; margin-bottom: 8px;">—</div>
+                        <div id="co_tinder_bio" style="font-size: 0.95em; line-height: 1.4; margin-bottom: 10px; font-style: italic; opacity: 0.92;">—</div>
+                        <div id="co_tinder_appearance" style="font-size: 0.85em; opacity: 0.75; line-height: 1.4; margin-bottom: 8px;">—</div>
+                        <div id="co_tinder_interests" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;"></div>
+                    </div>
+                </div>
+
+                <div id="co_tinder_buttons" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+                    <button id="co_tinder_pass" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(255,80,80,0.18);">← Geç</button>
+                    <button id="co_tinder_message" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(255,200,80,0.18);">✏️ Mesaj</button>
+                    <button id="co_tinder_super" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(80,160,255,0.18);">⭐ Super</button>
+                    <button id="co_tinder_like" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(80,220,120,0.18);">Eşleş →</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                    <button id="co_tinder_reset" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(255,255,255,0.06);">🔄 Desteği sıfırla</button>
+                </div>
+
+                <div>
+                    <h4 style="margin: 8px 0 6px 0;">💚 Eşleşmelerin <span id="co_tinder_matches_count" style="opacity: 0.6; font-size: 0.8em;">(0)</span></h4>
+                    <div id="co_tinder_matches_list" style="max-height: 280px; overflow-y: auto; font-size: 0.9em; padding: 4px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(0,0,0,0.1);">
+                        <em style="opacity: 0.6;">Henüz eşleşme yok. Sağa kaydır!</em>
+                    </div>
+
+                    <h4 style="margin: 14px 0 6px 0;">📸 Selfie Üret (IP-Adapter FaceID)</h4>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
+                        <select id="co_tinder_selfie_preset" class="text_pole" style="flex: 1; min-width: 140px;">
+                            <option value="casual_selfie">Casual Selfie</option>
+                            <option value="night_out">Night Out</option>
+                            <option value="beach">Beach</option>
+                            <option value="coffee_shop">Coffee Shop</option>
+                            <option value="workout">Workout</option>
+                            <option value="formal">Formal</option>
+                            <option value="morning">Morning</option>
+                        </select>
+                        <button id="co_tinder_selfie_btn" class="menu_button" style="background: rgba(180,80,255,0.18);">📸 Selfie Gönder</button>
+                    </div>
+                    <div id="co_tinder_selfie_status" style="font-size: 0.85em; opacity: 0.7; padding: 4px;"></div>
+                </div>
             </div>
         </div>
     </div>

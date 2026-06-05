@@ -360,4 +360,43 @@ export const spiceModule = {
         if (!heat) return '(karakter yok)';
         return `spice: ${heat.emoji} ${heat.label} (${heat.score}/4) | ort: ${heat.average} | tepe: ${heat.peak}`;
     },
+
+    // ===== Yol C — Side Panel integration =====
+    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // ui.panel: spice heat (emoji + label) + average/peak istatistikleri.
+    ui: {
+        panel(orch, mod) {
+            const heat = spiceModule.currentHeat();
+            if (!heat) {
+                return '<em style="opacity:0.5;">Aktif karakter için spice verisi yok.</em>';
+            }
+            const heatColors = ['#6bcf6b', '#f4d35e', '#ee964b', '#e36363', '#a83279'];
+            const barColor = heatColors[heat.score] || '#6bcf6b';
+            return `
+                <h4>🔥 Spice Heat</h4>
+                <p style="font-size:1.4em; text-align:center; margin:8px 0;">
+                    ${heat.emoji} <strong>${escapeHtml(heat.label)}</strong>
+                </p>
+                <div style="background:rgba(127,127,127,0.15); height:8px; border-radius:4px; overflow:hidden; margin:6px 0;">
+                    <div style="background:${barColor}; height:100%; width:${(heat.score / 4) * 100}%; transition:width 0.3s;"></div>
+                </div>
+                <p style="font-size:0.8em; opacity:0.6; text-align:center;">
+                    Skor: ${heat.score}/4 · Ortalama: ${heat.average} · Tepe: ${heat.peak}
+                </p>
+                <p style="font-size:0.85em; opacity:0.7; margin-top:8px;">
+                    Hızlı: <code>/co spice intensity</code> · <code>/co spice level 3</code>
+                </p>
+            `;
+        },
+        // v0.8.1 audit: mount/refresh no-op stub kaldırıldı. ui objesi
+        // sadece side panel  callback'i içeriyor. Settings drawer
+        // mount’u dispatcher tarafından otomatik legacy 
+        // fallback’ine düşer (index.js içinde tanımlı, kapsamlı).
+    },
 };
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

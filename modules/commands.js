@@ -16,6 +16,7 @@ import { moodModule } from './mood.js';
 import { scenariosModule } from './scenarios.js';
 import { promptsModule } from './prompts.js';
 import { lorebookModule } from './lorebook.js';
+import { tinderModule } from './tinder.js';
 
 const MOD = {
     memory: memoryModule,
@@ -23,7 +24,24 @@ const MOD = {
     scenarios: scenariosModule,
     lorebook: lorebookModule,
     prompts: promptsModule,
+    tinder: tinderModule,
 };
+
+/**
+ * /co selfie [preset]
+ * Generates a selfie of the active tinder-matched character using
+ * IP-Adapter FaceID for face consistency. The character's existing
+ * portrait is the face reference; preset chooses the outfit/pose/
+ * location. Posts the result to the chat.
+ */
+async function selfieCommand(orch, preset) {
+    if (!tinderModule || typeof tinderModule.generateSelfie !== 'function') {
+        return '❌ Tinder modülü yüklü değil.';
+    }
+    const result = await tinderModule.generateSelfie({ preset });
+    if (!result.ok) return `❌ Selfie üretilemedi: ${result.error || 'bilinmeyen hata'}`;
+    return `📸 Selfie üretildi: ${result.charName} (${preset}) — imageUrl: ${result.imageUrl}`;
+}
 
 function fmtResult(s) {
     return String(s);
@@ -250,6 +268,14 @@ export function registerAllCommands(orch) {
                 const rest = args.slice(2);
                 if (slashCommands.preset[action]) return slashCommands.preset[action](rest);
                 return `Bilinmeyen preset eylemi: ${action}. Şunları dene: list, apply, create, remove`;
+            }
+            if (sub === 'selfie') {
+                const preset = args[1] || 'casual_selfie';
+                const valid = ['casual_selfie', 'night_out', 'beach', 'coffee_shop', 'workout', 'formal', 'morning'];
+                if (!valid.includes(preset)) {
+                    return `Geçersiz preset: ${preset}. Şunlardan birini dene: ${valid.join(', ')}`;
+                }
+                return selfieCommand(orch, preset);
             }
             if (sub === 'lore') {
                 const action = args[1] || 'suggest';

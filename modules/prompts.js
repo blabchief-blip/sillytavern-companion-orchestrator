@@ -33,6 +33,31 @@ const BUILTIN_PRESETS = {
         description: 'Camera-aware, scene-based, like a film.',
         systemAddition: '[Writing style: Cinematic. Treat each reply as a film scene. Open with establishing context, use camera-like framing (close-up, wide, cut to), build to a beat, end on an image or line.]',
     },
+    slow_burn: {
+        name: 'Slow Burn Tension',
+        description: 'Anticipation over payoff. Heated glances, near-misses, restrained longing. A single touch carries the weight of a confession.',
+        systemAddition: '[Writing style: Slow Burn Tension. Prioritize anticipation over payoff. Rely on proximity, eye contact, unfinished gestures, restrained dialogue. The space between two people is more important than what they say. Do not resolve tension quickly — let it build across beats. A single touch, a held breath, a glance that lingers one second too long: these are the climaxes. Avoid melodrama; favor restraint. Never rush the moment of contact. Silence is a valid sentence.]',
+    },
+    lingering_glances: {
+        name: 'Lingering Glances',
+        description: 'Visual attention as the primary register. Where the eyes go, the heart follows.',
+        systemAddition: '[Writing style: Lingering Glances. Use the gaze as the central instrument. Track where eyes go, what they catch on, what they return to. Micro-expressions, the curve of a hand, the way fabric moves. A look that starts casual and ends heavy. Let attention itself become a form of intimacy. Avoid stating feelings directly; instead, show them through the geometry of looking.]',
+    },
+    loaded_silence: {
+        name: 'Loaded Silence',
+        description: 'What is not said carries more weight than what is. Restraint, ellipses, half-thoughts.',
+        systemAddition: '[Writing style: Loaded Silence. Treat absence of speech as action. Let dialogue trail off into unfinished sentences, gestures that interrupt words, thoughts the character pulls back from saying. Use beat, pause, ellipsis to mark the unsaid. The reader should feel the weight of what is NOT in the reply. Subtext is the only text.]',
+    },
+    electric_proximity: {
+        name: 'Electric Proximity',
+        description: 'Close physical space, charged awareness. Bodies as narrative instruments.',
+        systemAddition: '[Writing style: Electric Proximity. Make the body a continuous source of awareness. The distance between two people, the heat from another skin, the way breath changes when someone leans close. Small physical events — a hand steadying on a table, shoulders brushing in a doorway, a shared silence over a drink — carry emotional charge. Pacing is slow, sensory, anchored in the present moment. Avoid grand gestures; favor the involuntary.]',
+    },
+    tender_aftermath: {
+        name: 'Tender Aftermath',
+        description: 'Post-intensity softness. Coming down together. The quiet that follows a storm.',
+        systemAddition: '[Writing style: Tender Aftermath. After tension or intensity, the tone should ease into gentle presence. Ordinary actions — pouring tea, pulling a blanket, sitting close without speaking — become the recovery. Notice the body relaxing, the breath evening out. Let vulnerability show as quiet. Avoid dramatic declarations; favor the small, the warm, the recognizable. The character does not need to explain themselves.]',
+    },
     explicit_verbose: {
         name: 'NSFW Verbose',
         description: 'Extended explicit scenes with detailed physicality.',
@@ -180,7 +205,7 @@ export const promptsModule = {
      * Get currently applied preset key.
      */
     getCurrent() {
-        return _orch?.settings?.prompts?.activePreset || 'default';
+        return _orch?.settings?.promptsData?.activePreset || 'default';
     },
 
     /**
@@ -198,7 +223,7 @@ export const promptsModule = {
         if (!_ctx?.setExtensionPrompt) return { ok: false, error: 'ST context unavailable' };
         try {
             _ctx.setExtensionPrompt('CO_PROMPT_PRESET', preset.systemAddition || '', 0, 0);
-            _orch.settings.prompts.activePreset = key;
+            _orch.settings.promptsData.activePreset = key;
             save();
             return { ok: true, preset: preset.name };
         } catch (err) {
@@ -234,4 +259,53 @@ export const promptsModule = {
         save();
         return { ok: true };
     },
+
+    // ===== Yol C — Side Panel integration =====
+    // ui: { panel, mount, refresh } — generic dispatcher için.
+    // ui.panel: aktif prompt preset + kullanılabilir preset listesi.
+    ui: {
+        panel(orch, mod) {
+            const store = getStore();
+            const active = store.activePreset || 'default';
+            const all = promptsModule.list();
+            const activeData = all[active];
+            const rows = Object.entries(all).map(([key, pr]) => {
+                const isActive = key === active;
+                const isCustom = !BUILTIN_PRESETS[key];
+                return `
+                    <li style="font-size:0.85em; padding:3px 0; ${isActive ? 'font-weight:bold;' : ''}">
+                        ${isActive ? '▶ ' : '○ '}${escapeHtml(pr.name || key)}
+                        ${isCustom ? ' <span style="opacity:0.5; font-size:0.8em;">(custom)</span>' : ''}
+                    </li>
+                `;
+            }).join('');
+            return `
+                <h4>✨ Aktif Prompt Preset</h4>
+                <p style="font-size:1em; margin:6px 0;">
+                    <strong>${escapeHtml(activeData?.name || active)}</strong>
+                </p>
+                <p style="font-size:0.8em; opacity:0.7; margin:4px 0;">
+                    ${activeData?.description ? escapeHtml(activeData.description) : '<em>(açıklama yok)</em>'}
+                </p>
+                ${activeData?.systemAddition ? `<p style="font-size:0.75em; opacity:0.6; border-left:2px solid rgba(127,127,127,0.4); padding-left:6px; margin:4px 0;">${escapeHtml(activeData.systemAddition.slice(0, 140))}…</p>` : ''}
+                <details style="margin-top:6px;">
+                    <summary style="cursor:pointer; font-size:0.85em; opacity:0.7;">Tüm presetler (${Object.keys(all).length})</summary>
+                    <ul style="list-style:none; padding-left:0; margin:4px 0;">${rows}</ul>
+                </details>
+                <p style="font-size:0.85em; opacity:0.7; margin-top:8px;">
+                    Hızlı: <code>/co prompts use descriptive</code>
+                </p>
+            `;
+        },
+        // v0.8.1 audit: mount/refresh no-op stub kaldırıldı. ui objesi
+        // sadece side panel  callback'i içeriyor. Settings drawer
+        // mount’u dispatcher tarafından otomatik legacy 
+        // fallback’ine düşer (index.js içinde tanımlı, kapsamlı).
+    },
 };
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

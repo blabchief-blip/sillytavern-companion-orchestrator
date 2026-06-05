@@ -83,12 +83,18 @@ export function parseLLMTags(raw) {
 }
 
 // =============================================================
-// LLM Call — OpenRouter direct API
+// LLM Call — DeepSeek direct API (v0.8.0)
 // =============================================================
+// v0.8.0: OpenRouter’dan DeepSeek firmasının kendi API’sine geçiş.
+// OpenRouter dolaylısız, fiyat daha ucuz, limit yok (kredi bazlı).
+// Default endpoint DeepSeek; OpenRouter’a geri dönmek istersen
+// settings.llm_tagger.endpoint = 'https://openrouter.ai/api/v1/chat/completions'
+// settings.llm_tagger.model = 'deepseek/deepseek-v3.2' (OpenRouter model adı)
+// yap.
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'google/gemini-2.5-flash';
-const FALLBACK_MODEL = 'deepseek/deepseek-v3.2'; // already known good
+const DEFAULT_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const DEFAULT_MODEL = 'deepseek-chat'; // DeepSeek V3 (kasım 2024 itibariyle, V3.2 için ‘deepseek-reasoner’)
+const FALLBACK_MODEL = 'deepseek-chat'; // aynı endpoint, ayrı model yok
 
 const SYSTEM_PROMPT = `You are a Pony Diffusion image tagger. Convert roleplay scenes into 10-20 visual tags in Danbooru format (lowercase, underscores instead of spaces, no spaces in tags, max 30 chars per tag).
 
@@ -98,9 +104,9 @@ OUTPUT FORMAT: Return ONLY a JSON array of strings. Example:
 Focus on: body pose, action, facial expression, location, time of day, lighting, mood, clothing.
 Skip: character names, dialogue, narrative text, meta-references.`;
 
-export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL) {
+export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL, endpoint = DEFAULT_API_URL) {
   if (!apiKey) {
-    throw new Error('OpenRouter API key missing — set in Companion settings');
+    throw new Error('DeepSeek API key missing — set in Companion settings');
   }
   if (!text || text.length < 5) {
     return [];
@@ -132,7 +138,7 @@ export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL) {
   // (apiKey'de Türkçe karakter varsa header hata verir)
   const safeApiKey = apiKey ? String(apiKey).replace(/[^\x00-\xFF]/g, '?') : '';
   
-  const resp = await fetch(OPENROUTER_URL, {
+  const resp = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${safeApiKey}`,
@@ -141,10 +147,10 @@ export async function extractLLMTags(text, apiKey, model = DEFAULT_MODEL) {
     body: bodyString,
   });
   const latency = Date.now() - start;
-  
+
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`OpenRouter ${resp.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`LLM API ${resp.status}: ${errText.slice(0, 200)}`);
   }
   
   const data = await resp.json();
@@ -278,7 +284,8 @@ class LLMTagger {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const result = await extractLLMTags(augmentedText, this.settings.apiKey, this.settings.model);
+        const endpoint = this.settings.endpoint || DEFAULT_API_URL;
+        const result = await extractLLMTags(augmentedText, this.settings.apiKey, this.settings.model, endpoint);
         const totalLatency = Date.now() - start;
         
         this.settings.stats.totalCalls++;
@@ -334,7 +341,8 @@ class LLMTagger {
     if (!key) return { ok: false, error: 'no key' };
     
     try {
-      const result = await extractLLMTags('A woman smiles in a coffee shop.', key, this.settings.model);
+      const endpoint = this.settings.endpoint || DEFAULT_API_URL;
+      const result = await extractLLMTags('A woman smiles in a coffee shop.', key, this.settings.model, endpoint);
       return {
         ok: true,
         latency: result.latency,

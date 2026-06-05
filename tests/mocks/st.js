@@ -53,6 +53,21 @@ function createMockCtx(initial = {}) {
         saveSettingsDebounced: 0,
         generateQuietPrompt: 0,
         registerSlashCommand: [],
+        addCommandObject: [],
+    };
+    // SlashCommandParser mock: ST’deki addCommandObject(obj) signature’ını
+    // taklit eder. obj.name varsa kaydeder; renderHelpItem yoksa noop ekler
+    // ki production’daki “this.command.renderHelpItem is not a function”
+    // hatasını test’te de simüle edelim.
+    const SlashCommandParser = {
+        addCommandObject(obj) {
+            if (!obj || typeof obj !== 'object') return;
+            // ST’de obj.renderHelpItem zorunlu; test’te yoksa noop ekle
+            if (typeof obj.renderHelpItem !== 'function') {
+                obj.renderHelpItem = () => null;
+            }
+            calls.addCommandObject.push(obj);
+        },
     };
     return {
         characterId: initial.characterId ?? 'char-1',
@@ -60,6 +75,11 @@ function createMockCtx(initial = {}) {
         chat,
         characters,
         extensionSettings,
+        SlashCommandParser,
+        // Document mock — side panel body’ye inject için basit DOM yüzeyi.
+        // Testler document yoksa farklı path tetikliyor (no-op).
+        document: initial.document ?? (typeof globalThis.document !== 'undefined'
+            ? globalThis.document : null),
         eventSource: createMockEventSource(),
         saveSettingsDebounced() { calls.saveSettingsDebounced += 1; },
         generateQuietPrompt: async (prompt) => {
@@ -94,6 +114,20 @@ export function installStMocks(initial = {}) {
     globalThis.SillyTavern = {
         getContext() { return ctx; },
     };
+    // Mock fetch (used by tinder module to load cards from /api/characters/list)
+    // Save the original (Node 22+ has native fetch) so reset can restore it.
+    if (!globalThis.__nativeFetch) {
+        globalThis.__nativeFetch = globalThis.fetch;
+    }
+    globalThis.fetch = async (url, init) => {
+        if (globalThis.__mockFetchHandler) {
+            return globalThis.__mockFetchHandler(url, init);
+        }
+        return {
+            ok: true,
+            async json() { return []; },
+        };
+    };
     return ctx;
 }
 
@@ -106,6 +140,13 @@ export function resetStMocks() {
     installed = false;
     ctx = null;
     delete globalThis.SillyTavern;
+    if (globalThis.__mockFetchHandler) delete globalThis.__mockFetchHandler;
+    if (globalThis.__nativeFetch) {
+        globalThis.fetch = globalThis.__nativeFetch;
+    }
+    // NOTE: module-level singleton state in the modules under test (e.g.
+    // tinder.js's _orch, _cardCache) is reset by the test itself via
+    // _resetTinderForTests(), since ESM modules can't be require()'d.
 }
 
 /**
