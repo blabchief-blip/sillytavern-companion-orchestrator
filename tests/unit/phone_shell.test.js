@@ -443,16 +443,26 @@ describe('sendToST — ST chat\'e mesaj gönder', () => {
 });
 
 describe('onMessageReceived — karakter cevabı shell\'e düşer', () => {
+    // ST 1.18'de MESSAGE_RECEIVED event payload = (messageId, type) — string ID
+    // phone_shell messageId ile getContext().chat[messageId] lookup yapar
+    function pushMockMessage(msg) {
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push(msg);
+        return stCtx.chat.length - 1; // index = messageId
+    }
+
     test('shell pasifken hiçbir şey yapma', () => {
+        const id = pushMockMessage({ role: 'assistant', mes: 'merhaba' });
         const before = phoneShellModule.getInfo().messageCount;
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'merhaba' } });
+        phoneShellModule.onMessageReceived(orch, id);
         assert.equal(phoneShellModule.getInfo().messageCount, before);
     });
 
     test('shell aktif + assistant mesaj → shell\'e eklenir', () => {
         phoneShellModule.mount();
+        const id = pushMockMessage({ role: 'assistant', mes: 'selam' });
         const before = phoneShellModule.getInfo().messageCount;
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'selam' } });
+        phoneShellModule.onMessageReceived(orch, id);
         assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
         // 'other' rolü olarak
         const last = phoneShellModule.getInfo().messageCount > 0
@@ -462,28 +472,33 @@ describe('onMessageReceived — karakter cevabı shell\'e düşer', () => {
 
     test('user rolü gelirse eklenmez (zaten user mesajı için onMessageSent var)', () => {
         phoneShellModule.mount();
+        const id = pushMockMessage({ role: 'user', mes: 'kullanıcı' });
         const before = phoneShellModule.getInfo().messageCount;
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'user', mes: 'kullanıcı' } });
+        phoneShellModule.onMessageReceived(orch, id);
         assert.equal(phoneShellModule.getInfo().messageCount, before);
     });
 
     test('boş mesaj eklenmez', () => {
         phoneShellModule.mount();
         const before = phoneShellModule.getInfo().messageCount;
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: '' } });
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: '   ' } });
+        pushMockMessage({ role: 'assistant', mes: '' });
+        pushMockMessage({ role: 'assistant', mes: '   ' });
+        // İlk mesajın id'sini çağır
+        const stCtx = globalThis.SillyTavern.getContext();
+        phoneShellModule.onMessageReceived(orch, stCtx.chat.length - 2);
+        phoneShellModule.onMessageReceived(orch, stCtx.chat.length - 1);
         assert.equal(phoneShellModule.getInfo().messageCount, before);
     });
 
     test('önceki self mesajlar seen işaretlenir', () => {
         phoneShellModule.mount();
         phoneShellModule.appendMessage('user', 'ilk mesaj');
-        phoneShellModule.onMessageReceived(orch, { message: { role: 'assistant', mes: 'cevap' } });
-        // seen=true kontrol et (internal _messages array)
+        // Yeni API: push mock message + messageId lookup
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push({ role: 'assistant', mes: 'cevap' });
+        const id = stCtx.chat.length - 1;
+        phoneShellModule.onMessageReceived(orch, id);
         // appendMessage yaptıktan sonra _markAllSeen çağrıldı
-        const lastSelf = phoneShellModule.getInfo();
-        // info'da seen yok, doğrudan kontrol
-        // Önceki self mesaj seen=true olmalı
         // _messages'a doğrudan erişim yok, ama seen badge'i DOM'da görünmeli
         const shell = dom.window.document.querySelector('#co-phone-shell');
         assert.match(shell.textContent, /✓✓/);

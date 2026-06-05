@@ -299,19 +299,19 @@ const phoneShellModule = {
      * data = { message: { role, mes, ... }, character: { name } }
      */
     onMessageReceived(orch, data) {
-        // ST 1.18'de data shape'i görmek için tüm argümanı log'la
-        let dataShape = 'null';
-        try {
-            dataShape = data ? (Array.isArray(data) ? 'array[' + data.length + ']' : 'object{' + Object.keys(data).join(',') + '}') : 'null';
-        } catch (_) {}
-        console.log('[phone_shell] onMessageReceived _active=' + _active + ' data=' + dataShape + ' JSON=' + JSON.stringify(data).slice(0, 400));
+        // ST 1.18'de MESSAGE_RECEIVED event payload = (messageId: string, type: string)
+        // Bkz. script.js:3773: eventSource.emit(event_types.MESSAGE_RECEIVED, this.messageId, this.type)
+        // Önceki kod data'yı msg objesi sanıyordu, gerçekte string ID.
+        // Çözüm: data = messageId → getContext().chat[messageId] lookup.
         if (!_active) return;
-        // ST 1.18 bazen data direkt msg, bazen data.message wrapper, bazen data array
-        const msg = (data && data.message) || (Array.isArray(data) ? data[0] : data);
-        if (!msg || typeof msg !== 'object') return;
+        const messageId = data;  // string
+        const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        if (!ctx || !Array.isArray(ctx.chat)) return;
+        const msg = ctx.chat[messageId];
+        if (!msg) return;
         if (msg.is_user === true || msg.role === 'user') return;
         if (msg.role === 'system') return;
-        const text = String(msg.mes || msg.message || msg.text || '').trim();
+        const text = String(msg.mes || '').trim();
         if (!text) return;
         console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
         phoneShellModule.appendMessage('assistant', text);
