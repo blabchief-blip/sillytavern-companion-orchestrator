@@ -17,6 +17,7 @@ import { scenariosModule } from './scenarios.js';
 import { promptsModule } from './prompts.js';
 import { lorebookModule } from './lorebook.js';
 import { tinderModule } from './tinder.js';
+import { characterProfileModule } from './character_profile.js';
 import { antiGhostingModule } from './anti_ghosting.js';
 import { platformTransitionModule } from './platform_transition.js';
 import { phoneShellModule } from './phone_shell.js';
@@ -42,6 +43,16 @@ function showOutput(text) {
     return str;
 }
 
+function voiceTr(style) {
+    const map = {
+        'flirty-direct': 'doğrudan, kısa cümleler, flörtöz',
+        'teasing-slow': 'yavaş, gerilimi uzatan, bekleten',
+        'submissive-whisper': 'yumuşak, alçak ses, çekingen',
+        'dominant-command': 'emir veren, kontrol eden',
+    };
+    return map[style] || style;
+}
+
 const MOD = {
     memory: memoryModule,
     mood: moodModule,
@@ -49,6 +60,7 @@ const MOD = {
     lorebook: lorebookModule,
     prompts: promptsModule,
     tinder: tinderModule,
+    character_profile: characterProfileModule,
     anti_ghosting: antiGhostingModule,
     platform_transition: platformTransitionModule,
     phone_shell: phoneShellModule,
@@ -325,6 +337,150 @@ export function registerAllCommands(orch) {
                 const rest = args.slice(2);
                 if (slashCommands.lore[action]) return slashCommands.lore[action](rest);
                 return `Bilinmeyen lorebook eylemi: ${action}. Şunları dene: suggest`;
+            }
+            if (sub === 'char') {
+                // v0.8.6: /co char [name] nsfw <action> [args...]
+                //   /co char Soo nsfw show
+                //   /co char Soo nsfw voice teasing-slow
+                //   /co char Soo nsfw add-kink voice-notes
+                //   /co char Soo nsfw remove-kink voice-notes
+                //   /co char Soo nsfw add-limit extreme-bondage
+                //   /co char Soo nsfw trust 5
+                //   /co char Soo nsfw reset
+                //   /co char list
+                //   /co char Soo nsfw platform signal_style
+                //   /co char Soo nsfw selfie on|off
+                //   /co char Soo nsfw voice-note on|off
+                //   /co char Soo nsfw custom "Karakter İzmirli, sıcak"
+                const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+                if (!cp) return 'character_profile modülü yüklenmedi.';
+
+                const charId = args[1];
+                if (!charId) {
+                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom>\n  /co char list';
+                }
+                if (charId === 'list') {
+                    const all = cp.list();
+                    const ids = Object.keys(all);
+                    if (ids.length === 0) return 'Hiç karakter profili ayarlanmamış. /co char <isim> nsfw show ile başla.';
+                    return ids.map(id => `${id}: ${all[id].voice} | kinks: ${all[id].kinks.length} | limits: ${all[id].hardLimits.length}`).join('\n');
+                }
+                const action = args[2];
+                if (action !== 'nsfw') {
+                    return 'Şu an sadece /co char <isim> nsfw <action> destekleniyor.';
+                }
+                const sub_action = args[3];
+                if (!sub_action || sub_action === 'show') {
+                    const s = cp.summary(charId);
+                    const p = cp.get(charId);
+                    return [
+                        `Karakter: ${charId}`,
+                        `Ses: ${s.voice} (${voiceTr(s.voice)})`,
+                        `Kinks: ${p.kinks.length ? p.kinks.join(', ') : '(yok)'}`,
+                        `Hard limits: ${p.hardLimits.length} (${p.hardLimits.join(', ')})`,
+                        `Trust: ${s.trust} / ${p.maxTrust} (escalate eşik: ${p.trustToEscalate})`,
+                        `Platform: ${s.platform}`,
+                        `Voice note: ${s.voiceNoteEnabled ? 'on' : 'off'}`,
+                        `Selfie: ${s.selfiePermission ? 'on' : 'off'}`,
+                        s.canEscalate ? '✅ NSFW escalation AKTİF' : '⏳ Trust eşik altında, escalation bekliyor',
+                        p.customDirective ? `Custom: ${p.customDirective}` : '',
+                    ].filter(Boolean).join('\n');
+                }
+                if (sub_action === 'voice') {
+                    const style = args[4];
+                    if (!style) return 'Kullanım: /co char <isim> nsfw voice <flirty-direct|teasing-slow|submissive-whisper|dominant-command>';
+                    const r = cp.set(charId, { voice: style });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} ses: ${style}`;
+                }
+                if (sub_action === 'add-kink' || sub_action === 'remove-kink') {
+                    const kink = args[4];
+                    if (!kink) return `Kullanım: /co char <isim> nsfw ${sub_action} <${cp.KINKS.join('|')}>`;
+                    const cur = cp.get(charId);
+                    let newKinks;
+                    if (sub_action === 'add-kink') {
+                        if (cur.kinks.includes(kink)) return `${charId} zaten ${kink} kink'ine sahip.`;
+                        newKinks = [...cur.kinks, kink];
+                    } else {
+                        if (!cur.kinks.includes(kink)) return `${charId} ${kink} kink'ine sahip değil.`;
+                        newKinks = cur.kinks.filter(k => k !== kink);
+                    }
+                    const r = cp.set(charId, { kinks: newKinks });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} kinks: ${newKinks.join(', ') || '(boş)'}`;
+                }
+                if (sub_action === 'add-limit') {
+                    const limit = args[4];
+                    if (!limit) return `Kullanım: /co char <isim> nsfw add-limit <isim>`;
+                    const cur = cp.get(charId);
+                    if (cur.hardLimits.includes(limit)) return `${charId} zaten ${limit} limit'ine sahip.`;
+                    const r = cp.set(charId, { hardLimits: [...cur.hardLimits, limit] });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} hard limits: ${r.profile.hardLimits.join(', ')}`;
+                }
+                if (sub_action === 'trust') {
+                    const amount = args[4];
+                    if (amount === 'add' || amount === '+') {
+                        const n = parseInt(args[5], 10) || 1;
+                        const t = cp.incrementTrust(charId, n);
+                        return `${charId} trust: ${t}`;
+                    }
+                    if (amount === 'set') {
+                        // Direct set — tests/reset için
+                        const n = parseInt(args[5], 10);
+                        if (!Number.isFinite(n) || n < 0) return 'Geçerli bir sayı gerekli.';
+                        const max = cp.get(charId).maxTrust;
+                        const target = Math.min(n, max);
+                        if (globalThis.__co_characterProfile) {
+                            // _trust field'ına doğrudan set etmek için set() ile
+                            // trustToEscalate değiştirip incrementTrust ile doldur
+                            // yerine, modül API'sına public method eklemek daha temiz.
+                            // Şimdilik: önce trustToEscalate'i düşür, increment
+                            // yaparak set et, sonra geri yükle.
+                            const cur = cp.get(charId);
+                            const origThreshold = cur.trustToEscalate;
+                            cp.set(charId, { trustToEscalate: 0 });
+                            cp.incrementTrust(charId, target);
+                            cp.set(charId, { trustToEscalate: origThreshold });
+                        }
+                        return `${charId} trust set: ${cp.getTrust(charId)}`;
+                    }
+                    return 'Kullanım: /co char <isim> nsfw trust <add|set> [n]';
+                }
+                if (sub_action === 'reset') {
+                    const r = cp.reset(charId);
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} profile default'a sıfırlandı (trust 0).`;
+                }
+                if (sub_action === 'platform') {
+                    const platform = args[4];
+                    if (!platform) return `Kullanım: /co char <isim> nsfw platform <${cp.PLATFORM_PREFS.join('|')}>`;
+                    const r = cp.set(charId, { platformPrefs: platform });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} platform: ${platform}`;
+                }
+                if (sub_action === 'selfie') {
+                    const on = args[4];
+                    if (on !== 'on' && on !== 'off') return 'Kullanım: /co char <isim> nsfw selfie <on|off>';
+                    const r = cp.set(charId, { selfiePermission: on === 'on' });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} selfie: ${on}`;
+                }
+                if (sub_action === 'voice-note' || sub_action === 'voicenote') {
+                    const on = args[4];
+                    if (on !== 'on' && on !== 'off') return 'Kullanım: /co char <isim> nsfw voice-note <on|off>';
+                    const r = cp.set(charId, { voiceNoteEnabled: on === 'on' });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} voice note: ${on}`;
+                }
+                if (sub_action === 'custom') {
+                    const text = (args[4] || '').replace(/^["']|["']$/g, '');
+                    if (!text) return 'Kullanım: /co char <isim> nsfw custom "direktif metni"';
+                    const r = cp.set(charId, { customDirective: text });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} custom directive set: ${text.slice(0, 60)}${text.length > 60 ? '...' : ''}`;
+                }
+                return 'Kullanım: /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom>';
             }
             if (sub === 'tinder') {
                 // v0.8.2: /co tinder <action> [args...]
