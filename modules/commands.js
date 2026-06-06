@@ -365,13 +365,21 @@ export function registerAllCommands(orch) {
                 //   /co char Soo nsfw selfie on|off
                 //   /co char Soo nsfw voice-note on|off
                 //   /co char Soo nsfw custom "Karakter İzmirli, sıcak"
-                const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+                // v0.8.7 fix: cp lookup öncelik sırası:
+                // 1) globalThis.__co_characterProfile (namespace pattern)
+                // 2) MOD.character_profile (doğrudan modül referansı, en güvenilir)
+                // 3) globalThis.__co_characterProfileRef (debug ref, init tarafından set)
+                // Hata mesajı verbose: her üç kaynağın durumunu da logla
+                const cp =
+                    (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile)
+                    || (typeof MOD !== 'undefined' && MOD.character_profile)
+                    || (typeof globalThis !== 'undefined' && globalThis.__co_characterProfileRef);
                 if (!cp) {
-                    // v0.8.7 debug: extension reload loop ya da module init sırası sorunu olabilir.
-                    // console.error ile gerçek değeri logla ki root cause teşhis edilebilsin.
-                    const modAvail = typeof MOD?.character_profile !== 'undefined';
-                    console.error('[Companion Orchestrator] /co char: __co_characterProfile missing. MOD.character_profile:', modAvail, 'MOD.character_profile.init:', typeof MOD?.character_profile?.init);
-                    return `character_profile modülü yüklenmedi (namespace yok). index.js'de modules array'inde kayıtlı mı kontrol et. (MOD.character_profile tanımlı: ${modAvail})`;
+                    const ns = typeof globalThis !== 'undefined' && globalThis.__co_characterProfile;
+                    const nsRef = typeof globalThis !== 'undefined' && globalThis.__co_characterProfileRef;
+                    const modAvail = typeof MOD !== 'undefined' && typeof MOD.character_profile !== 'undefined';
+                    console.error('[Companion Orchestrator] /co char: cp missing. namespace:', !!ns, 'namespaceRef:', !!nsRef, 'MOD.character_profile:', modAvail, 'MOD.character_profile.init:', typeof MOD?.character_profile?.init);
+                    return `character_profile modülü yüklenmedi. namespace: ${!!ns}, MOD: ${modAvail}, ref: ${!!nsRef}. ST cache reload (Cmd+Shift+R) gerekebilir.`;
                 }
 
                 let charId = args[1];
