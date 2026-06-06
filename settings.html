@@ -425,6 +425,93 @@
             </div>
 
             <hr />
+            <!-- ============ CHARACTER PROFILE (v0.8.6) UI ============ -->
+            <div class="co-module-panel" data-module="character_profile">
+                <h4>🎭 Karakter NSFW Profili</h4>
+                <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
+                    Aktif karakter için ses üslubu, kink'ler, hard limit'ler ve trust seviyesi.
+                </p>
+                <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                    <label style="flex: 1; min-width: 130px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Karakter ID</span>
+                        <input id="co_char_id" type="text" class="text_pole" placeholder="(aktif karakter)" readonly style="width: 100%; font-family: monospace; font-size: 0.9em;" />
+                    </label>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+                    <label style="flex: 1; min-width: 130px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Ses üslubu</span>
+                        <select id="co_char_voice" class="text_pole" style="width: 100%;">
+                            <option value="flirty-direct">💋 Doğrudan flörtöz</option>
+                            <option value="teasing-slow">🐢 Yavaş gerilim</option>
+                            <option value="submissive-whisper">😇 Yumuşak fısıltı</option>
+                            <option value="dominant-command">👑 Emir veren</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+                    <label style="flex: 1; min-width: 130px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Platform tercihi</span>
+                        <select id="co_char_platform" class="text_pole" style="width: 100%;">
+                            <option value="tinder_chat">💗 Tinder sohbet</option>
+                            <option value="whatsapp_style">💬 WhatsApp</option>
+                            <option value="telegram_style">✈️ Telegram</option>
+                            <option value="signal_style">🔒 Signal</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="co-row" style="margin-top: 6px;">
+                    <span style="display:block; font-size:0.85em; opacity:0.8; margin-bottom: 4px;">Kink'ler (istekler):</span>
+                    <div id="co_char_kinks" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="voice-notes" /> 🎙️ Sesli mesaj</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="selfies" /> 📸 Selfie</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="intimate-texting" /> 💋 Samimi yazışma</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="roleplay" /> 🎬 Rol yapma</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="pet-play" /> 🐾 Evcil hayvan oyunu</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="switch-dynamic" /> 🔄 Switch dinamiği</label>
+                    </div>
+                </div>
+                <div class="co-row" style="margin-top: 6px;">
+                    <span style="display:block; font-size:0.85em; opacity:0.8; margin-bottom: 4px;">Hard limit'ler (yasak):</span>
+                    <div id="co_char_limits" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,80,80,0.3); border-radius: 12px;"><input type="checkbox" data-limit="violence" /> 🚫 Şiddet</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,80,80,0.3); border-radius: 12px;"><input type="checkbox" data-limit="degradation" /> 🚫 Aşağılama</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,80,80,0.3); border-radius: 12px;"><input type="checkbox" data-limit="non-consent" /> 🚫 Rıza dışı</label>
+                    </div>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px;">
+                    <label style="flex: 1; min-width: 130px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Trust eşik (0-10): <strong id="co_char_threshold_val">5</strong></span>
+                        <input id="co_char_threshold" type="range" min="0" max="10" value="5" style="width: 100%;" />
+                    </label>
+                </div>
+                <div id="co_char_trust_display" style="margin-top: 6px; padding: 6px 8px; background: rgba(127,127,127,0.1); border-radius: 4px; font-size: 0.85em;">
+                    Trust: <strong id="co_char_trust_val">0</strong> / 10
+                    <span id="co_char_trust_status" style="margin-left: 8px; opacity: 0.7;">⏳ escalation bekliyor</span>
+                </div>
+                <div class="co-row" style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+                    <button id="co_char_save" class="menu_button" style="flex: 1; min-width: 100px;">
+                        <i class="fa-solid fa-floppy-disk"></i> Kaydet
+                    </button>
+                    <button id="co_char_trust_add" class="menu_button" style="flex: 1; min-width: 100px;">
+                        <i class="fa-solid fa-plus"></i> Trust +1
+                    </button>
+                    <button id="co_char_reset" class="menu_button" style="flex: 1; min-width: 100px; background: rgba(255,80,80,0.2);">
+                        <i class="fa-solid fa-rotate-left"></i> Sıfırla
+                    </button>
+                </div>
+                <div class="co-row" style="margin-top: 6px;">
+                    <label style="font-size: 0.85em;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Özel direktif (serbest):</span>
+                        <textarea id="co_char_custom" class="text_pole" rows="2" placeholder="örn: Karakter İzmirli, 25 yaşında, üniversite öğrencisi..." style="width: 100%; font-family: inherit; font-size: 0.9em;"></textarea>
+                    </label>
+                </div>
+                <div class="co-row" style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                    <label class="checkbox_label" style="font-size: 0.85em;"><input id="co_char_selfie" type="checkbox" /> Selfie isteği açık</label>
+                    <label class="checkbox_label" style="font-size: 0.85em;"><input id="co_char_voicenote" type="checkbox" /> Sesli mesaj yanıtı açık</label>
+                </div>
+            </div>
+
+            <hr />
             <!-- ============ SPICE / HEAT METER UI ============ -->
             <div class="co-module-panel" data-module="spice">
                 <h4>🌶️ Spice / Heat Meter</h4>

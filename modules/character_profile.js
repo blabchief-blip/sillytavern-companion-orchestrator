@@ -132,6 +132,202 @@ export const characterProfileModule = {
     HARD_LIMITS_DEFAULT,
     PLATFORM_PREFS,
 
+    /**
+     * v0.8.6: settings.html paneli için ui.mount + ui.refresh
+     * modül mount ettiğinde bu çağrılır. mountModularSettings generic
+     * dispatcher'ı (modules/ui.js) bunu otomatik çağırır.
+     */
+    ui: {
+        mount(orch, ctx, deps) {
+            if (!deps?.$) return;
+            const $ = deps.$;
+            const self = characterProfileModule;
+
+            // Karakter ID'sini aktüel karakter olarak doldur
+            const charId = ctx?.characterId || self._currentCharId || '';
+            $('#co_char_id').val(charId);
+
+            // Voice select populate
+            const $voice = $('#co_char_voice');
+            $voice.empty();
+            VOICE_STYLES.forEach(v => {
+                const label = ({
+                    'flirty-direct': '💋 Doğrudan flörtöz',
+                    'teasing-slow': '🐢 Yavaş gerilim',
+                    'submissive-whisper': '😇 Yumuşak fısıltı',
+                    'dominant-command': '👑 Emir veren',
+                })[v] || v;
+                $voice.append(`<option value="${v}">${label}</option>`);
+            });
+
+            // Platform select populate
+            const $platform = $('#co_char_platform');
+            $platform.empty();
+            PLATFORM_PREFS.forEach(p => {
+                const label = ({
+                    'tinder_chat': '💗 Tinder sohbet',
+                    'whatsapp_style': '💬 WhatsApp',
+                    'telegram_style': '✈️ Telegram',
+                    'signal_style': '🔒 Signal',
+                })[p] || p;
+                $platform.append(`<option value="${p}">${label}</option>`);
+            });
+
+            // Kinks / limits checkbox wiring
+            $('#co_char_kinks input[data-kink]').on('change', function () {
+                const kink = $(this).data('kink');
+                const cur = self.get(charId);
+                let kinks = [...cur.kinks];
+                if (this.checked) {
+                    if (!kinks.includes(kink)) kinks.push(kink);
+                } else {
+                    kinks = kinks.filter(k => k !== kink);
+                }
+                const r = self.set(charId, { kinks });
+                if (!r.ok) {
+                    // Hard limit clash veya invalid → geri al
+                    this.checked = !this.checked;
+                    console.warn('[character_profile] set failed:', r.error);
+                }
+                self.ui.refresh(orch);
+            });
+            $('#co_char_limits input[data-limit]').on('change', function () {
+                const limit = $(this).data('limit');
+                const cur = self.get(charId);
+                let limits = [...cur.hardLimits];
+                if (this.checked) {
+                    if (!limits.includes(limit)) limits.push(limit);
+                } else {
+                    limits = limits.filter(l => l !== limit);
+                }
+                const r = self.set(charId, { hardLimits: limits });
+                if (!r.ok) {
+                    this.checked = !this.checked;
+                    console.warn('[character_profile] hardLimits set failed:', r.error, JSON.stringify(limits));
+                } else {
+                    self.ui.refresh(orch);
+                }
+                self.ui.refresh(orch);
+            });
+
+            // Voice + platform change
+            $voice.on('change', function () {
+                const r = self.set(charId, { voice: $(this).val() });
+                if (!r.ok) console.warn('[character_profile] voice set failed:', r.error);
+            });
+            $platform.on('change', function () {
+                const r = self.set(charId, { platformPrefs: $(this).val() });
+                if (!r.ok) console.warn('[character_profile] platform set failed:', r.error);
+            });
+
+            // Trust threshold slider
+            const $threshold = $('#co_char_threshold');
+            const $thresholdVal = $('#co_char_threshold_val');
+            $threshold.on('input', function () {
+                $thresholdVal.text($(this).val());
+            });
+            $threshold.on('change', function () {
+                const t = parseInt($(this).val(), 10);
+                const r = self.set(charId, { trustToEscalate: t });
+                if (!r.ok) console.warn('[character_profile] threshold set failed:', r.error);
+            });
+
+            // Save button → trust +1 ile kaydet
+            $('#co_char_save').off('click').on('click', function () {
+                const custom = $('#co_char_custom').val();
+                const selfie = $('#co_char_selfie').is(':checked');
+                const voiceNote = $('#co_char_voicenote').is(':checked');
+                const r = self.set(charId, {
+                    customDirective: custom,
+                    selfiePermission: selfie,
+                    voiceNoteEnabled: voiceNote,
+                });
+                if (!r.ok) {
+                    console.warn('[character_profile] save failed:', r.error);
+                } else if (deps?.saveSettings) {
+                    deps.saveSettings();
+                }
+                self.ui.refresh(orch);
+            });
+
+            // Trust +1 button
+            $('#co_char_trust_add').off('click').on('click', function () {
+                self.incrementTrust(charId, 1);
+                self.ui.refresh(orch);
+            });
+
+            // Reset button
+            $('#co_char_reset').off('click').on('click', function () {
+                if (confirm('Karakter profili sıfırlansın mı? Trust da 0 olacak.')) {
+                    self.reset(charId);
+                    self.ui.refresh(orch);
+                }
+            });
+
+            // Custom directive, selfie, voice-note inputs
+            $('#co_char_custom').on('input', function () {
+                // Debounce koyma — her tuşta set et
+                self.set(charId, { customDirective: $(this).val() });
+            });
+            $('#co_char_selfie').on('change', function () {
+                self.set(charId, { selfiePermission: this.checked });
+            });
+            $('#co_char_voicenote').on('change', function () {
+                self.set(charId, { voiceNoteEnabled: this.checked });
+            });
+
+            // Initial populate
+            self.ui.refresh(orch);
+        },
+
+        refresh(orch) {
+            const charId = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext)
+                ? SillyTavern.getContext()?.characterId
+                : null;
+            if (!charId) return;
+            const p = characterProfileModule.get(charId);
+            const t = characterProfileModule.getTrust(charId);
+            // Önce global jQuery ($), sonra window.$ fallback.
+            // Test ortamında globalThis.$ set edilmiş olabilir.
+            const $ = (typeof globalThis !== 'undefined' && globalThis.$)
+                || (typeof window !== 'undefined' && (window.jQuery || window.$));
+            if (!$) return;
+            const $voice = $('#co_char_voice');
+            if ($voice.length && $voice.val() !== p.voice) $voice.val(p.voice);
+            const $platform = $('#co_char_platform');
+            if ($platform.length && $platform.val() !== p.platformPrefs) $platform.val(p.platformPrefs);
+            // Kinks
+            $('#co_char_kinks input[data-kink]').each(function () {
+                this.checked = p.kinks.includes($(this).data('kink'));
+            });
+            // Limits
+            $('#co_char_limits input[data-limit]').each(function () {
+                this.checked = p.hardLimits.includes($(this).data('limit'));
+            });
+            // Threshold
+            const $thr = $('#co_char_threshold');
+            if ($thr.length && parseInt($thr.val(), 10) !== p.trustToEscalate) {
+                $thr.val(p.trustToEscalate);
+                $('#co_char_threshold_val').text(p.trustToEscalate);
+            }
+            // Trust display
+            const $trust = $('#co_char_trust_val');
+            if ($trust.length) $trust.text(t.toFixed(1));
+            const canEsc = characterProfileModule.canEscalate(charId);
+            const $status = $('#co_char_trust_status');
+            if ($status.length) {
+                $status.text(canEsc ? '✅ escalation AKTİF' : '⏳ escalation bekliyor');
+            }
+            // Custom + toggle
+            const $custom = $('#co_char_custom');
+            if ($custom.length && $custom.val() !== p.customDirective) $custom.val(p.customDirective || '');
+            const $selfie = $('#co_char_selfie');
+            if ($selfie.length && $selfie.is(':checked') !== p.selfiePermission) $selfie.prop('checked', p.selfiePermission);
+            const $vn = $('#co_char_voicenote');
+            if ($vn.length && $vn.is(':checked') !== p.voiceNoteEnabled) $vn.prop('checked', p.voiceNoteEnabled);
+        },
+    },
+
     init(orch) {
         _orch = orch;
         _ctx = typeof SillyTavern !== 'undefined' ? SillyTavern.getContext() : null;
@@ -158,9 +354,10 @@ export const characterProfileModule = {
         store[charId].nsfwProfile = {
             ...current,
             ...profile,
-            // hardLimits birleştir (override değil, union)
+            // hardLimits explicit set edilmişse replace (kullanıcı override eder),
+            // undefined ise mevcut (default) kalsın. UI toggle tam kontrol verir.
             hardLimits: profile.hardLimits
-                ? Array.from(new Set([...current.hardLimits, ...profile.hardLimits]))
+                ? Array.from(new Set(profile.hardLimits))
                 : current.hardLimits,
             kinks: profile.kinks
                 ? profile.kinks.filter(k => !current.hardLimits.includes(k))

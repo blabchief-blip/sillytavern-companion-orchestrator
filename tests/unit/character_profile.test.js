@@ -90,12 +90,26 @@ describe('character_profile — get/set/reset', () => {
         assert.match(r.error, /hard limit/i);
     });
 
-    test('set() hard limits extend et (union)', () => {
+    test('set() hard limits explicit replace (user override)', () => {
+        // v0.8.6: hardLimits artık UNION değil — explicit replace.
+        // Kullanıcı tüm listeyi gönderir, default limitler korunmaz.
+        // (UI checkbox toggle pattern'i ile uyumlu.)
         const r = characterProfileModule.set('char-1', { hardLimits: ['extreme-bondage'] });
         assert.equal(r.ok, true);
         const p = characterProfileModule.get('char-1');
         assert.ok(p.hardLimits.includes('extreme-bondage'));
-        assert.ok(p.hardLimits.includes('violence'));  // default kaldı
+        // Default limit artık otomatik değil — sadece explicit set edileni var
+        assert.ok(!p.hardLimits.includes('violence'), 'violence default artık union edilmiyor');
+    });
+
+    test('set() hardLimits undefined → mevcut korunur', () => {
+        // İlk set: extreme-bondage ekle
+        characterProfileModule.set('char-1', { hardLimits: ['extreme-bondage'] });
+        // İkinci set: hardLimits yok → mevcut kalsın
+        characterProfileModule.set('char-1', { voice: 'teasing-slow' });
+        const p = characterProfileModule.get('char-1');
+        assert.ok(p.hardLimits.includes('extreme-bondage'));
+        assert.ok(!p.hardLimits.includes('violence'));  // sadece extreme-bondage
     });
 
     test('reset() default profile\'a döndürür', () => {
