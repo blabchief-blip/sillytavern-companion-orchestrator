@@ -233,7 +233,7 @@
   "104": {
     "class_type": "IPAdapterInsightFaceLoader",
     "inputs": {
-      "provider": "CPU"
+      "provider": "ROCM"
     }
   },
   "105": {

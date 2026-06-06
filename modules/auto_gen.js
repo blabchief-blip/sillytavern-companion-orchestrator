@@ -940,7 +940,7 @@ class AutoGen {
     const ipm = NID(), clv = NID(), ins = NID(), lim = NID();
     workflow[ipm] = { class_type: 'IPAdapterModelLoader', inputs: { ipadapter_file: 'ip-adapter-faceid-plusv2_sdxl.bin' } };
     workflow[clv] = { class_type: 'CLIPVisionLoader', inputs: { clip_name: 'CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors' } };
-    workflow[ins] = { class_type: 'IPAdapterInsightFaceLoader', inputs: { provider: 'CPU' } };
+    workflow[ins] = { class_type: 'IPAdapterInsightFaceLoader', inputs: { provider: 'ROCM' } };
     workflow[lim] = { class_type: 'LoadImage', inputs: { image: refName } };
     const w = (typeof this.settings.faceIdWeight === 'number') ? this.settings.faceIdWeight : 0.85;
     const loraS = (typeof this.settings.faceIdLoraStrength === 'number') ? this.settings.faceIdLoraStrength : 0.7;

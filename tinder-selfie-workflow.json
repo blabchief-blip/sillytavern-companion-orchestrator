@@ -86,7 +86,7 @@
     "_meta": {"title": "Referans Fotoğraf (eşleşme yüzü)"}
   },
   "65": {
-    "inputs": {"provider": "CPU"},
+    "inputs": {"provider": "ROCM"},
     "class_type": "IPAdapterInsightFaceLoader",
     "_meta": {"title": "InsightFace Loader"}
   },
