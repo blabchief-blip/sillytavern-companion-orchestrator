@@ -100,6 +100,37 @@ describe('/co char — yardım & listeleme', () => {
         assert.match(out, /Kullanım/);
     });
 
+    test('charId yok + ST aktif karakter → otomatik algıla', async () => {
+        // Test sırasında ayrı bir beforeEach'le yeni mock kur
+        resetStMocks();
+        installStMocks({
+            characterId: 'char-1',
+            characters: [{ id: 'char-1', name: 'Test Char' }],
+        });
+        // orch'u yeniden kur
+        orch = buildOrchestrator();
+        const ctx2 = bindOrchestrator(orch);
+        orch.ctx = ctx2;
+        const origAddCmd = ctx2.SlashCommandParser.addCommandObject;
+        ctx2.SlashCommandParser.addCommandObject = (cmd) => {
+            origAddCmd(cmd);
+            callback = cmd.callback;
+        };
+        registerAllCommands(orch);
+
+        const out = await callback(
+            { _scope: { parent: null }, _hasUnnamedArgument: true },
+            ['char', 'nsfw', 'show'],
+        );
+        assert.match(out, /Karakter: Test Char/);
+    });
+
+    test('charId yok + ST boş → kullanım', async () => {
+        // Empty characters list — auto-detect fails
+        const out = await callCommand(['char']);
+        assert.match(out, /Kullanım/);
+    });
+
     test('charId=list → tüm profilleri listele', async () => {
         characterProfileModule.set('Soo', { voice: 'teasing-slow' });
         characterProfileModule.set('Ashley', { voice: 'dominant-command' });

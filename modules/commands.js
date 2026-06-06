@@ -355,9 +355,46 @@ export function registerAllCommands(orch) {
                 const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
                 if (!cp) return 'character_profile modülü yüklenmedi.';
 
-                const charId = args[1];
+                let charId = args[1];
+                // v0.8.6: Aktif karakteri otomatik algıla
+                // - /co char (charId yok) → ST aktif karakter
+                // - /co char nsfw <action> (args[1]='nsfw' gibi reserved keyword) → ST aktif karakter
+                // 'nsfw' reserved keyword, charId olarak kullanılmamalı.
+                if (!charId || charId === 'nsfw' || charId === 'list') {
+                    // 'list' için otomatik algılama yapma (kullanıcı list istiyor)
+                    if (charId === 'list') {
+                        // aşağıdaki list handler'ı çalışacak
+                    } else {
+                        try {
+                            const stCtx = (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext?.());
+                            if (stCtx) {
+                                const cid = stCtx.characterId;
+                                if (cid !== undefined && cid !== null) {
+                                    const chars = stCtx.characters;
+                                    if (Array.isArray(chars)) {
+                                        let c = chars.find(x => x && x.id === cid);
+                                        if (!c && chars[cid]) c = chars[cid];
+                                        if (c?.name) {
+                                            if (charId === 'nsfw') {
+                                                // Kullanıcı /co char nsfw <action> yazdı.
+                                                // charId atlandı, nsfw action olarak kullanıldı.
+                                                // args dizisini splice et: ['char', 'nsfw', 'show']
+                                                // → ['char', 'Test Char', 'nsfw', 'show']
+                                                args.splice(1, 0, c.name);
+                                                charId = c.name;
+                                            } else {
+                                                // /co char (charId yok) → sadece charId set et
+                                                charId = c.name;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_) { /* best-effort */ }
+                    }
+                }
                 if (!charId) {
-                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>\n  /co char list';
+                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>\n  /co char list\n  (veya ST\'de aktif karakter seç, /co char <isim> yazmadan direkt nsfw yazabilirsin)';
                 }
                 if (charId === 'list') {
                     const all = cp.list();
