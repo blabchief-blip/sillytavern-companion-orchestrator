@@ -2267,6 +2267,7 @@ const orchestrator = {
                                 await this._insertSelfieIntoChat(r.imageUrl, r.charName, preset);
                             } catch (e) {
                                 console.warn('[Tinder] Insert selfie into chat failed:', e);
+                                $status.text(`⚠️ Üretildi ama chat'e eklenemedi: ${e?.message || e}`).css('opacity', '0.9');
                             }
                         } else {
                             $status.text(`❌ ${r.error}`).css('opacity', '0.9');
@@ -2351,21 +2352,16 @@ const orchestrator = {
         });
 
         // 2) ST'nin görsel deposuna kaydet (/api/images/upload → kalıcı path).
-        //    Eski kod addOneMessage'a {name,role,content,image} veriyordu — ST
-        //    1.18 bunu kabul etmiyor, mesaj boş satır olarak düşüyordu. Doğru
-        //    yol: görseli upload edip extra.media ile gerçek mesaj objesi kurmak
-        //    (built-in Stable Diffusion extension'ın yaptığı gibi).
-        let token = '';
-        try {
-            const tr = await fetch('/csrf-token', { credentials: 'include' });
-            if (tr.ok) token = (await tr.json())?.token || '';
-        } catch (_) { /* token yoksa endpoint reddedebilir; aşağıda yakalanır */ }
-
+        //    CSRF için ST'nin kendi getRequestHeaders()'ını kullan (manuel
+        //    /csrf-token güvenilmez olabiliyordu). Built-in Stable Diffusion
+        //    extension'ın birebir kalıbı.
+        const headers = (typeof ctx.getRequestHeaders === 'function')
+            ? ctx.getRequestHeaders()
+            : { 'Content-Type': 'application/json' };
         const safeName = String(charName || 'tinder').replace(/[^\w-]/g, '_');
         const upResp = await fetch('/api/images/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { 'X-CSRF-Token': token } : {}) },
-            credentials: 'include',
+            headers,
             body: JSON.stringify({
                 image: base64,
                 format: 'png',
@@ -2379,7 +2375,10 @@ const orchestrator = {
         }
         const { path } = await upResp.json();
 
-        // 3) Düzgün ST mesaj objesi (extra.media attachment) + chat'e ekle.
+        // 3) Düzgün ST mesaj objesi (SADECE extra.media — redundant extra.image
+        //    auto-wrapper ile çakışıp boş render'a yol açabiliyordu). SD
+        //    extension'ın sırası: push → MESSAGE_RECEIVED → addOneMessage →
+        //    CHARACTER_MESSAGE_RENDERED → saveChat.
         const caption = `*${charName} sends a selfie (${preset})*`;
         const message = {
             name: charName,
@@ -2392,11 +2391,14 @@ const orchestrator = {
                 media_display: 'gallery',
                 media_index: 0,
                 inline_image: false,
-                image: path, // legacy fallback (eski renderer'lar)
             },
         };
         ctx.chat.push(message);
+        const messageId = ctx.chat.length - 1;
+        const ev = ctx.eventSource, ET = ctx.eventTypes || {};
+        try { await ev?.emit?.(ET.MESSAGE_RECEIVED || 'message_received', messageId, 'extension'); } catch (_) {}
         if (typeof ctx.addOneMessage === 'function') ctx.addOneMessage(message);
+        try { await ev?.emit?.(ET.CHARACTER_MESSAGE_RENDERED || 'character_message_rendered', messageId, 'extension'); } catch (_) {}
         if (typeof ctx.saveChat === 'function') { try { await ctx.saveChat(); } catch (_) {} }
 
         try { URL.revokeObjectURL(imageBlobUrl); } catch (_) {}
