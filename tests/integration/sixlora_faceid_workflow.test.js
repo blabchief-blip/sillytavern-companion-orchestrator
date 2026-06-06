@@ -39,10 +39,10 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
         for (const id of ['100', '101', '102', '103']) {
             assert.ok(workflow[id], `Node ${id} eksik`);
         }
-        assert.equal(workflow['100'].class_type, 'IPAdapterUnifiedLoaderFaceID');
+        assert.equal(workflow['100'].class_type, 'IPAdapterUnifiedLoader');
         assert.equal(workflow['101'].class_type, 'CLIPVisionLoader');
         assert.equal(workflow['102'].class_type, 'LoadImage');
-        assert.equal(workflow['103'].class_type, 'IPAdapterApply');
+        assert.equal(workflow['103'].class_type, 'IPAdapterApplyFaceID');
     });
 
     test('KSampler (3) artık IPAdapter çıkışına bağlı (38 değil)', () => {
@@ -60,10 +60,12 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
     test('IPAdapter Apply bağlantıları doğru', () => {
         if (!workflow) return;
         const ip = workflow['103'].inputs;
-        // model ← IPAdapter loader (100, 0) — FaceID patched model
+        // model ← IPAdapter UnifiedLoader (100, 0) — FaceID patched model
         assert.deepEqual(ip.model, ['100', 0]);
-        // ipadapter ← IPAdapter loader (100, 1)
+        // ipadapter ← IPAdapter UnifiedLoader (100, 1) — preset=FACEID seçildi
         assert.deepEqual(ip.ipadapter, ['100', 1]);
+        // preset kontrolü (UnifiedLoader üzerinden FaceID seçili)
+        assert.equal(workflow['100'].inputs.preset, 'FACEID');
         // image ← LoadImage (102, 0) — referans avatar
         assert.deepEqual(ip.image, ['102', 0]);
         // clip_vision ← CLIPVisionLoader (101, 0)

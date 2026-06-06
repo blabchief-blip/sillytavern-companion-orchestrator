@@ -181,11 +181,9 @@
     }
   },
   "100": {
-    "class_type": "IPAdapterUnifiedLoaderFaceID",
+    "class_type": "IPAdapterUnifiedLoader",
     "inputs": {
-      "preset": "FACEID",
-      "lora_strength": 0.8,
-      "provider": "CPU"
+      "preset": "FACEID"
     }
   },
   "101": {
@@ -201,7 +199,7 @@
     }
   },
   "103": {
-    "class_type": "IPAdapterApply",
+    "class_type": "IPAdapterApplyFaceID",
     "inputs": {
       "weight": "*ipawt*",
       "noise": 0.1,
