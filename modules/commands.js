@@ -396,7 +396,12 @@ export function registerAllCommands(orch) {
                                                 args.splice(1, 0, c.name);
                                                 charId = c.name;
                                             } else {
-                                                // /co char (charId yok) → sadece charId set et
+                                                // v0.8.7 fix: /co char (no-arg) → ST aktif karakter.
+                                                // charId sadece set etmek args[2]='nsfw' eylemini es geçerdi
+                                                // → "Şu an sadece /co char <isim> nsfw..." hatası.
+                                                // Çözüm: args splice et → ['char'] → ['char', 'Test Char', 'nsfw']
+                                                // sonra sub_action=args[3] undefined → show default.
+                                                args.splice(1, 0, c.name, 'nsfw');
                                                 charId = c.name;
                                             }
                                         }
