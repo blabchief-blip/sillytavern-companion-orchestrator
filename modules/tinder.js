@@ -690,11 +690,16 @@ export const tinderModule = {
 
         // Build prompt from preset + card metadata
         const promptPreset = opts.preset || 'casual_selfie';
-        const promptParts = SELFIE_PROMPTS[promptPreset] || SELFIE_PROMPTS.casual_selfie;
+        const rawParts = SELFIE_PROMPTS[promptPreset] || SELFIE_PROMPTS.casual_selfie;
+        // SELFIE_PROMPTS değerleri .join(', ')'lı STRING. Eskiden `...rawParts`
+        // ile spread edilince string harf harf bölünüyordu (bozuk prompt).
+        // Hem string hem array'i güvenli ele al.
+        const presetText = Array.isArray(rawParts) ? rawParts.join(', ') : String(rawParts);
+        const ethnicity = (card.ethnicity || '').replace(/_/g, ' ').trim();
         const prompt = [
-            `portrait of ${card.name}, a ${card.age}-year-old ${(card.ethnicity || '').replace(/_/g, ' ')} woman`,
-            ...promptParts,
-        ].join(', ');
+            `portrait of ${card.name}, a ${card.age}-year-old${ethnicity ? ' ' + ethnicity : ''} woman`,
+            presetText,
+        ].filter(Boolean).join(', ');
         const negative = [
             'nude, naked, porn, explicit',
             'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
@@ -1042,7 +1047,7 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*lorawt3*': 0.4,
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
-        '*ipweight*': 0.85,
+        '*ipweight*': 1.0, // faceid-plusv2 için kimlik gücü (0.85 düşük benzerlik veriyordu)
         '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,
