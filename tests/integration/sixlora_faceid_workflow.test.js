@@ -34,46 +34,66 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
         assert.ok(typeof workflow === 'object');
     });
 
-    test('4 yeni IPAdapter/FaceID node var (100-103)', () => {
+    test('5 yeni IPAdapter/FaceID node var (100-104)', () => {
         if (!workflow) return;
-        for (const id of ['100', '101', '102', '103']) {
+        for (const id of ['100', '101', '102', '103', '104']) {
             assert.ok(workflow[id], `Node ${id} eksik`);
         }
-        assert.equal(workflow['100'].class_type, 'IPAdapterUnifiedLoader');
+        // cubiq FaceID-aware loader seması (mevcut tinder-selfie-workflow.json ile ayni)
+        assert.equal(workflow['100'].class_type, 'IPAdapterModelLoader');
         assert.equal(workflow['101'].class_type, 'CLIPVisionLoader');
         assert.equal(workflow['102'].class_type, 'LoadImage');
-        assert.equal(workflow['103'].class_type, 'IPAdapterApplyFaceID');
+        assert.equal(workflow['103'].class_type, 'IPAdapterFaceID');
+        assert.equal(workflow['104'].class_type, 'IPAdapterInsightFaceLoader');
     });
 
-    test('KSampler (3) artık IPAdapter çıkışına bağlı (38 değil)', () => {
+    test('KSampler (3) IPAdapter model çıkışını alır, conditioning doğrudan CLIPTextEncode\'den', () => {
         if (!workflow) return;
         const ks = workflow['3'];
         assert.equal(ks.class_type, 'KSampler');
-        // model, positive, negative artık [103, x] olmalı (IPAdapter Apply çıkışı)
+        // cubiq IPAdapterFaceID sadece MODEL'i patch eder, conditioning'i değil.
+        // model ← 103, 0 (FaceID patched)
         assert.deepEqual(ks.inputs.model, ['103', 0]);
-        assert.deepEqual(ks.inputs.positive, ['103', 1]);
-        assert.deepEqual(ks.inputs.negative, ['103', 2]);
-        // Eski LoraLoader chain (38) artık KSampler'a değil, IPAdapter'a bağlı
-        // 103.model = [100, 0] (IPAdapter loader), ayrı yol
+        // positive ← 6, 0 (CLIPTextEncode doğrudan, IPAdapter'ı bypass)
+        assert.deepEqual(ks.inputs.positive, ['6', 0]);
+        // negative ← 7, 0 (CLIPTextEncode doğrudan)
+        assert.deepEqual(ks.inputs.negative, ['7', 0]);
     });
 
-    test('IPAdapter Apply bağlantıları doğru', () => {
+    test('IPAdapterFaceID bağlantıları doğru (cubiq seması — sadece model patch)', () => {
         if (!workflow) return;
         const ip = workflow['103'].inputs;
-        // model ← IPAdapter UnifiedLoader (100, 0) — FaceID patched model
+        // model ← IPAdapterModelLoader (100, 0)
         assert.deepEqual(ip.model, ['100', 0]);
-        // ipadapter ← IPAdapter UnifiedLoader (100, 1) — preset=FACEID seçildi
-        assert.deepEqual(ip.ipadapter, ['100', 1]);
-        // preset kontrolü (UnifiedLoader üzerinden FaceID seçili)
-        assert.equal(workflow['100'].inputs.preset, 'FACEID');
-        // image ← LoadImage (102, 0) — referans avatar
+        // ipadapter ← IPAdapterModelLoader (100, 0) — aynı node, .bin loader
+        assert.deepEqual(ip.ipadapter, ['100', 0]);
+        // image ← LoadImage (102, 0)
         assert.deepEqual(ip.image, ['102', 0]);
         // clip_vision ← CLIPVisionLoader (101, 0)
         assert.deepEqual(ip.clip_vision, ['101', 0]);
-        // positive ← CLIPTextEncode positive (6, 0)
-        assert.deepEqual(ip.positive, ['6', 0]);
-        // negative ← CLIPTextEncode negative (7, 0)
-        assert.deepEqual(ip.negative, ['7', 0]);
+        // insightface ← IPAdapterInsightFaceLoader (104, 0)
+        assert.deepEqual(ip.insightface, ['104', 0]);
+        // cubiq IPAdapterFaceID conditioning input'u almaz (sadece model patch)
+        assert.equal(ip.positive, undefined, 'IPAdapterFaceID conditioning almaz (cubiq davranışı)');
+        assert.equal(ip.negative, undefined, 'IPAdapterFaceID conditioning almaz (cubiq davranışı)');
+    });
+
+    test('IPAdapterModelLoader doğru FaceID model dosyasını yükler', () => {
+        if (!workflow) return;
+        const file = workflow['100'].inputs.ipadapter_file;
+        assert.match(file, /faceid/i, 'FaceID model dosyası olmalı');
+        assert.match(file, /\.bin$/, '.bin uzantılı IPAdapter model');
+    });
+
+    test('IPAdapterFaceID FaceID-Plus v2 parametreleri mevcut', () => {
+        if (!workflow) return;
+        const ip = workflow['103'].inputs;
+        // Mevcut çalışan tinder-selfie-workflow.json'dan kopyalanan parametreler
+        assert.ok(typeof ip.weight_faceidv2 === 'number', 'weight_faceidv2 numeric olmalı');
+        assert.equal(ip.combine_embeds, 'concat');
+        assert.equal(ip.embeds_scaling, 'V only');
+        assert.ok(typeof ip.start_at === 'number');
+        assert.ok(typeof ip.end_at === 'number');
     });
 
     test('Wildcard\'lar mevcut (mevcut 6Lora + yeni FaceID)', () => {

@@ -12,12 +12,12 @@
         0
       ],
       "positive": [
-        "103",
-        1
+        "6",
+        0
       ],
       "negative": [
-        "103",
-        2
+        "7",
+        0
       ],
       "latent_image": [
         "5",
@@ -181,9 +181,9 @@
     }
   },
   "100": {
-    "class_type": "IPAdapterUnifiedLoader",
+    "class_type": "IPAdapterModelLoader",
     "inputs": {
-      "preset": "FACEID"
+      "ipadapter_file": "ip-adapter-faceid-plusv2_sdxl.bin"
     }
   },
   "101": {
@@ -199,22 +199,22 @@
     }
   },
   "103": {
-    "class_type": "IPAdapterApplyFaceID",
+    "class_type": "IPAdapterFaceID",
     "inputs": {
       "weight": "*ipawt*",
-      "noise": 0.1,
+      "weight_faceidv2": 1.5,
       "weight_type": "linear",
+      "combine_embeds": "concat",
       "start_at": 0.0,
       "end_at": 1.0,
-      "unfold_batch": false,
-      "attn_mask": null,
+      "embeds_scaling": "V only",
       "model": [
         "100",
         0
       ],
       "ipadapter": [
         "100",
-        1
+        0
       ],
       "image": [
         "102",
@@ -224,14 +224,16 @@
         "101",
         0
       ],
-      "positive": [
-        "6",
-        0
-      ],
-      "negative": [
-        "7",
+      "insightface": [
+        "104",
         0
       ]
+    }
+  },
+  "104": {
+    "class_type": "IPAdapterInsightFaceLoader",
+    "inputs": {
+      "provider": "CPU"
     }
   }
 }
