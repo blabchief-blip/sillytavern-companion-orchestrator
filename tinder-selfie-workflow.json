@@ -7,7 +7,7 @@
       "sampler_name": "*sampler*",
       "scheduler": "karras",
       "denoise": "*denoise*",
-      "model": ["38", 0],
+      "model": ["39", 0],
       "positive": ["6", 0],
       "negative": ["7", 0],
       "latent_image": ["5", 0]
@@ -26,12 +26,12 @@
     "_meta": {"title": "Boş Gizli Görüntü"}
   },
   "6": {
-    "inputs": {"text": "*input*", "clip": ["38", 1]},
+    "inputs": {"text": "*input*", "clip": ["39", 1]},
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "Pozitif İstem"}
   },
   "7": {
-    "inputs": {"text": "*ninput*", "clip": ["38", 1]},
+    "inputs": {"text": "*ninput*", "clip": ["39", 1]},
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "Negatif İstem"}
   },
@@ -64,6 +64,11 @@
     "inputs": {"lora_name": "*lora4*", "strength_model": "*lorawt4*", "strength_clip": 1, "model": ["37", 0], "clip": ["37", 1]},
     "class_type": "LoraLoader",
     "_meta": {"title": "LoRA - Slot 4"}
+  },
+  "39": {
+    "inputs": {"lora_name": "*lora5*", "strength_model": "*lorawt5*", "strength_clip": 1, "model": ["38", 0], "clip": ["38", 1]},
+    "class_type": "LoraLoader",
+    "_meta": {"title": "LoRA - Slot 5"}
   },
   "64": {
     "inputs": {"image": "*refimage*"},

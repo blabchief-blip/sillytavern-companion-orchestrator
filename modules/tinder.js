@@ -1234,17 +1234,25 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*sampler*': 'dpmpp_2m',
         '*width*': 832,
         '*height*': 1216,
-        '*model*': 'juggernautXL_ragnarokBy.safetensors',
+        // v0.8.9: realism Pony checkpoint — Pony body/breast slider LoRA'ları
+        // juggernautXL'de (non-Pony) HİÇ etki etmiyordu (ablasyon ile doğrulandı).
+        // realismByStableYogi_ponyV65 hem gerçekçi hem tüm LoRA'lar çalışıyor.
+        '*model*': 'realismByStableYogi_ponyV65.safetensors',
         '*input*': prompt,
         '*ninput*': negative,
         '*lora*': 'RealSkin_xxXL_v1.safetensors',
         '*lorawt*': 0.35,
         '*lora2*': 'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt2*': 0.4,
-        '*lora3*': 'Makeup Slider_alpha1.0_rank4_noxattn_last.safetensors',
-        '*lorawt3*': 0.0, // Makeup Slider kapalı — yüzü değiştirip FaceID kimliğini bozuyordu
+        // Makeup Slider yerine AmateurStyle: ReActor yüzü swap ettiği için makyaj
+        // anlamsızdı; bu LoRA candid/amatör selfie dokusu veriyor (AI görünümünü kırar).
+        '*lora3*': 'AmateurStyle_v1_PONY_REALISM.safetensors',
+        '*lorawt3*': 0.6,
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
+        // Slot 5: checkpoint ile aynı yapımcının realism LoRA'sı (ekstra cila)
+        '*lora5*': 'Realism Lora By Stable Yogi_V3_Lite.safetensors',
+        '*lorawt5*': 0.5,
         '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,
