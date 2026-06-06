@@ -207,7 +207,8 @@ const SPICE_POSE = {
   1: ['sitting_close', 'face_to_face', 'eye_contact', 'gentle_touch'],
   2: ['leaning_close', 'hand_on_face', 'forehead_touch', 'neck_kiss', 'lips_at_ear'],
   3: ['straddling', 'on_lap', 'pinned_against_wall', 'hands_in_hair', 'pressed_against', 'breath_visible', 'bare_shoulders'],
-  4: ['lying_together', 'under_sheets', 'disheveled_clothing', 'exposed_skin', 'arching_back', 'tangled_limbs'],
+  // v0.8.12: açık pozlar — yatay, bacaklar açık, hassas bölge görünür
+  4: ['lying_on_back', 'legs_spread', 'spread_legs', 'arching_back', 'exposed', 'intimate_position', 'close_up'],
 };
 
 // Clothing default per spice (v0.6.1 — controls what's worn)
@@ -216,7 +217,8 @@ const SPICE_CLOTHING = {
   1: ['casual_clothes', 'loose_fit'],
   2: ['revealing_clothes', 'cleavage', 'tight_clothes'],
   3: ['lingerie', 'underwear', 'partially_undressed', 'see_through', 'open_shirt'],
-  4: ['nude', 'nudity', 'explicit', 'stripped', 'torn_clothes'],
+  // v0.8.12: Pony-optimised explicit tags — model tamamen açık içerik üretir
+  4: ['nude', 'nudity', 'nsfw', 'nipples', 'pussy', 'explicit', 'fully_undressed', 'no_clothes'],
 };
 
 // Body language per spice (v0.6.1)
@@ -225,7 +227,8 @@ const SPICE_BODY_LANG = {
   1: ['soft_smile', 'gentle_lean', 'hand_holding', 'head_tilt'],
   2: ['hair_flip', 'lip_bite', 'side_glance', 'touched_neck', 'playing_with_hair'],
   3: ['pulled_close', 'against_body', 'hands_gripping', 'trembling', 'wet_lips'],
-  4: ['arching', 'writhing', 'pulled_hair', 'clenched_jaw', 'head_back', 'moaning', 'gripping_sheets'],
+  // v0.8.12: Pony explicit body language — gerçekçi açık ifadeler
+  4: ['arching', 'writhing', 'head_back', 'moaning', 'gripping_sheets', 'pleasure_expression', 'flushed_face', 'wet'],
 };
 
 // Mood preset → emotion tags
@@ -292,18 +295,20 @@ class AutoGen {
         lastGenTs: 0,
         comfyuiUrl: orch.settings.image_gen?.comfyuiUrl || 'http://192.168.68.66:8001',
         workflowFile: '6Lora-CyberReal.json', // file adı string olmalı!
+        // v0.8.12: NSFW odaklı Pony LoRA stack — gerçekçi deri + explicit anatomi
         loras: [
-          'Realism_Engine_Klein_V2.safetensors',
-          'incase_style_v3-1_ponyxl_ilff.safetensors',
-          'add-detail-xl.safetensors',
-          'S1_Dramatic_Lighting_v3.safetensors',
+          'RealSkin_xxXL_v1.safetensors',          // deri dokusu gerçekçiliği
+          'ZITnsfwLoRAv2.safetensors',             // NSFW enabler (Pony)
+          'PerfectBreastsPonyV2.safetensors',      // göğüs kalitesi / anatomi
+          'mature_female_slider_pony_v2.safetensors', // olgun kadın vücut oranları
         ],
-        lorawts: [0.6, 0.4, 0.5, 0.4],
-        negativeOverride: 'lowres, bad anatomy, bad hands, blurry, watermark, text',
+        lorawts: [0.4, 0.7, 0.5, 0.5],
+        // v0.8.12: sansür kelimelerini negatif'e ekle (model blur/mosaic eklemesin)
+        negativeOverride: 'lowres, bad anatomy, bad hands, blurry, watermark, text, censored, mosaic, blur, covered, clothed, clothes, underwear',
         width: 832,
         height: 1216,
-        steps: 25,
-        cfg: 5,
+        steps: 28,
+        cfg: 6,
         sampler: 'euler_ancestral',
         scheduler: 'karras',
         model: 'cyberrealisticPony_v170.safetensors',
@@ -321,8 +326,8 @@ class AutoGen {
         usePosePresets: true,    // v0.6.1: built-in pose presets (B senaryosu)
         useCustomTags: true,     // v0.6.1: custom tag presets (E senaryosu)
         useSceneIntimate: true,  // v0.6.3: scene text → NSFW tag extraction (regex fallback when LLM fails)
-        explicitMode: false,     // v0.6.1 GUARD: explicit (spice 4) için kullanıcı onayı
-        maxAllowedSpice: 3,      // v0.6.1 GUARD: max spice level (0-4), explicitMode on olsa 4'e çıkabilir
+        explicitMode: true,      // v0.8.12: varsayılan açık — spice 4 (explicit) bloklanmıyor
+        maxAllowedSpice: 4,      // v0.8.12: tam explicit içeriğe izin ver
         history: [],
         debug: false,
         injectToChat: true,
@@ -330,6 +335,27 @@ class AutoGen {
     }
 
     this.settings = orch.settings.auto_gen;
+
+    // v0.8.12: NSFW migration — eski kurulumları güncelle
+    {
+      const s = this.settings;
+      // LoRA stack: incase_style (anime) → NSFW Pony stack
+      if (Array.isArray(s.loras) && s.loras.includes('incase_style_v3-1_ponyxl_ilff.safetensors')) {
+        s.loras = ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'];
+        s.lorawts = [0.4, 0.7, 0.5, 0.5];
+        console.log('[Companion AutoGen] v0.8.12 migration: NSFW LoRA stack güncellendi');
+      }
+      // explicitMode + maxAllowedSpice guard'ları kaldır
+      if (s.explicitMode === false) { s.explicitMode = true; }
+      if (s.maxAllowedSpice < 4) { s.maxAllowedSpice = 4; }
+      // CFG / steps yükselt
+      if (s.cfg < 6) { s.cfg = 6; }
+      if (s.steps < 28) { s.steps = 28; }
+      // Negatif prompt'a sansür kelimeleri ekle
+      if (s.negativeOverride && !s.negativeOverride.includes('censored')) {
+        s.negativeOverride += ', censored, mosaic, blur, covered, clothed, clothes, underwear';
+      }
+    }
 
     // Hook MESSAGE_RECEIVED (eğer enabled)
     if (this.settings.enabled) {
