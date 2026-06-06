@@ -366,7 +366,13 @@ export function registerAllCommands(orch) {
                 //   /co char Soo nsfw voice-note on|off
                 //   /co char Soo nsfw custom "Karakter İzmirli, sıcak"
                 const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
-                if (!cp) return 'character_profile modülü yüklenmedi.';
+                if (!cp) {
+                    // v0.8.7 debug: extension reload loop ya da module init sırası sorunu olabilir.
+                    // console.error ile gerçek değeri logla ki root cause teşhis edilebilsin.
+                    const modAvail = typeof MOD?.character_profile !== 'undefined';
+                    console.error('[Companion Orchestrator] /co char: __co_characterProfile missing. MOD.character_profile:', modAvail, 'MOD.character_profile.init:', typeof MOD?.character_profile?.init);
+                    return `character_profile modülü yüklenmedi (namespace yok). index.js'de modules array'inde kayıtlı mı kontrol et. (MOD.character_profile tanımlı: ${modAvail})`;
+                }
 
                 let charId = args[1];
                 // v0.8.6: Aktif karakteri otomatik algıla
