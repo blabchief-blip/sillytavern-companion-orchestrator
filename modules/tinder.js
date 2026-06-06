@@ -531,6 +531,36 @@ export const tinderModule = {
             }
             const avatarFileName = `${importedFileName}.png`;
 
+            // Tinder PNG'leri V2 kart DEĞİL — sadece portre (gömülü 'chara'
+            // verisi yok). JSON import'u karakter verisini getirdi ama avatar
+            // boş/default kaldı. Portreyi karakterin avatar'ı olarak ata:
+            // /api/characters/edit-avatar mevcut veriyi okuyup görseli değiştirir
+            // (veri korunur, portre eklenir). PNG import'unda gerek yok (zaten
+            // görsel var). Hata olursa import'u bozmadan geç.
+            if (fileType === 'json') {
+                try {
+                    const pngResp = await fetch(`/characters/tinder-batch/${baseName}.png`, { credentials: 'include' });
+                    if (pngResp.ok) {
+                        const pngBlob = await pngResp.blob();
+                        const avToken = await getCsrfToken();
+                        const fd = new FormData();
+                        fd.append('avatar', pngBlob, 'avatar.png');
+                        fd.append('avatar_url', avatarFileName);
+                        const avResp = await fetch('/api/characters/edit-avatar', {
+                            method: 'POST',
+                            headers: avToken ? { 'X-CSRF-Token': avToken } : {},
+                            body: fd,
+                            credentials: 'include',
+                        });
+                        if (!avResp.ok) {
+                            console.warn('[Tinder] edit-avatar başarısız:', avResp.status);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Tinder] Avatar portre atama hatası:', e?.message || e);
+                }
+            }
+
             // Refresh ST's character list so the new char is visible.
             if (typeof ctx.getCharacters === 'function') {
                 try { await ctx.getCharacters(); } catch (_) {}

@@ -2333,37 +2333,69 @@ const orchestrator = {
      */
     async _insertSelfieIntoChat(imageBlobUrl, charName, preset) {
         const ctx = SillyTavern.getContext();
-        if (!ctx?.chat?.length && !Array.isArray(ctx?.chat)) return;
-        // Fetch the blob and convert to a File so ST can attach it
+        if (!ctx || !Array.isArray(ctx.chat)) return;
+
+        // 1) Selfie blob'unu base64'e çevir (data: önekini at).
         const r = await fetch(imageBlobUrl);
         if (!r.ok) throw new Error(`Failed to fetch selfie blob: ${r.status}`);
         const blob = await r.blob();
-        const file = new File([blob], `tinder_selfie_${preset}.png`, { type: 'image/png' });
-        const caption = `*${charName} sends a selfie (${preset})*`;
-        // Use ST's message API. We add an assistant message with the image.
+        const base64 = await new Promise((res, rej) => {
+            const fr = new FileReader();
+            fr.onload = () => res(String(fr.result).split(',')[1] || '');
+            fr.onerror = rej;
+            fr.readAsDataURL(blob);
+        });
+
+        // 2) ST'nin görsel deposuna kaydet (/api/images/upload → kalıcı path).
+        //    Eski kod addOneMessage'a {name,role,content,image} veriyordu — ST
+        //    1.18 bunu kabul etmiyor, mesaj boş satır olarak düşüyordu. Doğru
+        //    yol: görseli upload edip extra.media ile gerçek mesaj objesi kurmak
+        //    (built-in Stable Diffusion extension'ın yaptığı gibi).
+        let token = '';
         try {
-            if (typeof ctx.addOneMessage === 'function') {
-                // Many ST versions accept {name, role, content, image} payloads
-                await ctx.addOneMessage({
-                    name: charName,
-                    role: 'assistant',
-                    content: caption,
-                    image: file,
-                });
-            } else if (typeof window.addOneMessage === 'function') {
-                await window.addOneMessage({
-                    name: charName,
-                    role: 'assistant',
-                    content: caption,
-                    image: file,
-                });
-            } else {
-                console.warn('[Tinder] No message-insertion API available; selfie generated but not added to chat.');
-            }
-        } finally {
-            // Free the blob URL — ST now holds the file
-            try { URL.revokeObjectURL(imageBlobUrl); } catch (_) {}
+            const tr = await fetch('/csrf-token', { credentials: 'include' });
+            if (tr.ok) token = (await tr.json())?.token || '';
+        } catch (_) { /* token yoksa endpoint reddedebilir; aşağıda yakalanır */ }
+
+        const safeName = String(charName || 'tinder').replace(/[^\w-]/g, '_');
+        const upResp = await fetch('/api/images/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { 'X-CSRF-Token': token } : {}) },
+            credentials: 'include',
+            body: JSON.stringify({
+                image: base64,
+                format: 'png',
+                ch_name: safeName,
+                filename: `selfie_${preset}_${Date.now()}`,
+            }),
+        });
+        if (!upResp.ok) {
+            const t = await upResp.text().catch(() => '');
+            throw new Error(`Selfie upload failed: ${upResp.status} ${t.slice(0, 120)}`);
         }
+        const { path } = await upResp.json();
+
+        // 3) Düzgün ST mesaj objesi (extra.media attachment) + chat'e ekle.
+        const caption = `*${charName} sends a selfie (${preset})*`;
+        const message = {
+            name: charName,
+            is_user: false,
+            is_system: false,
+            send_date: Date.now(),
+            mes: caption,
+            extra: {
+                media: [{ url: path, type: 'image', title: caption, source: 'generated' }],
+                media_display: 'gallery',
+                media_index: 0,
+                inline_image: false,
+                image: path, // legacy fallback (eski renderer'lar)
+            },
+        };
+        ctx.chat.push(message);
+        if (typeof ctx.addOneMessage === 'function') ctx.addOneMessage(message);
+        if (typeof ctx.saveChat === 'function') { try { await ctx.saveChat(); } catch (_) {} }
+
+        try { URL.revokeObjectURL(imageBlobUrl); } catch (_) {}
     },
 
     refreshTinderPanel() {
