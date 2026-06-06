@@ -640,8 +640,12 @@ export const tinderModule = {
     async generateSelfie(opts = {}) {
         const ctx = SillyTavern.getContext();
         const charId = ctx.characterId;
-        if (!charId) return { ok: false, error: 'No active character' };
-        const char = ctx.characters?.find(c => c.id === charId);
+        // ctx.characterId ST'de characters dizisindeki INDEX'tir (this_chid),
+        // bir .id property değil. Index 0 geçerli olduğu için !charId kullanma.
+        if (charId === undefined || charId === null) {
+            return { ok: false, error: 'No active character' };
+        }
+        const char = ctx.characters?.[charId];
         if (!char) return { ok: false, error: 'Active character not found' };
         const avatar = char.avatar || '';
         if (!avatar.startsWith('tinder_')) {

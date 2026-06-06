@@ -18,7 +18,7 @@ test('tinderModule has generateSelfie function', () => {
 
 test('generateSelfie rejects non-tinder active character', async () => {
     const fakeCtx = {
-        characterId: 1,
+        characterId: 0,
         characters: [{ id: 1, avatar: 'riley.png', name: 'Riley' }],
     };
     globalThis.SillyTavern = { getContext: () => fakeCtx };
@@ -30,7 +30,7 @@ test('generateSelfie rejects non-tinder active character', async () => {
 
 test('generateSelfie returns helpful error when IP-Adapter template missing', async () => {
     const fakeCtx = {
-        characterId: 1,
+        characterId: 0,
         characters: [{ id: 1, avatar: 'tinder_0001_daria_vancouver.png', name: 'Daria' }],
     };
     globalThis.SillyTavern = { getContext: () => fakeCtx };
