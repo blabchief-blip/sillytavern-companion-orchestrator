@@ -63,9 +63,12 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
     test('IPAdapterFaceID bağlantıları doğru (cubiq seması — sadece model patch)', () => {
         if (!workflow) return;
         const ip = workflow['103'].inputs;
-        // model ← IPAdapterModelLoader (100, 0)
-        assert.deepEqual(ip.model, ['100', 0]);
-        // ipadapter ← IPAdapterModelLoader (100, 0) — aynı node, .bin loader
+        // model ← LoraLoader chain (38, 0) — MODEL tipi
+        // 100 IPAdapterModelLoader IPADAPTER döndürür, MODEL değil
+        // ÖNEMLI: Önceki denemede [100, 0] yazmıştım (received_type IPADAPTER
+        // mismatch hatası). Doğrusu [38, 0] — LoraLoader zincirinin son halkası.
+        assert.deepEqual(ip.model, ['38', 0], 'LoraLoader chain MODEL tipi döndürür');
+        // ipadapter ← IPAdapterModelLoader (100, 0) — IPADAPTER tipi
         assert.deepEqual(ip.ipadapter, ['100', 0]);
         // image ← LoadImage (102, 0)
         assert.deepEqual(ip.image, ['102', 0]);
@@ -76,6 +79,28 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
         // cubiq IPAdapterFaceID conditioning input'u almaz (sadece model patch)
         assert.equal(ip.positive, undefined, 'IPAdapterFaceID conditioning almaz (cubiq davranışı)');
         assert.equal(ip.negative, undefined, 'IPAdapterFaceID conditioning almaz (cubiq davranışı)');
+    });
+
+    test('CLIPVisionLoader doğru model adı kullanıyor (ComfyUI dosya adı)', () => {
+        if (!workflow) return;
+        const clip = workflow['101'].inputs.clip_name;
+        // cubiq standart dosya adı — ComfyUI validation listesinde
+        // 'ipadapter_sd15.safetensors' YOK; 'CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors' VAR
+        assert.match(clip, /^CLIP-ViT-H-14/, 'CLIP-ViT-H-14 varyantı olmalı');
+        assert.ok(clip.endsWith('.safetensors'), '.safetensors uzantılı olmalı');
+    });
+
+    test('Weight + image default numeric/string — workflow tek başına validation geçer', () => {
+        if (!workflow) return;
+        // Önceki denemede weight = '*ipawt*' string validation patlıyordu.
+        // Default numeric olmalı ki tinder.js substitution yapmasa bile
+        // ComfyUI validation'da geçsin.
+        const weight = workflow['103'].inputs.weight;
+        assert.equal(typeof weight, 'number', 'Weight numeric olmalı (string wildcard olmamalı)');
+        assert.ok(weight >= 0 && weight <= 1, 'Weight 0-1 aralığında olmalı');
+        // image string olmalı (validation file exists check yapar; default placeholder OK)
+        const image = workflow['102'].inputs.image;
+        assert.equal(typeof image, 'string', 'image string olmalı');
     });
 
     test('IPAdapterModelLoader doğru FaceID model dosyasını yükler', () => {
@@ -106,9 +131,15 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
                           '*width*', '*height*']) {
             assert.ok(allText.includes(w), `Wildcard eksik: ${w}`);
         }
-        // Yeni FaceID wildcards
-        assert.ok(allText.includes('*refimage*'), 'Wildcard *refimage* eksik (LoadImage için)');
-        assert.ok(allText.includes('*ipawt*'), 'Wildcard *ipawt* eksik (IPAdapter weight için)');
+        // Yeni FaceID default'lar (workflow artık default numeric/string
+        // — ComfyUI validation tek başına geçebilsin. tinder.js substitution
+        // opsiyonel olarak değiştirebilir ama default yeterli).
+        // *ipawt* → numeric 0.85 oldu, *refimage* → 'placeholder.png' oldu
+        // (LoadImage validation file exists check yapar; default OK).
+        // Bu sayede workflow dosyasını ComfyUI'ya direkt yükleyince bile
+        // hata vermeden calisir.
+        assert.match(allText, /\"weight\":\s*0\.\d+/, 'weight numeric default olmalı');
+        assert.match(allText, /\"image\":\s*\"[^\"]+\"/, 'image string default olmalı');
     });
 
     test('4 LoraLoader zinciri korunmuş (35→36→37→38)', () => {
@@ -167,9 +198,12 @@ describe('Wildcard substitution mantığı (6Lora-FaceID)', () => {
             assert.doesNotMatch(result, new RegExp(escaped), `Wildcard kalmış: ${w}`);
         }
         // Ve değerler gerçekten yer almış olmalı
-        assert.match(result, /jana\.png/);
+        // image default 'placeholder.png' → tinder.js bunu da override eder
+        // (örn. jana.png), ama substitution testi için default üzerinden
+        // doğrulama: weight numeric 0.85 + prompt string + Lora adı tireli
         assert.match(result, /bedroom, seductive/);
         assert.match(result, /0\.85/);
+        assert.match(result, /Breast Slider - Pony/);
     });
 
     test('Tire içeren LoRA adları substitution\'da bozulmaz', () => {
