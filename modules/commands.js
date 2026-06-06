@@ -230,6 +230,19 @@ export const slashCommands = {
             const sugs = MOD.lorebook.suggest({ limit });
             return MOD.lorebook.formatSuggestions(sugs);
         },
+        // v0.8.7: /co lore list [search] [book=NAME]
+        // UID aramak için: /co lore list rıza
+        // Belirli lorebook: /co lore list --book=Main
+        list: (args) => {
+            if (!MOD.lorebook.listAvailableEntries) return 'listAvailableEntries API yok.';
+            const bookArg = args.find(a => a.startsWith('--book='))?.split('=')[1] || null;
+            const search = args.find(a => !a.startsWith('--')) || null;
+            const entries = MOD.lorebook.listAvailableEntries({ book: bookArg, search });
+            if (entries.length === 0) return 'Hiç world info entry bulunamadı. (ST\'de world info yüklü mü?)';
+            return entries.map(e =>
+                `${e.uid} [${e.book}]${e.enabled ? '' : ' (DISABLED)'}: ${e.comment}${e.keys?.length ? ' — keys: ' + e.keys.join(', ') : ''}`
+            ).join('\n');
+        },
     },
 };
 

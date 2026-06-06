@@ -157,6 +157,36 @@ export const lorebookModule = {
         };
     },
 
+    /**
+     * v0.8.7: Tüm ST world info entry'lerini listele.
+     * /co lore list command'ı için — patron UID aramak zorunda kalmasın.
+     * Filter: { book, search } opsiyonel.
+     * Returns: [{ uid, book, comment, keys, enabled }]
+     */
+    listAvailableEntries({ book = null, search = null } = {}) {
+        if (!_ctx?.world_info) return [];
+        const all = [];
+        for (const [bookName, b] of Object.entries(_ctx.world_info || {})) {
+            if (book && bookName !== book) continue;
+            if (!b?.entries) continue;
+            for (const [uid, entry] of Object.entries(b.entries)) {
+                const comment = entry.comment || '';
+                if (search) {
+                    const s = String(search).toLowerCase();
+                    if (!uid.toLowerCase().includes(s) && !comment.toLowerCase().includes(s)) continue;
+                }
+                all.push({
+                    uid,
+                    book: bookName,
+                    comment: comment || '(no comment)',
+                    keys: entry.key || [],
+                    enabled: entry.enabled !== false,
+                });
+            }
+        }
+        return all;
+    },
+
     suggest({ limit = null, contextChars = null } = {}) {
         const max = limit ?? _orch.settings.lorebook.maxSuggestions ?? 3;
         const charLimit = contextChars ?? 4000;
