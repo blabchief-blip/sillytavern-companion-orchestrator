@@ -1475,6 +1475,18 @@ tinderModule._onNumberShared = async function (matchId) {
     } catch (e) {
         console.warn('[tinder] phone_shell import failed:', e?.message || e);
     }
+    // v0.8.6: Numara paylaşımı sonrası trust-conditional lorebook
+    // entry'leri inject et. Karakter trust yüksekse intimacy markers
+    // (rıza sonrası özel anılar gibi) otomatik aktif olur.
+    try {
+        const lbMod = (await import('./lorebook.js')).lorebookModule;
+        if (lbMod?.injectTrustConditionalEntries) {
+            const r = lbMod.injectTrustConditionalEntries();
+            results.trustConditional = r;
+        }
+    } catch (e) {
+        console.warn('[tinder] lorebook inject failed:', e?.message || e);
+    }
     return { ok: true, results };
 };
 

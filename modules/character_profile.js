@@ -41,7 +41,7 @@ function defaultProfile() {
         hardLimits: [...HARD_LIMITS_DEFAULT],
         trustToEscalate: 5,
         maxTrust: 10,
-        intimacyMarkers: [],
+        intimacyMarkers: [], // v0.8.6: [{ uid, comment, triggerOn: 'trust >= 7' }]
         platformPrefs: 'whatsapp_style',
         voiceNoteEnabled: true,
         selfiePermission: false,
@@ -111,6 +111,25 @@ function validateProfile(profile) {
     }
     if (profile.platformPrefs && !PLATFORM_PREFS.includes(profile.platformPrefs)) {
         errors.push('Invalid platformPrefs: ' + profile.platformPrefs);
+    }
+    if (profile.intimacyMarkers) {
+        if (!Array.isArray(profile.intimacyMarkers)) {
+            errors.push('intimacyMarkers must be array');
+        } else {
+            for (const m of profile.intimacyMarkers) {
+                if (typeof m === 'string') continue; // legacy string[] compat
+                if (!m || typeof m !== 'object') {
+                    errors.push('intimacyMarker must be object or string');
+                    continue;
+                }
+                if (!m.uid || typeof m.uid !== 'string') {
+                    errors.push('intimacyMarker.uid required (string lorebook entry UID)');
+                }
+                if (m.triggerOn && !/^trust\s*(>=|<=|==|!=|>|<)\s*\d+(?:\.\d+)?$/i.test(m.triggerOn)) {
+                    errors.push('intimacyMarker.triggerOn invalid format (e.g. "trust >= 7")');
+                }
+            }
+        }
     }
     if (profile.trustToEscalate !== undefined) {
         const t = Number(profile.trustToEscalate);

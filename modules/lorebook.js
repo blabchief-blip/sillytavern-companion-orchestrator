@@ -48,6 +48,115 @@ export const lorebookModule = {
         return Math.min(1, hits * 0.3);
     },
 
+    /**
+     * v0.8.6: Trust-conditional lorebook entries.
+     *
+     * character_profile.intimacyMarkers her marker bir lorebook entry
+     * tanımı içerir:
+     *   {
+     *     uid: 'world_entry_42',
+     *     comment: 'Rıza sonrası özel anı',
+     *     triggerOn: 'trust >= 7',
+     *   }
+     *
+     * Eğer aktif karakterin trust seviyesi eşiği karşılıyorsa
+     * entry ST'nin chat'inde lore_entries olarak inject edilir.
+     *
+     * ST API: _ctx.chat[msgIndex].extra.lore_entries array'ine uid ekle.
+     * Alternatif: _ctx.eventSource.emit(WORLDINFO_FORCE_ACTIVATE, {uid, force:true})
+     */
+    getTrustConditionalEntries({ charId = null, trust = null } = {}) {
+        if (!charId) {
+            try {
+                const st = (typeof globalThis !== 'undefined' && globalThis.SillyTavern);
+                const ctx = st?.getContext?.();
+                charId = ctx?.characterId;
+            } catch (_) {}
+        }
+        if (!charId) return { triggered: [], skipped: [] };
+        const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+        if (!cp) return { triggered: [], skipped: [] };
+        const profile = cp.get(charId);
+        if (!profile?.intimacyMarkers || profile.intimacyMarkers.length === 0) {
+            return { triggered: [], skipped: [] };
+        }
+        const currentTrust = trust ?? cp.getTrust(charId);
+        const triggered = [];
+        const skipped = [];
+        for (const marker of profile.intimacyMarkers) {
+            if (!marker || typeof marker !== 'object') continue;
+            // triggerOn parse: 'trust >= 7', 'trust > 5', 'trust == 3', 'trust <= 2'
+            const match = String(marker.triggerOn || '').match(/trust\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)?)/i);
+            if (!match) {
+                skipped.push({ marker, reason: 'invalid triggerOn' });
+                continue;
+            }
+            const op = match[1];
+            const threshold = parseFloat(match[2]);
+            let passes = false;
+            switch (op) {
+                case '>=': passes = currentTrust >= threshold; break;
+                case '<=': passes = currentTrust <= threshold; break;
+                case '>': passes = currentTrust > threshold; break;
+                case '<': passes = currentTrust < threshold; break;
+                case '==': passes = Math.abs(currentTrust - threshold) < 0.01; break;
+                case '!=': passes = Math.abs(currentTrust - threshold) >= 0.01; break;
+            }
+            if (passes) triggered.push(marker);
+            else skipped.push({ marker, reason: `trust ${currentTrust} not ${op} ${threshold}` });
+        }
+        return { triggered, skipped, currentTrust };
+    },
+
+    /**
+     * Trust-conditional entry'leri ST chat'ine inject et.
+     * Her triggered marker için chat[lastIndex].extra.lore_entries'e
+     * uid ekle. Sonra WORLDINFO_FORCE_ACTIVATE emit et.
+     */
+    injectTrustConditionalEntries({ charId = null } = {}) {
+        if (!_ctx?.world_info) return { ok: false, error: 'world_info unavailable' };
+        const { triggered, skipped, currentTrust } = this.getTrustConditionalEntries({ charId });
+        if (triggered.length === 0) {
+            return { ok: true, injected: 0, skipped: currentTrust !== undefined ? skipped.length : 0, currentTrust };
+        }
+        const chat = _ctx.chat;
+        if (!Array.isArray(chat) || chat.length === 0) {
+            return { ok: false, error: 'chat unavailable' };
+        }
+        // Son mesaja lore_entries inject et
+        const lastIdx = chat.length - 1;
+        if (!chat[lastIdx].extra) chat[lastIdx].extra = {};
+        if (!Array.isArray(chat[lastIdx].extra.lore_entries)) chat[lastIdx].extra.lore_entries = [];
+        let injectedCount = 0;
+        for (const marker of triggered) {
+            if (!marker.uid) continue;
+            // UID zaten ekli değilse ekle
+            if (!chat[lastIdx].extra.lore_entries.includes(marker.uid)) {
+                chat[lastIdx].extra.lore_entries.push(marker.uid);
+                injectedCount++;
+            }
+            // ST event tetikle (force activate)
+            try {
+                if (_ctx.eventSource && _ctx.event_types?.WORLDINFO_FORCE_ACTIVATE) {
+                    _ctx.eventSource.emit(_ctx.event_types.WORLDINFO_FORCE_ACTIVATE, {
+                        uid: marker.uid,
+                        force: true,
+                    });
+                }
+            } catch (e) {
+                // Best-effort
+            }
+        }
+        return {
+            ok: true,
+            injected: injectedCount,
+            totalTriggered: triggered.length,
+            skipped: skipped.length,
+            currentTrust,
+            triggeredMarkers: triggered,
+        };
+    },
+
     suggest({ limit = null, contextChars = null } = {}) {
         const max = limit ?? _orch.settings.lorebook.maxSuggestions ?? 3;
         const charLimit = contextChars ?? 4000;
