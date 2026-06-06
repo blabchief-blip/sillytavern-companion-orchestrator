@@ -61,6 +61,64 @@ function defaultProfile() {
 let _orch = null;
 let _ctx = null;
 
+/**
+ * v0.8.8.7: ST 1.18+ characters array formatları uyumlu karakter lookup.
+ * ST'de `characters` hem array, hem de object map olabilir, ayrıca
+ * `characterId` (aktif karakter) ve `this_chid` ayrı olabilir.
+ * Öncelik sırası:
+ * 1. Aktif karakter (ctx.characterId / ctx.this_chid)
+ * 2. ID/filename eşleşmesi
+ * 3. Name eşleşmesi
+ * Hata durumunda null döner.
+ */
+function findCharacterById(ctx, charId) {
+    if (!ctx) return null;
+    const chars = ctx.characters;
+    if (!chars) return null;
+
+    // Önce aktif karakter (eğer charId ile eşleşiyorsa)
+    const activeId = ctx.characterId ?? ctx.this_chid;
+    if (activeId !== undefined && activeId !== null) {
+        const active = Array.isArray(chars) ? chars[activeId] : chars[activeId];
+        if (active) {
+            if (
+                active.name === charId
+                || active.filename === charId
+                || active.avatar === charId
+                || String(active.id) === String(charId)
+                || String(activeId) === String(charId)
+            ) {
+                return active;
+            }
+        }
+    }
+
+    // ST 1.18 array format: Array.isArray(chars) === true
+    if (Array.isArray(chars)) {
+        // Önce doğrudan index olarak
+        if (chars[charId]) return chars[charId];
+        // Sonra find ile
+        const found = chars.find(c => c
+            && (c.name === charId
+                || c.filename === charId
+                || c.avatar === charId
+                || c.id === charId
+                || String(c.id) === String(charId)));
+        if (found) return found;
+    } else if (typeof chars === 'object') {
+        // Eski format: { [id]: data } veya { [name]: data }
+        if (chars[charId]) return chars[charId];
+        // Value'lardan birinde name eşleşmesi
+        for (const [k, v] of Object.entries(chars)) {
+            if (v && (v.name === charId || v.filename === charId || v.avatar === charId)) {
+                return v;
+            }
+        }
+    }
+
+    return null;
+}
+
 function getStore() {
     if (!_orch) return null;
     if (!_orch.settings) {
@@ -480,9 +538,29 @@ export const characterProfileModule = {
     applyRecommendedProfile(charId) {
         if (!charId) return { ok: false, error: 'charId required' };
 
-        // Aktif karakterin JSON'unu ST context'ten al
-        const charData = _ctx?.characters ? _ctx.characters.find(c => c.id === charId || c.filename === charId) : null;
-        if (!charData) return { ok: false, error: 'character not loaded' };
+        // v0.8.8.7 fix: Her çağrıda fresh ST context al — init'te set edilen
+        // _ctx stale olabilir (ST sayfa yenilenmediyse characters boş döner).
+        // Birden fazla fallback: _ctx (init'te set), globalThis.SillyTavern
+        // (runtime), veya doğrudan this_chid ile aktif karakter.
+        const ctx = _ctx
+            || (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext === 'function' ? SillyTavern.getContext() : null)
+            || (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext ? globalThis.SillyTavern.getContext() : null);
+        if (!ctx) return { ok: false, error: 'ST context unavailable (refresh ST with Cmd+R)' };
+
+        // ST 1.18+ characters array formatı: { [characterId]: characterData }
+        // Eski ST'de: characters[chid] = data
+        // Karakteri bul: önce activeCharId, sonra id, sonra filename, sonra name
+        const charData = findCharacterById(ctx, charId);
+        if (!charData) {
+            // Debug: hangi characters yüklü?
+            const charKeys = ctx.characters
+                ? (Array.isArray(ctx.characters) ? ctx.characters.map(c => c?.name || c?.filename || c?.id) : Object.keys(ctx.characters))
+                : [];
+            return {
+                ok: false,
+                error: `character not loaded (aranan: "${charId}", yüklü karakterler: ${charKeys.length} — ${charKeys.slice(0, 5).join(', ')}${charKeys.length > 5 ? '...' : ''})`,
+            };
+        }
 
         // persona veya data altında recommendedProfile ara
         const persona = charData.persona || (charData.data && charData.data.persona) || {};

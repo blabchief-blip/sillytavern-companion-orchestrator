@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { installStMocks, resetStMocks, buildOrchestrator, bindOrchestrator } from '../mocks/st.js';
+import { installStMocks, resetStMocks, buildOrchestrator, bindOrchestrator, setNextGetContextNull } from '../mocks/st.js';
 import { characterProfileModule } from '../../modules/character_profile.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -124,6 +124,73 @@ describe('applyRecommendedProfile — önerilen profili uygula', () => {
         const r = characterProfileModule.applyRecommendedProfile('YokBoyleBir');
         assert.equal(r.ok, false);
         assert.match(r.error, /character not loaded/);
+    });
+
+    test('v0.8.8.7: ST 1.18 characters obj-map formatı {id: data} çalışır', () => {
+        // ST 1.18+ bazen characters obj-map formatında döner
+        resetStMocks();
+        installStMocks({
+            characterId: 'Melisa',
+            characters: {
+                'Melisa': { name: 'Melisa', persona: { recommendedProfile: { voice: 'playful', kinks: ['selfies'], hardLimits: [], trust: 5, selfiePermission: true } } },
+            },
+        });
+        orch = buildOrchestrator();
+        const ctx = bindOrchestrator(orch);
+        characterProfileModule.init(orch);
+        const r = characterProfileModule.applyRecommendedProfile('Melisa');
+        assert.equal(r.ok, true, `beklenen ok, error: ${r.error}`);
+        assert.equal(r.profile.voice, 'playful');
+    });
+
+    test('v0.8.8.7: Filename ile bulma (Melisa.json lookup)', () => {
+        resetStMocks();
+        installStMocks({
+            characterId: undefined,
+            this_chid: undefined,
+            characters: [
+                { filename: 'Melisa.json', name: 'Ceyda', persona: { recommendedProfile: { voice: 'playful' } } },
+            ],
+        });
+        orch = buildOrchestrator();
+        bindOrchestrator(orch);
+        characterProfileModule.init(orch);
+        const r = characterProfileModule.applyRecommendedProfile('Melisa.json');
+        assert.equal(r.ok, true, `beklenen ok, error: ${r.error}`);
+    });
+
+    test('v0.8.8.7: _ctx null iken fresh ST context fallback alır', () => {
+        resetStMocks();
+        installStMocks({
+            characterId: 'Melisa',
+            characters: [{ name: 'Melisa', persona: { recommendedProfile: { voice: 'playful' } } }],
+        });
+        orch = buildOrchestrator();
+        bindOrchestrator(orch);
+        // Init sırasında context null dönsün (race condition simülasyonu)
+        setNextGetContextNull(true);
+        characterProfileModule.init(orch);
+        // Şimdi _ctx = null. applyRecommendedProfile runtime'da fresh ctx almalı.
+        const r = characterProfileModule.applyRecommendedProfile('Melisa');
+        assert.equal(r.ok, true, `beklenen ok, error: ${r.error}`);
+    });
+
+    test('v0.8.8.7: Hata mesajı yüklü karakter sayısını da içerir (debug)', () => {
+        resetStMocks();
+        installStMocks({
+            characterId: undefined,
+            characters: [
+                { name: 'Ceyda' },
+                { name: 'Melisa', persona: { recommendedProfile: { voice: 'playful' } } },
+            ],
+        });
+        orch = buildOrchestrator();
+        bindOrchestrator(orch);
+        characterProfileModule.init(orch);
+        const r = characterProfileModule.applyRecommendedProfile('OlmayanKarakter');
+        assert.equal(r.ok, false);
+        assert.match(r.error, /yüklü karakterler: \d+/);
+        assert.match(r.error, /Ceyda/);  // en az 1 yüklü karakter adı
     });
 
     test('Persona/recommendedProfile yoksa error', () => {
