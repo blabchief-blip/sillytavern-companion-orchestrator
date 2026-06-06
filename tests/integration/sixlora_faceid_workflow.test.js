@@ -47,6 +47,18 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
         assert.equal(workflow['104'].class_type, 'IPAdapterInsightFaceLoader');
     });
 
+    test('105 faceid-plusv2 companion LoRA UNet zincirine uygulanıyor (kimlik için ŞART)', () => {
+        if (!workflow) return;
+        const lora = workflow['105'];
+        assert.ok(lora, 'Node 105 (companion LoRA) eksik');
+        assert.equal(lora.class_type, 'LoraLoaderModelOnly');
+        assert.match(lora.inputs.lora_name, /faceid-plusv2.*lora.*\.safetensors$/i,
+            'faceid-plusv2 companion LoRA dosyası olmalı');
+        assert.equal(typeof lora.inputs.strength_model, 'number');
+        // LoRA, LoraLoader zincirinin sonundan (38) gelir, IPAdapterFaceID'ye gider
+        assert.deepEqual(lora.inputs.model, ['38', 0]);
+    });
+
     test('KSampler (3) IPAdapter model çıkışını alır, conditioning doğrudan CLIPTextEncode\'den', () => {
         if (!workflow) return;
         const ks = workflow['3'];
@@ -63,11 +75,12 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
     test('IPAdapterFaceID bağlantıları doğru (cubiq seması — sadece model patch)', () => {
         if (!workflow) return;
         const ip = workflow['103'].inputs;
-        // model ← LoraLoader chain (38, 0) — MODEL tipi
+        // model ← faceid companion LoRA (105, 0) — MODEL tipi
         // 100 IPAdapterModelLoader IPADAPTER döndürür, MODEL değil
-        // ÖNEMLI: Önceki denemede [100, 0] yazmıştım (received_type IPADAPTER
-        // mismatch hatası). Doğrusu [38, 0] — LoraLoader zincirinin son halkası.
-        assert.deepEqual(ip.model, ['38', 0], 'LoraLoader chain MODEL tipi döndürür');
+        // faceid-plusv2 kimlik için companion LoRA'sının UNet'e uygulanmasını
+        // ŞART koşar → 38 (LoraLoader chain sonu) artık 105 LoraLoaderModelOnly'den
+        // geçer, sonra IPAdapterFaceID. Bu olmadan yüz tutarlı ama benzemiyordu.
+        assert.deepEqual(ip.model, ['105', 0], 'faceid companion LoRA MODEL tipi döndürür');
         // ipadapter ← IPAdapterModelLoader (100, 0) — IPADAPTER tipi
         assert.deepEqual(ip.ipadapter, ['100', 0]);
         // image ← LoadImage (102, 0)

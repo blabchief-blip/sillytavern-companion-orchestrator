@@ -943,14 +943,22 @@ class AutoGen {
     workflow[ins] = { class_type: 'IPAdapterInsightFaceLoader', inputs: { provider: 'CPU' } };
     workflow[lim] = { class_type: 'LoadImage', inputs: { image: refName } };
     const w = (typeof this.settings.faceIdWeight === 'number') ? this.settings.faceIdWeight : 0.85;
+    const loraS = (typeof this.settings.faceIdLoraStrength === 'number') ? this.settings.faceIdLoraStrength : 0.7;
     for (const [, node] of Object.entries(workflow)) {
       if (node?.class_type === 'KSampler' && node.inputs?.model) {
         const src = node.inputs.model;
+        // faceid-plusv2 kimlik için companion LoRA'sının UNet'e uygulanmasını
+        // ŞART koşar. Bu olmadan yüz tutarlı ama avatar'a benzemiyordu.
+        const lora = NID();
+        workflow[lora] = {
+          class_type: 'LoraLoaderModelOnly',
+          inputs: { model: src, lora_name: 'ip-adapter-faceid-plusv2_sdxl_lora.safetensors', strength_model: loraS },
+        };
         const fid = NID();
         workflow[fid] = {
           class_type: 'IPAdapterFaceID',
           inputs: {
-            model: src, ipadapter: [ipm, 0], image: [lim, 0],
+            model: [lora, 0], ipadapter: [ipm, 0], image: [lim, 0],
             weight: w, weight_faceidv2: 1.5, weight_type: 'linear', combine_embeds: 'concat',
             start_at: 0.0, end_at: 1.0, embeds_scaling: 'V only',
             clip_vision: [clv, 0], insightface: [ins, 0],

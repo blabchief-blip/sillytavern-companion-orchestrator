@@ -65,6 +65,11 @@
     "class_type": "LoraLoader",
     "_meta": {"title": "LoRA - Slot 4"}
   },
+  "61": {
+    "inputs": {"lora_name": "ip-adapter-faceid-plusv2_sdxl_lora.safetensors", "strength_model": "*facelorawt*", "model": ["38", 0]},
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {"title": "FaceID plusv2 companion LoRA (kimlik için ŞART)"}
+  },
   "62": {
     "inputs": {"ipadapter_file": "ip-adapter-faceid-plusv2_sdxl.bin"},
     "class_type": "IPAdapterModelLoader",
@@ -87,7 +92,7 @@
   },
   "60": {
     "inputs": {
-      "model": ["38", 0],
+      "model": ["61", 0],
       "ipadapter": ["62", 0],
       "image": ["64", 0],
       "weight": "*ipweight*",

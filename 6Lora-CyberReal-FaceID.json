@@ -209,7 +209,7 @@
       "end_at": 1.0,
       "embeds_scaling": "V only",
       "model": [
-        "38",
+        "105",
         0
       ],
       "ipadapter": [
@@ -234,6 +234,20 @@
     "class_type": "IPAdapterInsightFaceLoader",
     "inputs": {
       "provider": "CPU"
+    }
+  },
+  "105": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "ip-adapter-faceid-plusv2_sdxl_lora.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "38",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "FaceID plusv2 companion LoRA (kimlik icin SART)"
     }
   }
 }

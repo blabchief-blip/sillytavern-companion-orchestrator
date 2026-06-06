@@ -1240,7 +1240,8 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*lorawt3*': 0.0, // Makeup Slider kapalı — yüzü değiştirip FaceID kimliğini bozuyordu
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
-        '*ipweight*': 1.2, // faceid-plusv2 kimlik gücü (model+LoRA prior'ını yenmek için)
+        '*facelorawt*': 0.7, // faceid-plusv2 companion LoRA gücü (kimlik için ŞART — bu olmadan benzemiyordu)
+        '*ipweight*': 0.95, // LoRA geldiği için 1.2'den indirildi (LoRA+yüksek weight aşırı keskinleştiriyordu)
         '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,
