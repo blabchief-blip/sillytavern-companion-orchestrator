@@ -1557,6 +1557,9 @@ const orchestrator = {
         $('#co_autogen_use_avatar').on('change', function() {
             if (self.settings.auto_gen) self.settings.auto_gen.useAvatar = this.checked;
         });
+        $('#co_autogen_use_faceid').on('change', function() {
+            if (self.settings.auto_gen) self.settings.auto_gen.useFaceId = this.checked;
+        });
         $('#co_autogen_use_mood').on('change', function() {
             if (self.settings.auto_gen) self.settings.auto_gen.useMood = this.checked;
         });
@@ -1624,6 +1627,7 @@ const orchestrator = {
 
         // Inject toggles
         $('#co_autogen_use_avatar').prop('checked', cfg.useAvatar !== false);
+        $('#co_autogen_use_faceid').prop('checked', cfg.useFaceId !== false);
         $('#co_autogen_use_mood').prop('checked', cfg.useMood !== false);
         $('#co_autogen_use_spice').prop('checked', cfg.useSpice !== false);
         $('#co_autogen_use_scenario').prop('checked', cfg.useScenario !== false);

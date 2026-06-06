@@ -313,6 +313,8 @@ class AutoGen {
           'photorealistic', 'sharp focus', 'cinematic lighting',
         ],
         useAvatar: true,
+        useFaceId: true,         // v0.8.7: IP-Adapter FaceID — aktif karakterin avatar yüzüyle tutarlı üretim
+        faceIdWeight: 0.85,      // FaceID weight (0-1)
         useMood: true,
         useSpice: true,
         useScenario: true,
@@ -859,7 +861,82 @@ class AutoGen {
       }
     }
 
+    // v0.8.7: IP-Adapter FaceID — aktif karakterin avatar yüzüyle tutarlı
+    // üretim (selfie ile aynı zincir). Avatar ComfyUI'ye yüklenir, workflow'a
+    // FaceID node'ları enjekte edilir (KSampler.model FaceID'den geçer).
+    // Avatar yoksa / upload başarısızsa sessizce atla — düz üretim devam eder.
+    if (this.settings.useFaceId) {
+      try {
+        const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
+        if (refName) {
+          this._injectFaceId(workflow, refName);
+        }
+      } catch (e) {
+        console.warn('[Companion AutoGen] FaceID enjeksiyonu atlandı:', e?.message || e);
+      }
+    }
+
     return workflow;
+  }
+
+  // -----------------------------------------------------------
+  // v0.8.7: FaceID — aktif karakterin avatar görselini ComfyUI input
+  // klasörüne yükle. LoadImage referansı için ad döner (yoksa null).
+  // -----------------------------------------------------------
+  async _uploadAvatarToComfy(comfyUrl) {
+    const ctx = this._getCtx() || this.ctx;
+    const charId = ctx?.characterId;
+    if (charId === undefined || charId === null) return null;
+    const char = ctx.characters?.[charId];
+    const avatarFile = char?.avatar;
+    if (!avatarFile || avatarFile === 'none.png') return null;
+    // ST karakter görselini /characters/<avatar>'dan çek
+    const imgResp = await fetch(`/characters/${encodeURIComponent(avatarFile)}`, { credentials: 'include' });
+    if (!imgResp.ok) return null;
+    const blob = await imgResp.blob();
+    const safe = String(avatarFile).replace(/[^\w.-]/g, '_');
+    const form = new FormData();
+    form.append('image', new File([blob], safe, { type: 'image/png' }));
+    form.append('overwrite', 'true');
+    form.append('type', 'input');
+    const up = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form });
+    if (!up.ok) return null;
+    const j = await up.json().catch(() => ({}));
+    return j.name || safe;
+  }
+
+  // -----------------------------------------------------------
+  // v0.8.7: Yüklenen workflow'a IP-Adapter FaceID zincirini enjekte et.
+  // KSampler(lar)ın model girişi FaceID node'undan geçirilir. cubiq
+  // IPAdapter_plus API'si (selfie ile aynı). ID çakışmasını önlemek için
+  // mevcut max id'den sonra yeni id'ler üretilir.
+  // -----------------------------------------------------------
+  _injectFaceId(workflow, refName) {
+    const ids = Object.keys(workflow).map(Number).filter(n => !Number.isNaN(n));
+    let nxt = (ids.length ? Math.max(...ids) : 0) + 1;
+    const NID = () => String(nxt++);
+    const ipm = NID(), clv = NID(), ins = NID(), lim = NID();
+    workflow[ipm] = { class_type: 'IPAdapterModelLoader', inputs: { ipadapter_file: 'ip-adapter-faceid-plusv2_sdxl.bin' } };
+    workflow[clv] = { class_type: 'CLIPVisionLoader', inputs: { clip_name: 'CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors' } };
+    workflow[ins] = { class_type: 'IPAdapterInsightFaceLoader', inputs: { provider: 'CPU' } };
+    workflow[lim] = { class_type: 'LoadImage', inputs: { image: refName } };
+    const w = (typeof this.settings.faceIdWeight === 'number') ? this.settings.faceIdWeight : 0.85;
+    for (const [, node] of Object.entries(workflow)) {
+      if (node?.class_type === 'KSampler' && node.inputs?.model) {
+        const src = node.inputs.model;
+        const fid = NID();
+        workflow[fid] = {
+          class_type: 'IPAdapterFaceID',
+          inputs: {
+            model: src, ipadapter: [ipm, 0], image: [lim, 0],
+            weight: w, weight_faceidv2: 1.0, weight_type: 'linear', combine_embeds: 'concat',
+            start_at: 0.0, end_at: 0.85, embeds_scaling: 'V only',
+            clip_vision: [clv, 0], insightface: [ins, 0],
+          },
+        };
+        node.inputs.model = [fid, 0];
+      }
+    }
   }
 
   // -----------------------------------------------------------
