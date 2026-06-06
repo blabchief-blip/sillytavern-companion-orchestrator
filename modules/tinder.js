@@ -53,6 +53,12 @@ function defaultTinderState() {
         filter: { personalities: [], cities: [] },
         currentCardId: null,
         lastActionAt: 0,
+        // v0.8.10: Match akış modu. 'texting' = eşleşince Tinder DM tarzı
+        // mesajlaşma akışı (LLM açılış DM'i + telefon shell). 'scenario' =
+        // kartın kendi yüz-yüze first_mes'i (eski davranış).
+        chatMode: 'texting',
+        // Texting modunda eşleşince Tinder temalı phone shell otomatik açılsın mı.
+        phoneShellOnMatch: true,
     };
 }
 
@@ -61,6 +67,79 @@ function getTinderState() {
         _orch.settings.tinder = defaultTinderState();
     }
     return _orch.settings.tinder;
+}
+
+// =========================================================================
+// v0.8.10: Texting-flow — eşleşince yüz-yüze senaryo yerine Tinder DM akışı
+// =========================================================================
+
+// Karttan texting bağlamı çıkar (isim/şehir/kişilik/ilgi alanları).
+function _cardPersona(card, data) {
+    const tx = (data && data.extensions && data.extensions.tinder) || {};
+    return {
+        name: (data && data.name) || (card && card.name) || 'She',
+        city: tx.city || (data && data.city) || '',
+        personality: (data && data.personality) || '',
+        interests: (tx.interests || (data && data.interests) || []).join(', '),
+    };
+}
+
+// LLM ile kısa Tinder açılış DM'i üret. Başarısızsa null döner (çağıran
+// taraf template fallback'e düşer). Test ortamında generateQuietPrompt yoksa
+// sessizce null.
+async function _genTextingOpener(p) {
+    const ctx = _ctx || (typeof SillyTavern !== 'undefined' ? SillyTavern.getContext() : null);
+    if (!ctx || typeof ctx.generateQuietPrompt !== 'function') return null;
+    const bits = [p.name];
+    if (p.city) bits.push(`from ${p.city}`);
+    if (p.personality) bits.push(`personality: ${p.personality}`);
+    if (p.interests) bits.push(`interests: ${p.interests}`);
+    const prompt = `You are ${bits.join(', ')}. You just matched with someone on a dating app (Tinder) `
+        + `and you are opening the conversation in the app's direct messages. Write ONE short, casual opening `
+        + `text message — texting style, 1-2 sentences, an emoji is fine, flirty but natural. It should read `
+        + `like a real dating-app DM, not narration. Output ONLY the message text, no quotes, no stage directions.`;
+    try {
+        const reply = await ctx.generateQuietPrompt({ quietPrompt: prompt, quietToLoud: false, skipWIAN: true });
+        const clean = (reply || '').trim().replace(/^["']+|["']+$/g, '').trim();
+        return clean.length > 0 ? clean : null;
+    } catch (e) {
+        console.warn('[Tinder] texting opener üretimi başarısız:', e?.message || e);
+        return null;
+    }
+}
+
+// LLM yoksa/başarısızsa deterministik texty açılış.
+function _templateOpener(p) {
+    const hook = p.interests ? p.interests.split(',')[0].trim()
+        : (p.city ? `someone in ${p.city}` : 'your vibe');
+    return `heyy we matched 😄 your profile kind of made my day — ${hook}, i'm into that. so what's your story?`;
+}
+
+// V2 kart JSON'unu (string) Tinder DM texting akışına dönüştür: scenario +
+// system_prompt texting register'ına çekilir, first_mes LLM/template açılış
+// DM'i ile değiştirilir. Hata olursa orijinal string'i bozmadan döndür.
+export async function _toTextingCard(jsonText, card) {
+    let parsed;
+    try { parsed = JSON.parse(jsonText); } catch { return jsonText; }
+    const d = parsed.data || parsed;
+    const p = _cardPersona(card, d);
+    const U = '{{user}}';
+
+    d.scenario = `You matched with ${p.name} on a dating app. You are now chatting in the app's direct `
+        + `messages — this is texting, NOT an in-person meeting. Keep it casual and flirty like real `
+        + `dating-app DMs: short messages, emojis okay, get to know each other. Do NOT jump into an `
+        + `in-person scene unless ${U} explicitly arranges a meetup.`;
+
+    const baseSys = d.system_prompt ? (d.system_prompt.trim() + '\n\n') : '';
+    d.system_prompt = baseSys + `[Dating-app DM mode: You are ${p.name}, texting ${U} on a dating app after `
+        + `matching. Write like phone texting — short, casual messages, emojis allowed, no long narration `
+        + `and no in-person action descriptions (no *asterisk actions*). Stay in the messaging phase until `
+        + `${U} brings up meeting in person.]`;
+
+    const opener = (await _genTextingOpener(p)) || _templateOpener(p);
+    if (opener) d.first_mes = opener;
+
+    return JSON.stringify(parsed);
 }
 
 /**
@@ -537,7 +616,13 @@ export const tinderModule = {
             const jsonResp = await fetch(jsonUrl, { credentials: 'include' });
             let file, fileType;
             if (jsonResp.ok) {
-                const jsonText = await jsonResp.text();
+                let jsonText = await jsonResp.text();
+                // v0.8.10: texting modunda kartı Tinder DM akışına dönüştür
+                // (scenario/system_prompt texting register + LLM açılış DM'i).
+                if ((getTinderState().chatMode || 'texting') === 'texting') {
+                    try { jsonText = await _toTextingCard(jsonText, card); }
+                    catch (e) { console.warn('[Tinder] texting dönüşümü başarısız:', e?.message || e); }
+                }
                 file = new File([jsonText], `${baseName}.json`, { type: 'application/json' });
                 fileType = 'json';
             } else {
@@ -683,6 +768,19 @@ export const tinderModule = {
                 }
             }
 
+            // v0.8.10: texting modunda Tinder temalı phone shell'i aç (gerçek
+            // uygulama hissi). Hata olursa import'u bozmadan geç.
+            let phoneShell = null;
+            const tState = getTinderState();
+            if ((tState.chatMode || 'texting') === 'texting' && tState.phoneShellOnMatch !== false) {
+                try {
+                    const r = await tinderModule._onMatchOpen(matchId);
+                    phoneShell = r?.results?.phoneShell || null;
+                } catch (e) {
+                    console.warn('[Tinder] match-open phone shell başarısız:', e?.message || e);
+                }
+            }
+
             return {
                 ok: true,
                 charName: card.name,
@@ -690,6 +788,7 @@ export const tinderModule = {
                 avatar: avatarFileName,
                 opened,
                 openedVia,
+                phoneShell,
                 // `shouldReload` is no longer needed - the jQuery click
                 // approach opens the chat inline. Returning false tells
                 // the caller (settings panel) to skip the page reload,
@@ -893,6 +992,17 @@ export const tinderModule = {
             };
             softInput.off('change.co_tinder_thr').on('change.co_tinder_thr', () => updateThreshold('soft_open'));
             exchangeInput.off('change.co_tinder_thr').on('change.co_tinder_thr', () => updateThreshold('exchange'));
+
+            // v0.8.10: Texting akışı toggle
+            const $chatMode = $('#co_tinder_chat_mode_texting');
+            if ($chatMode && $chatMode.length) {
+                orch.settings.tinder = orch.settings.tinder || {};
+                $chatMode.prop('checked', (orch.settings.tinder.chatMode || 'texting') === 'texting');
+                $chatMode.off('change.co_tinder_mode').on('change.co_tinder_mode', function () {
+                    orch.settings.tinder.chatMode = this.checked ? 'texting' : 'scenario';
+                    if (typeof saveSettingsDebounced === 'function') saveSettingsDebounced();
+                });
+            }
 
             // Reset exchange all
             $('#co_tinder_reset_exchange_all').off('click.co_tinder_rst').on('click.co_tinder_rst', () => {
@@ -1784,6 +1894,32 @@ tinderModule.explicitExchangeCommand = function (matchId, opts = {}) {
  * Lazy import (tinder → platform_transition + phone_shell) — circular yok.
  * Test ortamı: module yoksa sessizce geç (return ok:false).
  */
+// v0.8.10: Eşleşme açılışında Tinder temalı phone shell + tinder_chat
+// platform. _onNumberShared'in (whatsapp) match-açılış karşılığı. Lazy
+// import (circular yok). Test ortamında modül yoksa sessizce geç.
+tinderModule._onMatchOpen = async function (matchId) {
+    const results = { platformTransition: null, phoneShell: null };
+    try {
+        const ptMod = (await import('./platform_transition.js')).platformTransitionModule;
+        if (ptMod?.transitionTo) {
+            results.platformTransition = ptMod.transitionTo(matchId, 'tinder_chat');
+        }
+    } catch (e) {
+        console.warn('[tinder] platform_transition (match open) import failed:', e?.message || e);
+    }
+    try {
+        const psMod = (await import('./phone_shell.js')).phoneShellModule;
+        if (psMod?.mount) {
+            const r = psMod.mount();
+            results.phoneShell = r.ok ? 'mounted' : (r.error || 'failed');
+            if (r.ok && psMod.setPlatform) psMod.setPlatform('tinder_chat');
+        }
+    } catch (e) {
+        console.warn('[tinder] phone_shell (match open) import failed:', e?.message || e);
+    }
+    return { ok: true, results };
+};
+
 tinderModule._onNumberShared = async function (matchId) {
     if (!matchId) return { ok: false, error: 'matchId required' };
     const results = { platformTransition: null, phoneShell: null, historyImport: null };
