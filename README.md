@@ -215,7 +215,31 @@ npm run test:llm    # LLM behavior only
 
 CI runs on every push via `.github/workflows/test.yml` (Node 20, 22, 24 on macOS).
 
-**Test coverage:** 842 tests across 28 modules (v0.8.7). Zero external dependencies — pure `node --test`.
+**Test coverage:** 893 tests across 28 modules (v0.8.8). Zero external dependencies — pure `node --test`.
+
+## v0.8.8: NSFW Selfie Tier System
+
+Tinder eşleşmelerinden **4 tier NSFW selfie** üretimi. Selfie akışı karakterin avatar'ından FaceID ile yüz tutarlı.
+
+**Tier'lar (trust-gated):**
+- **Tier 1** (suggestive) — yatakta, kapalı kıyafet/örtü, samimi. Trust 5+, selfie permission.
+- **Tier 2** (lingerie) — iç çamaşırı, yatak/yastık. Trust 5+, **kink: selfies/intimate-texting**.
+- **Tier 3** (nude tasteful) — çıplak ama sanatsal. Trust 7+, **kink: intimate-texting/roleplay/switch-dynamic**.
+- **Tier 4** (oyuncaklı) — çıplak + oyuncak. Trust 9+, tier 3 kink'leri.
+
+**Guard zinciri** (3 katman):
+1. **Hard limit** — `non-consent` veya `degradation` → max tier 2; `violence` → max tier 3
+2. **Selfie permission** — `selfiePermission: false` → tüm tier reddi
+3. **Kink gate** — tier 2+ için ilgili kink gerekli
+
+**Kullanım:**
+```
+/co selfie beach              → SFW
+/co selfie 1                  → tier 1 NSFW (guard zincirinden geçmeli)
+/co selfie 4                  → tier 4 NSFW (trust 9+ + kink + permission)
+```
+
+**UI:** Settings → Companion Orchestrator → Tinder paneli → Selfie dropdown (optgroup: 🔞 NSFW). Reddedilirse status'ta nedeni görünür.
 
 ## License
 

@@ -73,13 +73,19 @@ const MOD = {
  * portrait is the face reference; preset chooses the outfit/pose/
  * location. Posts the result to the chat.
  */
-async function selfieCommand(orch, preset) {
+async function selfieCommand(orch, preset, opts = {}) {
     if (!tinderModule || typeof tinderModule.generateSelfie !== 'function') {
         return '❌ Tinder modülü yüklü değil.';
     }
-    const result = await tinderModule.generateSelfie({ preset });
+    // v0.8.8: tier opsiyonel (1-4 NSFW), preset opsiyonel (SFW preset adı)
+    // generateSelfie({ tier }) veya generateSelfie({ preset }) — biri verilmeli
+    const result = await tinderModule.generateSelfie({ ...opts, preset });
     if (!result.ok) return `❌ Selfie üretilemedi: ${result.error || 'bilinmeyen hata'}`;
-    return `📸 Selfie üretildi: ${result.charName} (${preset}) — imageUrl: ${result.imageUrl}`;
+    if (result.tier && result.tier > 0) {
+        // NSFW üretildi — kullanıcıya tier bilgisi ver
+        return `🔞 NSFW Selfie (tier ${result.tier}) üretildi: ${result.charName} (${result.preset}) — imageUrl: ${result.imageUrl}`;
+    }
+    return `📸 Selfie üretildi: ${result.charName} (${preset || result.preset}) — imageUrl: ${result.imageUrl}`;
 }
 
 function fmtResult(s) {
@@ -338,12 +344,50 @@ export function registerAllCommands(orch) {
                 return `Bilinmeyen preset eylemi: ${action}. Şunları dene: list, apply, create, remove`;
             }
             if (sub === 'selfie') {
-                const preset = args[1] || 'casual_selfie';
-                const valid = ['casual_selfie', 'night_out', 'beach', 'coffee_shop', 'workout', 'formal', 'morning'];
-                if (!valid.includes(preset)) {
-                    return `Geçersiz preset: ${preset}. Şunlardan birini dene: ${valid.join(', ')}`;
+                // v0.8.8: /co selfie [preset|tier] — tier 1-4 NSFW, preset adı SFW
+                // Örnekler:
+                //   /co selfie                    → default casual_selfie (SFW)
+                //   /co selfie beach             → SFW beach preset
+                //   /co selfie 1                 → NSFW tier 1 (bedroom_suggestive)
+                //   /co selfie 3                 → NSFW tier 3 (nude_selfie)
+                const arg = args[1] || 'casual_selfie';
+                const validPresets = ['casual_selfie', 'night_out', 'beach', 'coffee_shop', 'workout', 'formal', 'morning'];
+                // Tier 1-4 ise numeric mi kontrol et
+                const tierNum = parseInt(arg, 10);
+                if (!isNaN(tierNum) && tierNum >= 1 && tierNum <= 4) {
+                    // v0.8.8: NSFW tier — character_profile guard zincirinden geçmeli
+                    const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile)
+                        || (typeof MOD !== 'undefined' && MOD.character_profile)
+                        || (typeof globalThis !== 'undefined' && globalThis.__co_characterProfileRef);
+                    if (!cp || typeof cp.canEscalateToNsfwSelfie !== 'function') {
+                        return 'character_profile modülü yüklenmedi. ST cache reload (Cmd+Shift+R) gerekebilir.';
+                    }
+                    // ST'deki aktif karakteri bul
+                    const ctx = (typeof SillyTavern !== 'undefined') ? SillyTavern.getContext() : null;
+                    const charId = ctx?.characterId;
+                    const char = ctx?.characters?.[charId];
+                    if (charId === undefined || charId === null) {
+                        return 'Aktif karakter yok. ST\'de bir karakter seç.';
+                    }
+                    // Karakter adından tinder avatar'ı bul
+                    const charName = char?.name || 'unknown';
+                    const guard = cp.canEscalateToNsfwSelfie(charName, tierNum);
+                    if (!guard.allowed) {
+                        const hints = {
+                            'tier 1': 'Karakter selfie permission kapalı veya trust yetersiz. /co char <isim> nsfw selfie on + trust ekle.',
+                            'tier 2': 'tier 2 için "selfies" veya "intimate-texting" kink gerekli + trust >= 5.',
+                            'tier 3': 'tier 3 için "intimate-texting"/"roleplay"/"switch-dynamic" kink gerekli + trust >= 7.',
+                            'tier 4': 'tier 4 için "intimate-texting"/"roleplay"/"switch-dynamic" kink gerekli + trust >= 9.',
+                        };
+                        return `❌ NSFW tier ${tierNum} reddedildi: ${guard.reason}\n${hints[`tier ${tierNum}`] || ''}`;
+                    }
+                    return selfieCommand(orch, null, { tier: tierNum });
                 }
-                return selfieCommand(orch, preset);
+                // SFW preset
+                if (!validPresets.includes(arg)) {
+                    return `Geçersiz: ${arg}. Preset (${validPresets.join(', ')}) veya tier (1-4) kullan.`;
+                }
+                return selfieCommand(orch, arg);
             }
             if (sub === 'lore') {
                 const action = args[1] || 'suggest';

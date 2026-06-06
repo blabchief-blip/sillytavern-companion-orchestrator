@@ -472,6 +472,91 @@ export const characterProfileModule = {
     },
 
     /**
+     * v0.8.8: NSFW selfie tier guard.
+     *
+     * Karakterin NSFW selfie üretimine hangi tier'a kadar izin verdiğini döner.
+     * 3 katmanlı guard:
+     *   1) Hard limit: 'non-consent' veya 'degradation' varsa maxTier=2 (yumuşak)
+     *      — non-consent NSFW selfie karakterin yazılı reddidir, ASLA
+     *        tier 3-4'e geçemez.
+     *   2) Trust escalation: trust < trustToEscalate → maxTier=0 (sadece SFW)
+     *   3) Kink gate: tier 2+ için en az 1 ilgili kink gerekli
+     *      - tier 2: 'selfies' veya 'intimate-texting' gerekli
+     *      - tier 3-4: 'intimate-texting' veya 'roleplay' gerekli
+     *   4) Selfie permission: selfiePermission=false → maxTier=0
+     *
+     * @param {string} charId
+     * @param {number} requestedTier 1-4 (1=suggestive, 2=lingerie, 3=nude, 4=with-toy)
+     * @returns {{ allowed: boolean, maxTier: number, reason: string }}
+     */
+    canEscalateToNsfwSelfie(charId, requestedTier) {
+        if (!charId) return { allowed: false, maxTier: 0, reason: 'charId required' };
+        if (typeof requestedTier !== 'number' || requestedTier < 1 || requestedTier > 4) {
+            return { allowed: false, maxTier: 0, reason: 'tier 1-4 arası olmalı' };
+        }
+        const p = getProfile(charId);
+        let maxTier = 4;
+
+        // 1) Hard limit gate — non-consent/degradation hard limit varsa
+        //    tier 3-4 (explicit) ASLA açılmaz. Bu hard-coded kırmızı çizgi,
+        //    trust veya kink'ten bağımsız.
+        const hardStops = p.hardLimits || [];
+        if (hardStops.includes('non-consent') || hardStops.includes('degradation')) {
+            maxTier = Math.min(maxTier, 2);
+        }
+        if (hardStops.includes('violence')) {
+            // violence hard limit tier 4'ü (oyuncak/bed) kapatır
+            maxTier = Math.min(maxTier, 3);
+        }
+
+        // 2) Selfie permission gate — kapalıysa sadece SFW
+        if (!p.selfiePermission) {
+            maxTier = Math.min(maxTier, 0);
+        }
+
+        // 3) Trust escalation gate — trust < trustToEscalate → maxTier=0
+        const trust = this.getTrust(charId);
+        if (trust < p.trustToEscalate) {
+            maxTier = Math.min(maxTier, 0);
+        }
+
+        // 4) Kink gate — tier 2+ için kink gerekli
+        if (requestedTier >= 2) {
+            const kinks = p.kinks || [];
+            const tier2Kinks = ['selfies', 'intimate-texting'];
+            if (requestedTier >= 3) {
+                // tier 3-4 daha sıkı kink
+                const tier3Kinks = ['intimate-texting', 'roleplay', 'switch-dynamic'];
+                if (!kinks.some(k => tier3Kinks.includes(k))) {
+                    return {
+                        allowed: false,
+                        maxTier,
+                        reason: `tier ${requestedTier} için '${tier3Kinks.join('/')}' kinks'lerinden biri gerekli (mevcut: ${kinks.join(', ') || 'yok'})`,
+                    };
+                }
+            } else if (!kinks.some(k => tier2Kinks.includes(k))) {
+                return {
+                    allowed: false,
+                    maxTier,
+                    reason: `tier 2 için '${tier2Kinks.join('/')}' kinks'lerinden biri gerekli (mevcut: ${kinks.join(', ') || 'yok'})`,
+                };
+            }
+        }
+
+        if (requestedTier > maxTier) {
+            return {
+                allowed: false,
+                maxTier,
+                reason: requestedTier === 1
+                    ? (p.selfiePermission ? 'selfie permission kapalı veya trust yetersiz' : 'selfie permission kapalı')
+                    : `tier ${requestedTier} guard reddi: hard limit / trust / permission — max izin: tier ${maxTier}`,
+            };
+        }
+
+        return { allowed: true, maxTier, reason: 'ok' };
+    },
+
+    /**
      * System prompt'a inject edilecek karakter-spesifik NSFW directive.
      * Türkçe prefix'ten SONRA, scenario system'inden ÖNCE eklenebilir.
      */

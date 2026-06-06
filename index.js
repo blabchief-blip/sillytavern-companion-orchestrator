@@ -2252,20 +2252,29 @@ const orchestrator = {
             // of the active character using IP-Adapter FaceID.
             if ($('#co_tinder_selfie_btn').data('wired') !== true) {
                 $('#co_tinder_selfie_btn').data('wired', true).on('click', async () => {
-                    const preset = $('#co_tinder_selfie_preset').val() || 'casual_selfie';
+                    const val = $('#co_tinder_selfie_preset').val() || 'casual_selfie';
+                    // v0.8.8: NSFW tier 1-4 numeric olur, SFW preset string.
+                    // Tier numeric ise tier argümanı olarak gönder (character_profile
+                    // guard'ı commands.js katmanında çalışır). Burada sadece
+                    // tier veya preset ayrımı.
+                    const tierNum = parseInt(val, 10);
+                    const isNsfwTier = !isNaN(tierNum) && tierNum >= 1 && tierNum <= 4;
+                    const preset = isNsfwTier ? null : val;
                     const $status = $('#co_tinder_selfie_status');
-                    $status.text('Üretiliyor… ~30-60s').css('opacity', '0.9');
+                    $status.text(isNsfwTier ? `🔞 NSFW tier ${tierNum} üretiliyor… ~30-60s` : 'Üretiliyor… ~30-60s').css('opacity', '0.9');
                     const $btn = $('#co_tinder_selfie_btn');
                     $btn.prop('disabled', true);
                     try {
-                        const r = await mod.generateSelfie({ preset });
+                        const opts = isNsfwTier ? { tier: tierNum } : { preset };
+                        const r = await mod.generateSelfie(opts);
                         if (r.ok) {
-                            $status.text(`✅ ${r.charName} (${preset}) hazır.`)
+                            const tag = isNsfwTier ? `🔞 NSFW tier ${r.tier}` : `📸 ${preset}`;
+                            $status.text(`✅ ${r.charName} (${r.preset}) hazır [${tag}].`)
                                 .css('opacity', '0.7');
                             // Insert the selfie into the chat as a new
                             // assistant message so the user sees it inline
                             try {
-                                await this._insertSelfieIntoChat(r.imageUrl, r.charName, preset);
+                                await this._insertSelfieIntoChat(r.imageUrl, r.charName, r.preset);
                             } catch (e) {
                                 console.warn('[Tinder] Insert selfie into chat failed:', e);
                                 $status.text(`⚠️ Üretildi ama chat'e eklenemedi: ${e?.message || e}`).css('opacity', '0.9');
