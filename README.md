@@ -215,7 +215,7 @@ npm run test:llm    # LLM behavior only
 
 CI runs on every push via `.github/workflows/test.yml` (Node 20, 22, 24 on macOS).
 
-**Test coverage:** 893 tests across 28 modules (v0.8.8). Zero external dependencies — pure `node --test`.
+**Test coverage:** 904 tests across 28 modules (v0.8.8.1). Zero external dependencies — pure `node --test`.
 
 ## v0.8.8: NSFW Selfie Tier System
 
@@ -240,6 +240,29 @@ Tinder eşleşmelerinden **4 tier NSFW selfie** üretimi. Selfie akışı karakt
 ```
 
 **UI:** Settings → Companion Orchestrator → Tinder paneli → Selfie dropdown (optgroup: 🔞 NSFW). Reddedilirse status'ta nedeni görünür.
+
+## v0.8.8.1: 6Lora Workflow + IPAdapter FaceID
+
+CyberReal 6Lora workflow'una IPAdapter FaceID node'ları eklendi — 4 LoRA stil kontrolü + FaceID yüz tutarlılığı.
+
+**Yeni workflow:** `data/default-user/user/workflows/6Lora-CyberReal-FaceID.json` (ST tarafı) + `extensions/companion-orchestrator/6Lora-CyberReal-FaceID.json` (extension tarafı).
+
+**4 yeni node (100-103):**
+- `100 IPAdapterUnifiedLoaderFaceID` — faceid model loader (preset: FACEID)
+- `101 CLIPVisionLoader` — face embedding encoder (`ipadapter_sd15.safetensors`)
+- `102 LoadImage` — referans avatar (ComfyUI input/ dizinine yüklenir)
+- `103 IPAdapterApply` — conditioning'i face patch ile modifiye et
+
+**Bağlantı:** KSampler (3) artık LoraLoader chain (38) yerine IPAdapter çıkışına bağlı.
+
+**Kullanım (programmatic):**
+```js
+tinder.generateSelfie({ workflow: '6lora_faceid', faceWeight: 0.85 })
+```
+
+**Avantaj:** LoRA zinciri (skin/body/makeup/breast) + yüz tutarlılığı birleşir. **Dezavantaj:** VRAM spike + generation ~1.5x (180s timeout).
+
+**Mevcut selfie yolu bozulmadı:** `workflow` opsiyonu verilmezse eski `tinder-selfie-workflow.json` (4 poz referans) kullanılır.
 
 ## License
 

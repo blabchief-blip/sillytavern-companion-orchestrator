@@ -326,6 +326,52 @@ export const tinderModule = {
     description: '500 benzersiz karakter kartı arasından swipe ederek eşleş.',
     toggleKey: 'tinderEnabled',
 
+    // v0.8.8: NSFW tier metadata — UI ve character_profile guard'ı için
+    // public erişim noktası. Tier 1-4: bedroom_suggestive, lingerie_selfie,
+    // nude_selfie, toy_selfie. Trust min eşikleri tier 2/3/4 için sırasıyla
+    // 5/7/9. Tier 1 trustToEscalate (default 5) ile guard'lanır.
+    NSFW_TIERS: {
+        1: { preset: 'bedroom_suggestive', label: 'Tier 1 — Yatakta (suggestive)', description: 'Kapalı kıyafet veya örtü, samimi ortam, flörtöz bakış', minTrust: 0 },
+        2: { preset: 'lingerie_selfie', label: 'Tier 2 — İç çamaşırı', description: 'Lingerie, yatak/yastık ortamı, sıcak ışık', minTrust: 5 },
+        3: { preset: 'nude_selfie', label: 'Tier 3 — Çıplak (tasteful)', description: 'Çıplak ama sanatsal kompozisyon, sayfa/örtü kısmi örtü', minTrust: 7 },
+        4: { preset: 'toy_selfie', label: 'Tier 4 — Oyuncak/ekspresif', description: 'Çıplak + oyuncak, en yüksek trust + kink guard', minTrust: 9 },
+    },
+
+    /**
+     * v0.8.8: Tier 1-4 listesi — UI dropdown veya karakter guard'ı için.
+     * Hard-coded constant, runtime'da değişmez.
+     */
+    getNsfwTiers() {
+        return Object.entries(this.NSFW_TIERS).map(([tier, info]) => ({
+            tier: parseInt(tier, 10),
+            ...info,
+        }));
+    },
+
+    /**
+     * v0.8.8: Tier için ComfyUI'ye gidecek prompt + negative'i döner (debug).
+     * Test ve UI önizleme için — generateSelfie içinde aynı logic var.
+     */
+    buildSelfiePrompt(opts) {
+        const arg = opts?.tier || opts?.preset || 'casual_selfie';
+        if (opts?.tier && opts.tier >= 1 && opts.tier <= 4) {
+            return {
+                preset: NSFW_TIER_PRESETS[opts.tier],
+                negative: NSFW_TIER_NEGATIVES[opts.tier],
+                tier: opts.tier,
+            };
+        }
+        return {
+            preset: arg,
+            negative: [
+                'nude, naked, porn, explicit',
+                'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+                'identical faces, similar faces',
+            ].join(', '),
+            tier: 0,
+        };
+    },
+
     async init(orch) {
         _orch = orch;
         _ctx = SillyTavern.getContext();
@@ -688,8 +734,27 @@ export const tinderModule = {
         const card = cache.get(baseName);
         if (!card) return { ok: false, error: `Card metadata not found for ${baseName}` };
 
-        // Build prompt from preset + card metadata
-        const promptPreset = opts.preset || 'casual_selfie';
+        // v0.8.8: Tier-aware prompt + negative + guard zinciri.
+        // Kullanıcı `opts.tier` (1-4) verebilir veya `opts.preset` (SFW).
+        // Tier verilirse character_profile.canEscalateToNsfwSelfie guard'ından
+        // geçmeli — aksi halde reddedilir (hard limit, trust, kink, permission).
+        let promptPreset;
+        let negativeOverride = null;
+        let nsfwTier = 0; // 0 = SFW (character_profile guard atlanır)
+
+        if (opts.tier && typeof opts.tier === 'number' && opts.tier >= 1 && opts.tier <= 4) {
+            // v0.8.8: Tier yolu. Guard kontrolü commands.js katmanında
+            // (canEscalateToNsfwSelfie) yapılıyor — burada tinder MOD'a
+            // bağımlı değil, sadece preset + negative seçiyor. Guard geçtiyse
+            // bu noktaya gelir, tier 1-4 güvenli.
+            nsfwTier = opts.tier;
+            promptPreset = NSFW_TIER_PRESETS[opts.tier] || 'casual_selfie';
+            negativeOverride = NSFW_TIER_NEGATIVES[opts.tier];
+        } else {
+            // SFW yolu — mevcut davranış
+            promptPreset = opts.preset || 'casual_selfie';
+        }
+
         const rawParts = SELFIE_PROMPTS[promptPreset] || SELFIE_PROMPTS.casual_selfie;
         // SELFIE_PROMPTS değerleri .join(', ')'lı STRING. Eskiden `...rawParts`
         // ile spread edilince string harf harf bölünüyordu (bozuk prompt).
@@ -700,7 +765,7 @@ export const tinderModule = {
             `portrait of ${card.name}, a ${card.age}-year-old${ethnicity ? ' ' + ethnicity : ''} woman`,
             presetText,
         ].filter(Boolean).join(', ');
-        const negative = [
+        const negative = negativeOverride || [
             'nude, naked, porn, explicit',
             'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
             'identical faces, similar faces',
@@ -714,18 +779,42 @@ export const tinderModule = {
             || window.CO_COMFYUI_URL
             || 'http://127.0.0.1:8188';
         try {
-            const result = await submitSelfieToComfyUI({
-                comfyUrl,
-                baseName,
-                refImage: `${baseName}.png`,
-                prompt,
-                negative,
-            });
+            // v0.8.8.1: workflow seçimi. 'standard' = mevcut tinder-selfie-workflow
+            // (4 poz referans). '6lora_faceid' = CyberReal 6Lora + IPAdapter FaceID.
+            // 6Lora path daha yavaş (~1.5x) ama CyberReal stil kontrolü + yüz
+            // tutarlılığı. Patron ops={ workflow: '6lora_faceid', faceWeight: 0.85 }
+            // vererek tetikler.
+            const useSixLora = opts.workflow === '6lora_faceid';
+            let result;
+            if (useSixLora) {
+                result = await submit6LoraFaceIDSelfieToComfyUI({
+                    comfyUrl,
+                    baseName,
+                    prompt,
+                    negative,
+                    faceWeight: typeof opts.faceWeight === 'number' ? opts.faceWeight : 0.85,
+                });
+            } else {
+                result = await submitSelfieToComfyUI({
+                    comfyUrl,
+                    baseName,
+                    refImage: `${baseName}.png`,
+                    prompt,
+                    negative,
+                });
+            }
             if (!result.ok) return { ok: false, error: result.error };
             // result.imageUrl is the localhost-routable URL for the new
             // selfie PNG (we proxy it through the tinder-batch dir so
             // ST's image upload tool can pick it up).
-            return { ok: true, charName: card.name, imageUrl: result.imageUrl };
+            return {
+                ok: true,
+                charName: card.name,
+                imageUrl: result.imageUrl,
+                tier: nsfwTier,  // 0=SFW, 1-4=NSFW
+                preset: promptPreset,
+                workflow: useSixLora ? '6lora_faceid' : 'standard',
+            };
         } catch (e) {
             return { ok: false, error: String(e?.message || e) };
         }
@@ -944,6 +1033,85 @@ const SELFIE_PROMPTS = {
         'in a sunlit bedroom, holding a coffee mug',
         'morning golden hour light, photorealistic, intimate',
     ].join(', '),
+    // v0.8.8: NSFW tier presets. Karakterin NSFW profil guard'ı (character_profile.canEscalateToNsfwSelfie)
+    // bu preset'lere erişimi kontrol eder. Trust/kink/hard-limit/permission
+    // katmanlarından herhangi biri reddederse preset UI/command'da görünmez bile.
+    // Negative prompt tier 3+ için gevşer (nude/porn kalkar); tier 1-2 aynı
+    // SFW negative'i kullanır. Bu sıralama önemli: önce SFW, sonra artan
+    // açıklık.
+    bedroom_suggestive: [
+        'wearing a silk pajama top, hair down, soft smile, looking at camera',
+        'lying on bed in a sunlit bedroom, soft morning light, intimate POV',
+        'soft natural lighting, photorealistic, tasteful composition',
+    ].join(', '),
+    lingerie_selfie: [
+        'wearing elegant black lace lingerie, confident expression',
+        'sitting on edge of bed, soft bedroom background, hand on pillow',
+        'warm tungsten bedside lamp lighting, photorealistic, intimate',
+    ].join(', '),
+    nude_selfie: [
+        'nude, tasteful pose, holding sheet partially covering body, looking at camera',
+        'lying on bed, soft natural light from window, intimate POV',
+        'warm soft lighting, photorealistic, tasteful artistic composition',
+    ].join(', '),
+    toy_selfie: [
+        'nude, holding a vibrator, suggestive pose, looking at camera seductively',
+        'lying on bed in intimate setting, soft warm lighting, POV selfie angle',
+        'warm soft lighting, photorealistic, tasteful composition',
+    ].join(', '),
+};
+
+// v0.8.8: NSFW tier → preset mapping. Tier sayısı kullanıcı-facing komut
+// argümanıdır (1-4), preset adı ComfyUI'ye giden anahtardır. Bu mapping'i
+// kullanmak kullanıcının tier'ı preset'e çevirmesini tek noktada tutar.
+const NSFW_TIER_PRESETS = {
+    1: 'bedroom_suggestive',
+    2: 'lingerie_selfie',
+    3: 'nude_selfie',
+    4: 'toy_selfie',
+};
+
+// v0.8.8: Tier'a göre negative prompt. Tier 1-2 aynı SFW negative (nude/porn
+// hâlâ var — bu tier'lar yatakta kapalı kıyafet veya iç çamaşırı, çıplak
+// değil). Tier 3+ gevşer (nude pozitif tag, ama porn/explicit hâlâ reddedilir
+// — abuse ve grotesk'i önler). Tier 4'te sadece anatomik kalite kontrolü
+// kalır.
+const NSFW_TIER_NEGATIVES = {
+    1: [
+        'nude, naked, porn, explicit, sexual act',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'identical faces, similar faces',
+    ].join(', '),
+    2: [
+        'nude, naked, porn, explicit, sexual act, exposed nipples, exposed genitals',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'identical faces, similar faces',
+    ].join(', '),
+    3: [
+        // nude çıkarıldı (pozitif tag), porn/explicit hâlâ var (grotesk önleme)
+        'porn, explicit sexual act, graphic content, blood, gore',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'identical faces, similar faces',
+    ].join(', '),
+    4: [
+        // Sadece anatomik kalite kontrolü — tier 4 trust 9+ gerektirdiği için
+        // ek guard character_profile.canEscalateToNsfwSelfie'de. Porn/explicit
+        // de kalktı çünkü oyuncak/ekspresif içerikte sadece grotesk/kan
+        // reddedilmesi yeterli.
+        'graphic violence, blood, gore',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'identical faces, similar faces',
+    ].join(', '),
+};
+
+// v0.8.8: Tier 1'in minimum trust eşiği. Karakter profili trustToEscalate
+// (default 5) tier 1 için yeterli; tier 2-4 için tier-specific ek eşikler.
+// Bu sabit tier'lar arası 'güvenli geçiş' sağlar.
+const NSFW_TIER_TRUST_MIN = {
+    1: 0,  // trustToEscalate zaten tier 1+ için guard
+    2: 5,  // tier 2 için trust >= 5
+    3: 7,  // tier 3 için trust >= 7
+    4: 9,  // tier 4 için trust >= 9 (en yüksek)
 };
 
 // Wildcard substitution helper (recursive)
@@ -1123,6 +1291,127 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
     if (!imgFilename) return { ok: false, error: 'ComfyUI generation timed out after 120s' };
 
     // Download the image and turn it into a blob URL the chat can show
+    try {
+        const url = `${comfyUrl}/view?filename=${encodeURIComponent(imgFilename)}&type=output`;
+        const ir = await fetch(url);
+        if (!ir.ok) return { ok: false, error: `ComfyUI /view ${ir.status}` };
+        const blob = await ir.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        return { ok: true, imageUrl: blobUrl, filename: imgFilename };
+    } catch (e) {
+        return { ok: false, error: `Failed to download image: ${e?.message || e}` };
+    }
+}
+
+// =========================================================================
+// v0.8.8.1: 6Lora Workflow + IPAdapter FaceID
+//
+// CyberReal 6Lora workflow'una IPAdapter FaceID node'ları eklendi:
+//   100 IPAdapterUnifiedLoaderFaceID  — faceid model loader
+//   101 CLIPVisionLoader              — face embedding encoder
+//   102 LoadImage                     — referans avatar (ComfyUI input/)
+//   103 IPAdapterApply                — conditioning'i face ile modifiye et
+//
+// Avantaj: 4 LoRA'nın stil kontrolü (skin, body, makeup, breast) +
+//          IPAdapter FaceID ile yüz tutarlılığı birleşir.
+// Dezavantaj: VRAM spike, generation ~1.5x (LoRA zinciri + IPAdapter).
+// =========================================================================
+async function submit6LoraFaceIDSelfieToComfyUI({ comfyUrl, baseName, prompt, negative, faceWeight = 0.85 }) {
+    // 6Lora-CyberReal-FaceID.json — yeni workflow (workflow/ dizininde ya da
+    // extension kökünde. Önce /scripts/extensions/third-party/companion-orchestrator/
+    // altına kopyalanmalı, sonra ST'nin statik servisi ile servis edilir.)
+    const wfUrl = '/scripts/extensions/third-party/companion-orchestrator/6Lora-CyberReal-FaceID.json';
+    let templateText;
+    try {
+        const r = await fetch(wfUrl, { credentials: 'include' });
+        if (!r.ok) throw new Error(`6Lora-FaceID workflow not found at ${wfUrl} (${r.status})`);
+        templateText = await r.text();
+    } catch (e) {
+        return { ok: false, error: `Could not load 6Lora workflow: ${e?.message || e}` };
+    }
+    let template;
+    try { template = JSON.parse(templateText); }
+    catch (e) { return { ok: false, error: `6Lora workflow invalid JSON: ${e?.message || e}` }; }
+
+    // Referans avatar ComfyUI input/ dizinine yükle
+    let refImageBase;
+    try {
+        refImageBase = await uploadRefImageToComfyUI(comfyUrl, baseName);
+    } catch (e) {
+        return { ok: false, error: `Referans yüz ComfyUI'ye yüklenemedi: ${e?.message || e}` };
+    }
+
+    const seed = Math.abs(Math.floor(Math.random() * 2 ** 31));
+    // CyberReal 6Lora defaults — patronun mevcut tune'ı
+    // LoRA chain: skin (0.35) → body (0.4) → makeup (0.0 face'i bozuyordu) → breast (1.0)
+    const substitutions = {
+        '*seed*':     seed,
+        '*steps*':    30,
+        '*cfg*':      6,
+        '*sampler*':  'dpmpp_2m',
+        '*width*':    832,
+        '*height*':   1216,
+        '*model*':    'juggernautXL_ragnarokBy.safetensors',
+        '*input*':    prompt,
+        '*ninput*':   negative,
+        '*lora*':     'RealSkin_xxXL_v1.safetensors',
+        '*lorawt*':   0.35,
+        '*lora2*':    'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
+        '*lorawt2*':  0.4,
+        '*lora3*':    'Makeup Slider_alpha1.0_rank4_noxattn_last.safetensors',
+        '*lorawt3*':  0.0,  // FaceID tutarlılığı için makeup kapalı (yüzü deforme ediyordu)
+        '*lora4*':    'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
+        '*lorawt4*':  1.0,
+        '*refimage*': refImageBase,    // LoadImage node
+        '*ipawt*':    faceWeight,      // IPAdapter Apply weight (0.0-1.0)
+        '*prefix*':   `6lora_faceid_${baseName}_${Date.now()}`,
+    };
+    const workflow = _substituteWildcards(template, substitutions);
+
+    // Submit
+    let resp, data;
+    try {
+        resp = await fetch(`${comfyUrl}/prompt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: workflow, client_id: 'tinder-6lora-faceid-' + Date.now() }),
+        });
+        if (!resp.ok) {
+            const t = await resp.text().catch(() => '');
+            return { ok: false, error: `ComfyUI /prompt ${resp.status}: ${t.slice(0, 200)}` };
+        }
+        data = await resp.json();
+    } catch (e) {
+        return { ok: false, error: `ComfyUI unreachable at ${comfyUrl}: ${e?.message || e}` };
+    }
+    const promptId = data?.prompt_id;
+    if (!promptId) return { ok: false, error: 'ComfyUI did not return prompt_id' };
+
+    // 6Lora + IPAdapter = daha uzun sürer (LoRA zinciri + face patch). 180s timeout.
+    let imgFilename = null;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 180_000) {
+        try {
+            const hr = await fetch(`${comfyUrl}/history/${promptId}`);
+            if (hr.ok) {
+                const h = await hr.json();
+                const entry = h[promptId];
+                const outs = entry?.outputs || {};
+                for (const nodeOut of Object.values(outs)) {
+                    const imgs = nodeOut?.images || [];
+                    for (const im of imgs) {
+                        if (im?.filename) { imgFilename = im.filename; break; }
+                    }
+                    if (imgFilename) break;
+                }
+            }
+        } catch (_) { /* keep polling */ }
+        if (imgFilename) break;
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    if (!imgFilename) return { ok: false, error: 'ComfyUI 6Lora+FaceID generation timed out (180s)' };
+
+    // Download
     try {
         const url = `${comfyUrl}/view?filename=${encodeURIComponent(imgFilename)}&type=output`;
         const ir = await fetch(url);

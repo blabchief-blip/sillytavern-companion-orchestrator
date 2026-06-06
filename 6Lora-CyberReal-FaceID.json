@@ -1,0 +1,239 @@
+{
+  "3": {
+    "inputs": {
+      "seed": "*seed*",
+      "steps": "*steps*",
+      "cfg": "*cfg*",
+      "sampler_name": "*sampler*",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "103",
+        0
+      ],
+      "positive": [
+        "103",
+        1
+      ],
+      "negative": [
+        "103",
+        2
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "*model*"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Kontrol Noktas\u0131 Y\u00fckle"
+    }
+  },
+  "5": {
+    "inputs": {
+      "width": "*width*",
+      "height": "*height*",
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Bo\u015f Gizli G\u00f6r\u00fcnt\u00fc"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "*input*",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Pozitif \u0130stem"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "*ninput*",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negatif \u0130stem"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Kod \u00c7\u00f6zme"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "6Lora-Pony",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "G\u00f6r\u00fcnt\u00fcy\u00fc Kaydet"
+    }
+  },
+  "35": {
+    "inputs": {
+      "lora_name": "*lora*",
+      "strength_model": "*lorawt*",
+      "strength_clip": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "LoRA - Slot 1"
+    }
+  },
+  "36": {
+    "inputs": {
+      "lora_name": "*lora2*",
+      "strength_model": "*lorawt2*",
+      "strength_clip": 1,
+      "model": [
+        "35",
+        0
+      ],
+      "clip": [
+        "35",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "LoRA - Slot 2"
+    }
+  },
+  "37": {
+    "inputs": {
+      "lora_name": "*lora3*",
+      "strength_model": "*lorawt3*",
+      "strength_clip": 1,
+      "model": [
+        "36",
+        0
+      ],
+      "clip": [
+        "36",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "LoRA - Slot 3"
+    }
+  },
+  "38": {
+    "inputs": {
+      "lora_name": "*lora4*",
+      "strength_model": "*lorawt4*",
+      "strength_clip": 1,
+      "model": [
+        "37",
+        0
+      ],
+      "clip": [
+        "37",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "LoRA - Slot 4"
+    }
+  },
+  "100": {
+    "class_type": "IPAdapterUnifiedLoaderFaceID",
+    "inputs": {
+      "preset": "FACEID",
+      "lora_strength": 0.8,
+      "provider": "CPU"
+    }
+  },
+  "101": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "ipadapter_sd15.safetensors"
+    }
+  },
+  "102": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "*refimage*"
+    }
+  },
+  "103": {
+    "class_type": "IPAdapterApply",
+    "inputs": {
+      "weight": "*ipawt*",
+      "noise": 0.1,
+      "weight_type": "linear",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "unfold_batch": false,
+      "attn_mask": null,
+      "model": [
+        "100",
+        0
+      ],
+      "ipadapter": [
+        "100",
+        1
+      ],
+      "image": [
+        "102",
+        0
+      ],
+      "clip_vision": [
+        "101",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ]
+    }
+  }
+}
