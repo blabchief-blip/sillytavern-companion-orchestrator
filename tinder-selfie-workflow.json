@@ -1,0 +1,106 @@
+{
+  "3": {
+    "inputs": {
+      "seed": "*seed*",
+      "steps": "*steps*",
+      "cfg": "*cfg*",
+      "sampler_name": "*sampler*",
+      "scheduler": "karras",
+      "denoise": "*denoise*",
+      "model": ["60", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {"title": "KSampler"}
+  },
+  "4": {
+    "inputs": {"ckpt_name": "*model*"},
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {"title": "Kontrol Noktası Yükle"}
+  },
+  "5": {
+    "inputs": {"width": "*width*", "height": "*height*", "batch_size": 1},
+    "class_type": "EmptyLatentImage",
+    "_meta": {"title": "Boş Gizli Görüntü"}
+  },
+  "6": {
+    "inputs": {"text": "*input*", "clip": ["4", 1]},
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "Pozitif İstem"}
+  },
+  "7": {
+    "inputs": {"text": "*ninput*", "clip": ["4", 1]},
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "Negatif İstem"}
+  },
+  "8": {
+    "inputs": {"samples": ["3", 0], "vae": ["4", 2]},
+    "class_type": "VAEDecode",
+    "_meta": {"title": "VAE Kod Çözme"}
+  },
+  "9": {
+    "inputs": {"filename_prefix": "*prefix*", "images": ["8", 0]},
+    "class_type": "SaveImage",
+    "_meta": {"title": "Görüntüyü Kaydet"}
+  },
+  "35": {
+    "inputs": {"lora_name": "*lora*", "strength_model": "*lorawt*", "strength_clip": 1, "model": ["4", 0], "clip": ["4", 1]},
+    "class_type": "LoraLoader",
+    "_meta": {"title": "LoRA - Slot 1"}
+  },
+  "36": {
+    "inputs": {"lora_name": "*lora2*", "strength_model": "*lorawt2*", "strength_clip": 1, "model": ["35", 0], "clip": ["35", 1]},
+    "class_type": "LoraLoader",
+    "_meta": {"title": "LoRA - Slot 2"}
+  },
+  "37": {
+    "inputs": {"lora_name": "*lora3*", "strength_model": "*lorawt3*", "strength_clip": 1, "model": ["36", 0], "clip": ["36", 1]},
+    "class_type": "LoraLoader",
+    "_meta": {"title": "LoRA - Slot 3"}
+  },
+  "38": {
+    "inputs": {"lora_name": "*lora4*", "strength_model": "*lorawt4*", "strength_clip": 1, "model": ["37", 0], "clip": ["37", 1]},
+    "class_type": "LoraLoader",
+    "_meta": {"title": "LoRA - Slot 4"}
+  },
+  "62": {
+    "inputs": {"ipadapter_file": "ip-adapter-faceid-plusv2_sdxl.bin"},
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {"title": "IPAdapter FaceID Modeli"}
+  },
+  "63": {
+    "inputs": {"clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"},
+    "class_type": "CLIPVisionLoader",
+    "_meta": {"title": "CLIP Vision Loader"}
+  },
+  "64": {
+    "inputs": {"image": "*refimage*"},
+    "class_type": "LoadImage",
+    "_meta": {"title": "Referans Fotoğraf (eşleşme yüzü)"}
+  },
+  "65": {
+    "inputs": {"provider": "CPU"},
+    "class_type": "IPAdapterInsightFaceLoader",
+    "_meta": {"title": "InsightFace Loader"}
+  },
+  "60": {
+    "inputs": {
+      "model": ["38", 0],
+      "ipadapter": ["62", 0],
+      "image": ["64", 0],
+      "weight": "*ipweight*",
+      "weight_faceidv2": 1.0,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0.0,
+      "end_at": 0.85,
+      "embeds_scaling": "V only",
+      "clip_vision": ["63", 0],
+      "insightface": ["65", 0]
+    },
+    "class_type": "IPAdapterFaceID",
+    "_meta": {"title": "IPAdapter FaceID Apply"}
+  }
+}
