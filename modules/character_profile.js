@@ -363,6 +363,16 @@ export const characterProfileModule = {
         if (typeof globalThis !== 'undefined') {
             globalThis.__co_characterProfile = this;
         }
+        // v0.8.7 debug log: this binding kontrol — ST slash command ikinci
+        // çağrıda "modül yüklenmedi" dönüyorsa, this/name undefined olabilir.
+        // Production'da ref'i global'te tut, böylece orch.modules lookup
+        // fallback olarak kullanılabilsin.
+        if (typeof globalThis !== 'undefined') {
+            globalThis.__co_characterProfileRef = this;
+        }
+        if (typeof console !== 'undefined' && orch?.settings?.debugLogging) {
+            console.log('[Companion Orchestrator] character_profile init: this.name =', this?.name, 'orch.settings keys:', orch?.settings ? Object.keys(orch.settings).length : 'null');
+        }
         try { getStore(); } catch (e) {
             console.error('[Companion Orchestrator] character_profile getStore() failed:', e?.message || e);
         }
