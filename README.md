@@ -215,7 +215,7 @@ npm run test:llm    # LLM behavior only
 
 CI runs on every push via `.github/workflows/test.yml` (Node 20, 22, 24 on macOS).
 
-**Test coverage:** 745 tests across 23 modules (v0.8.6). Zero external dependencies — pure `node --test`.
+**Test coverage:** 830 tests across 23 modules (v0.8.7). Zero external dependencies — pure `node --test`.
 
 ## License
 
