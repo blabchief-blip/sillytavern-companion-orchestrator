@@ -47,6 +47,12 @@ import { charLoraProfilesModule } from '../../modules/char_lora_profiles.js';
 import { promptTemplatesModule } from '../../modules/prompt_templates.js';
 import { tinderModule } from '../../modules/tinder.js';
 import { booruPromptModule } from '../../modules/booru_prompt.js';
+import { contentSafetyModule } from '../../modules/content_safety.js';
+import { antiGhostingModule } from '../../modules/anti_ghosting.js';
+import { platformTransitionModule } from '../../modules/platform_transition.js';
+import { phoneShellModule } from '../../modules/phone_shell.js';
+import { modernUIModule } from '../../modules/modern_ui.js';
+import { characterProfileModule } from '../../modules/character_profile.js';
 import { slashCommands, registerAllCommands } from '../../modules/commands.js';
 import {
     mountModularSettings, refreshAllPanelsGeneric,
@@ -58,6 +64,8 @@ const ALL_MODULES = [
     imageGenModule, avatarDescModule, kazumaBridgeModule, autoGenModule,
     llmTaggerModule, posePresetsModule, customTagsModule, spiceIntensifyModule,
     charLoraProfilesModule, promptTemplatesModule, tinderModule, booruPromptModule,
+    contentSafetyModule, antiGhostingModule, platformTransitionModule,
+    phoneShellModule, modernUIModule, characterProfileModule,
 ];
 
 // registerAllCommands tarafından kullanılan modüller
@@ -140,10 +148,11 @@ describe('import smoke: 23 modülün hepsi browser-safe', () => {
         assert.equal(new Set(names).size, names.length, `duplicate names in: ${names.join(', ')}`);
     });
 
-    test('ALL_MODULES 22 modül içeriyor (index.js ile aynı sayı)', () => {
-        // index.js de 22 modül import ediyor; commands.js ayrı export
-        assert.equal(ALL_MODULES.length, 22,
-            `22 modül bekleniyor, var: ${ALL_MODULES.length}`);
+    test('ALL_MODULES 28 modül içeriyor (index.js ile aynı sayı)', () => {
+        // index.js de 28 modül import ediyor (v0.8.7 itibarıyla: 22 eski + 5 v0.8.4-0.8.5 eklenen + character_profile);
+        // commands.js ayrı export
+        assert.equal(ALL_MODULES.length, 28,
+            `28 modül bekleniyor, var: ${ALL_MODULES.length}`);
     });
 
     test('booruPromptModule + commands.js ayrı export’lar (special-case)', () => {
@@ -163,9 +172,10 @@ describe('init akışı: 23 modülün hepsi ST mock’unda init ediyor', () => {
 
     test('13 modülün init()’i çağrıldı ve orch.settings doldu', () => {
         const initFns = ALL_MODULES.filter(m => typeof m.init === 'function');
-        // 22 modülden hangilerinin init() var: memory, mood, lorebook, io,
+        // 28 modülden hangilerinin init() var: memory, mood, lorebook, io,
         // spice, limits, aftercare, stmb_bridge, image_gen, avatar_desc,
-        // kazuma_bridge, tinder = 12.
+        // kazuma_bridge, tinder, character_profile, content_safety, anti_ghosting,
+        // platform_transition, phone_shell, modern_ui = 18.
         // (auto_gen / booru_prompt / llm_tagger / pose_presets / custom_tags /
         //  spice_intensify / char_lora_profiles / prompt_templates / scenarios /
         //  prompts modüllerinin init()’i yok — bunlar state’siz modüller.)
@@ -576,7 +586,7 @@ describe('index.js: import-time side effect guard', () => {
         const src = fs.readFileSync(path.join(process.cwd(), 'index.js'), 'utf8');
         assert.match(src, /const MODULE_NAME = 'companion_orchestrator'/);
         assert.match(src, /const VERSION = '0\.8\.\d+'/);
-        // 22 modülün hepsi import listesinde olmalı (booru_prompt eklendi)
+        // 28 modülün hepsi import listesinde olmalı (v0.8.7 itibarıyla)
         const importMatches = src.match(/^import \{ \w+Module \} from/mg) || [];
         assert.ok(importMatches.length >= 22,
             `en az 22 modül import edilmeli, var: ${importMatches.length}`);
@@ -650,8 +660,8 @@ describe('final health check: orchestrator + 23 modül', () => {
         const ctx = ctxStore.ctx;
 
         // Orchestrator sağlık
-        assert.equal(orch.modules.length, 22,
-            `22 modül bekleniyor, var: ${orch.modules.length}`);
+        assert.equal(orch.modules.length, 28,
+            `28 modül bekleniyor, var: ${orch.modules.length}`);
         assert.ok(orch.settings, 'settings var');
         assert.ok(orch.settings.memory, 'memory settings var');
         assert.ok(orch.settings.mood, 'mood settings var');
