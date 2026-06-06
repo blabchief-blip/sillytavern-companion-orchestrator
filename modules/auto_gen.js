@@ -883,6 +883,26 @@ class AutoGen {
   // v0.8.7: FaceID — aktif karakterin avatar görselini ComfyUI input
   // klasörüne yükle. LoadImage referansı için ad döner (yoksa null).
   // -----------------------------------------------------------
+  // Görseli yüz bölgesine (üst-orta kare) kırpar — FaceID kimliği için.
+  async _cropToFaceRegion(blob) {
+    try {
+      if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') return blob;
+      const img = await createImageBitmap(blob);
+      const w = img.width, h = img.height;
+      const side = Math.round(Math.min(w, h * 0.55));
+      const sx = Math.max(0, Math.round((w - side) / 2));
+      const sy = Math.max(0, Math.round(h * 0.04));
+      const canvas = new OffscreenCanvas(side, side);
+      const c = canvas.getContext('2d');
+      c.drawImage(img, sx, sy, side, side, 0, 0, side, side);
+      const out = await canvas.convertToBlob({ type: 'image/png' });
+      if (img.close) img.close();
+      return out || blob;
+    } catch (_) {
+      return blob;
+    }
+  }
+
   async _uploadAvatarToComfy(comfyUrl) {
     const ctx = this._getCtx() || this.ctx;
     const charId = ctx?.characterId;
@@ -893,7 +913,9 @@ class AutoGen {
     // ST karakter görselini /characters/<avatar>'dan çek
     const imgResp = await fetch(`/characters/${encodeURIComponent(avatarFile)}`, { credentials: 'include' });
     if (!imgResp.ok) return null;
-    const blob = await imgResp.blob();
+    // Yüz bölgesine kırp (selfie ile aynı): kare-değil avatar'da ComfyUI
+    // merkezden kırpıp gövdeyi alıyordu → FaceID kimliği zayıf.
+    const blob = await this._cropToFaceRegion(await imgResp.blob());
     const safe = String(avatarFile).replace(/[^\w.-]/g, '_');
     const form = new FormData();
     form.append('image', new File([blob], safe, { type: 'image/png' }));

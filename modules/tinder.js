@@ -966,17 +966,42 @@ function _substituteWildcards(obj, subs) {
     return obj;
 }
 
+// Portre/tam-boy görseli yüz bölgesine (üst-orta kare) kırpar. Tinder
+// kartları kare değil + tüm vücut; ComfyUI merkezden kırpınca gövdeyi alıyor,
+// yüzü değil → FaceID kimliği zayıf. Üst yarıdan kare kırpınca insightface +
+// CLIP temiz, büyük bir yüz görür. Tarayıcı API'si yoksa orijinali döndür.
+export async function cropToFaceRegion(blob) {
+    try {
+        if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') return blob;
+        const img = await createImageBitmap(blob);
+        const w = img.width, h = img.height;
+        // Üst bölgeye odaklı kare: yüzler portrelerde üstte. Tam boy için
+        // üst ~yarı head+omuz verir; headshot için zaten yüzü kapsar.
+        const side = Math.round(Math.min(w, h * 0.55));
+        const sx = Math.max(0, Math.round((w - side) / 2));
+        const sy = Math.max(0, Math.round(h * 0.04)); // küçük headroom
+        const canvas = new OffscreenCanvas(side, side);
+        const c = canvas.getContext('2d');
+        c.drawImage(img, sx, sy, side, side, 0, 0, side, side);
+        const out = await canvas.convertToBlob({ type: 'image/png' });
+        if (img.close) img.close();
+        return out || blob;
+    } catch (_) {
+        return blob; // kırpma başarısızsa orijinal
+    }
+}
+
 // Eşleşilen tinder karakterinin yüz görselini ComfyUI'nin input/ klasörüne
 // yükler. IP-Adapter FaceID'nin yüz referansı budur. ST'den PNG'yi blob olarak
-// çekip ComfyUI'nin POST /upload/image endpoint'ine multipart gönderiyoruz.
-// Dönen ad LoadImage node'unun *refimage* yerine konur.
+// çekip yüz bölgesine kırpıp ComfyUI'nin POST /upload/image endpoint'ine
+// gönderiyoruz. Dönen ad LoadImage node'unun *refimage* yerine konur.
 async function uploadRefImageToComfyUI(comfyUrl, baseName) {
     const pngUrl = absUrl(`/characters/tinder-batch/${baseName}.png`);
     const imgResp = await fetch(pngUrl, { credentials: 'include' });
     if (!imgResp.ok) {
         throw new Error(`Referans görsel ST'den alınamadı: ${pngUrl} (${imgResp.status})`);
     }
-    const blob = await imgResp.blob();
+    const blob = await cropToFaceRegion(await imgResp.blob());
     const form = new FormData();
     form.append('image', new File([blob], `${baseName}.png`, { type: 'image/png' }));
     form.append('overwrite', 'true');
