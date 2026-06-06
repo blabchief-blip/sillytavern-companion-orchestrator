@@ -91,11 +91,11 @@
       "ipadapter": ["62", 0],
       "image": ["64", 0],
       "weight": "*ipweight*",
-      "weight_faceidv2": 1.0,
+      "weight_faceidv2": 1.5,
       "weight_type": "linear",
       "combine_embeds": "concat",
       "start_at": 0.0,
-      "end_at": 0.85,
+      "end_at": 1.0,
       "embeds_scaling": "V only",
       "clip_vision": ["63", 0],
       "insightface": ["65", 0]

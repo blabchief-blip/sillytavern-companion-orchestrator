@@ -314,7 +314,7 @@ class AutoGen {
         ],
         useAvatar: true,
         useFaceId: true,         // v0.8.7: IP-Adapter FaceID — aktif karakterin avatar yüzüyle tutarlı üretim
-        faceIdWeight: 0.85,      // FaceID weight (0-1)
+        faceIdWeight: 1.2,       // FaceID weight (model+LoRA prior'ını yenmek için ~1.2)
         useMood: true,
         useSpice: true,
         useScenario: true,
@@ -951,8 +951,8 @@ class AutoGen {
           class_type: 'IPAdapterFaceID',
           inputs: {
             model: src, ipadapter: [ipm, 0], image: [lim, 0],
-            weight: w, weight_faceidv2: 1.0, weight_type: 'linear', combine_embeds: 'concat',
-            start_at: 0.0, end_at: 0.85, embeds_scaling: 'V only',
+            weight: w, weight_faceidv2: 1.5, weight_type: 'linear', combine_embeds: 'concat',
+            start_at: 0.0, end_at: 1.0, embeds_scaling: 'V only',
             clip_vision: [clv, 0], insightface: [ins, 0],
           },
         };
