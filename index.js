@@ -941,6 +941,10 @@ const orchestrator = {
         });
     },
 
+    // v0.8.8.6 character profile quick-init handler'ı character_profile modülünün
+    // ui.mount'unda tanımlıdır (modules/character_profile.js). Generic dispatcher
+    // (modules/ui.js) otomatik çağırır. Bu yüzden burada tekrar tanımlamaya gerek yok.
+
     wireAftercarePanel() {
         const self = this;
         if (!this.modules.find(m => m.name === 'aftercare')) return;
@@ -2479,6 +2483,13 @@ jQuery(async () => {
         eventSource.on(event_types.MESSAGE_RECEIVED, (data) => orchestrator.onMessageReceived(data));
         eventSource.on(event_types.MESSAGE_SENT, (data) => orchestrator.onMessageSent(data));
         eventSource.on(event_types.GENERATION_ENDED, () => orchestrator.onGenerationEnded());
+        // v0.8.8.6: Karakter değişince character_profile panel banner'ını refresh et
+        if (event_types.CHARACTER_CHANGED) {
+            eventSource.on(event_types.CHARACTER_CHANGED, () => orchestrator.refreshAllPanels());
+        }
+        if (event_types.CHARACTER_ID_CHANGED) {
+            eventSource.on(event_types.CHARACTER_ID_CHANGED, () => orchestrator.refreshAllPanels());
+        }
     });
 });
 

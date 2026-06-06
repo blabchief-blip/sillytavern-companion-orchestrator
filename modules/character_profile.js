@@ -29,8 +29,15 @@
 
 'use strict';
 
-const VOICE_STYLES = ['flirty-direct', 'teasing-slow', 'submissive-whisper', 'dominant-command'];
-const KINKS = ['voice-notes', 'selfies', 'intimate-texting', 'roleplay', 'pet-play', 'switch-dynamic'];
+const VOICE_STYLES = ['flirty-direct', 'teasing-slow', 'submissive-whisper', 'dominant-command', 'playful'];
+const KINKS = [
+    'voice-notes', 'selfies', 'intimate-texting', 'roleplay', 'pet-play', 'switch-dynamic',
+    // v0.8.8.6: Daha geniş kink listesi (Melisa kartı ve sonrası için)
+    'after-hours-flirting', 'office-roleplay', 'risqué-photos', 'exhibitionism',
+    'public', 'voyeurism', 'toys', 'threesome', 'group', 'anal',
+    'oral', 'rough', 'bondage', 'domination', 'submission', 'cum-control',
+    'feet', 'lingerie', 'bdsm', 'age-play', 'feminization'
+];
 const HARD_LIMITS_DEFAULT = ['violence', 'degradation', 'non-consent'];
 const PLATFORM_PREFS = ['whatsapp_style', 'telegram_style', 'signal_style', 'tinder_chat'];
 
@@ -301,6 +308,20 @@ export const characterProfileModule = {
                 self.set(charId, { voiceNoteEnabled: this.checked });
             });
 
+            // v0.8.8.6: Quick-init button + banner dismiss
+            $('#co_char_quick_init').off('click').on('click', function () {
+                const r = self.applyRecommendedProfile(charId);
+                if (r.ok) {
+                    $('#co_char_recommended_banner').slideUp(200);
+                    self.ui.refresh(orch);
+                } else {
+                    console.warn('[character_profile] quick-init failed:', r.error);
+                }
+            });
+            $('#co_char_recommended_dismiss').off('click').on('click', function () {
+                $('#co_char_recommended_banner').slideUp(200);
+            });
+
             // Initial populate
             self.ui.refresh(orch);
         },
@@ -350,6 +371,25 @@ export const characterProfileModule = {
             if ($selfie.length && $selfie.is(':checked') !== p.selfiePermission) $selfie.prop('checked', p.selfiePermission);
             const $vn = $('#co_char_voicenote');
             if ($vn.length && $vn.is(':checked') !== p.voiceNoteEnabled) $vn.prop('checked', p.voiceNoteEnabled);
+
+            // v0.8.8.6: Recommended profile banner — karakter için persona var mı?
+            try {
+                const stCtx = (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext?.());
+                if (stCtx) {
+                    const c = (stCtx.characters || []).find(x => x && (x.id === stCtx.characterId || x.name === charId));
+                    const persona = c?.persona || (c?.data && c.data.persona) || {};
+                    const hasRec = !!(persona.recommendedProfile || persona.voice || persona.kinks || persona.hard_limits !== undefined);
+                    const $banner = $('#co_char_recommended_banner');
+                    if ($banner.length) {
+                        if (hasRec) {
+                            $('#co_char_recommended_name').text(charId);
+                            $banner.slideDown(200);
+                        } else {
+                            $banner.slideUp(200);
+                        }
+                    }
+                }
+            } catch (_) { /* no-op */ }
         },
     },
 
@@ -418,6 +458,76 @@ export const characterProfileModule = {
             save();
         }
         return { ok: true, profile: defaultProfile() };
+    },
+
+    /**
+     * v0.8.8.6: Karakter kartında tanımlı önerilen profili uygula.
+     * Karakter seçildiğinde otomatik çağrılır (auto-init) veya
+     * /co char <name> nsfw quick-init komutuyla manuel tetiklenebilir.
+     *
+     * Karakter JSON'undan okur:
+     *   persona.recommendedProfile.voice
+     *   persona.recommendedProfile.trust (initial trust)
+     *   persona.recommendedProfile.hardLimits
+     *   persona.recommendedProfile.kinks
+     *   persona.recommendedProfile.selfiePermission
+     *   persona.voice, persona.hard_limits, persona.kinks, persona.trust_start
+     *   persona.selfie_permission
+     *
+     * Mevcut profile'ı override eder (full replace) — sadece auto-init veya
+     * explicit /co char nsfw quick-init ile çağrılır.
+     */
+    applyRecommendedProfile(charId) {
+        if (!charId) return { ok: false, error: 'charId required' };
+
+        // Aktif karakterin JSON'unu ST context'ten al
+        const charData = _ctx?.characters ? _ctx.characters.find(c => c.id === charId || c.filename === charId) : null;
+        if (!charData) return { ok: false, error: 'character not loaded' };
+
+        // persona veya data altında recommendedProfile ara
+        const persona = charData.persona || (charData.data && charData.data.persona) || {};
+        const rec = persona.recommendedProfile || null;
+        const legacyPersona = {
+            voice: persona.voice,
+            hardLimits: persona.hard_limits,
+            kinks: persona.kinks,
+            trust: persona.trust_start ?? persona.trust,
+            selfiePermission: persona.selfie_permission ?? persona.selfiePermission,
+        };
+
+        // Değerler: önce recommendedProfile, sonra persona alanları
+        const voice = rec?.voice || legacyPersona.voice;
+        const kinks = rec?.kinks || legacyPersona.kinks;
+        const hardLimits = rec?.hardLimits !== undefined ? rec.hardLimits : legacyPersona.hardLimits;
+        const trust = rec?.trust !== undefined ? rec.trust : legacyPersona.trust;
+        const selfiePermission = rec?.selfiePermission !== undefined ? rec.selfiePermission : legacyPersona.selfiePermission;
+
+        // En az bir alan tanımlı olmalı
+        if (!voice && !kinks && hardLimits === undefined && trust === undefined && selfiePermission === undefined) {
+            return { ok: false, error: 'no recommended profile' };
+        }
+
+        // Profili uygula (full replace, mevcut üzerine)
+        const current = this.get(charId);
+        const updated = {
+            ...current,
+            voice: voice || current.voice,
+            kinks: Array.isArray(kinks) ? kinks.filter(k => KINKS.includes(k)) : current.kinks,
+            hardLimits: Array.isArray(hardLimits) ? hardLimits : current.hardLimits,
+            selfiePermission: selfiePermission !== undefined ? !!selfiePermission : current.selfiePermission,
+            updatedAt: Date.now(),
+        };
+
+        // Trust ayrı saklanır (set ile)
+        this.set(charId, updated);
+        if (typeof trust === 'number' && trust >= 0) {
+            const store = getStore();
+            if (!store[charId]._trust) store[charId]._trust = 0;
+            store[charId]._trust = trust;
+        }
+
+        save();
+        return { ok: true, profile: this.get(charId), trust: this.getTrust(charId) };
     },
 
     list() {

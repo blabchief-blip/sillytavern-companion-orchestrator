@@ -438,6 +438,18 @@
                 <p style="font-size: 0.85em; opacity: 0.8; margin: 4px 0;">
                     Aktif karakter için ses üslubu, kink'ler, hard limit'ler ve trust seviyesi.
                 </p>
+                <div id="co_char_recommended_banner" style="display: none; margin-top: 6px; padding: 8px 10px; background: linear-gradient(90deg, rgba(76,175,80,0.18), rgba(33,150,243,0.12)); border-left: 3px solid #4caf50; border-radius: 4px; font-size: 0.85em;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.2em;">✨</span>
+                        <span style="flex: 1;"><strong id="co_char_recommended_name">Bu karakter</strong> için önerilen profil mevcut.</span>
+                        <button id="co_char_quick_init" class="menu_button" style="background: #4caf50; color: white; padding: 4px 10px; font-size: 0.9em; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fa-solid fa-bolt"></i> Hızlı Başlat
+                        </button>
+                        <button id="co_char_recommended_dismiss" class="menu_button" style="background: transparent; padding: 2px 6px; font-size: 0.85em; opacity: 0.6;" title="Kapat">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
                 <div class="co-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <label style="flex: 1; min-width: 130px;">
                         <span style="display:block; font-size:0.85em; opacity:0.8;">Karakter ID</span>
@@ -452,6 +464,7 @@
                             <option value="teasing-slow">🐢 Yavaş gerilim</option>
                             <option value="submissive-whisper">😇 Yumuşak fısıltı</option>
                             <option value="dominant-command">👑 Emir veren</option>
+                            <option value="playful">🎈 Eğlenceli / Playful</option>
                         </select>
                     </label>
                 </div>
@@ -475,6 +488,9 @@
                         <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="roleplay" /> 🎬 Rol yapma</label>
                         <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="pet-play" /> 🐾 Evcil hayvan oyunu</label>
                         <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="switch-dynamic" /> 🔄 Switch dinamiği</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="after-hours-flirting" /> 🌙 Mesai sonrası flört</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="office-roleplay" /> 🏢 Ofis RP</label>
+                        <label class="checkbox_label" style="font-size: 0.85em; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;"><input type="checkbox" data-kink="risqué-photos" /> 🔥 Riskli fotoğraf</label>
                     </div>
                 </div>
                 <div class="co-row" style="margin-top: 6px;">
