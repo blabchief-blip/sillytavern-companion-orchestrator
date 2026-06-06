@@ -1212,8 +1212,13 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
     // ComfyUI's LoadImage node reads the reference face from ComfyUI's own
     // `input/` directory. The tinder PNG lives in ST's data dir, NOT in
     // ComfyUI — so we must UPLOAD it to ComfyUI first, otherwise LoadImage
-    // fails and IP-Adapter FaceID has no face to work from. (This upload was
+    // fails and ReActor has no source face to swap from. (This upload was
     // the missing link: the old code just assumed the file was already there.)
+    //
+    // v0.8.9: IP-Adapter FaceID yerine ReActor face-swap. Taban görsel
+    // orijinal kart akışıyla (juggernautXL + 4 LoRA, FaceID YOK) üretilir →
+    // gerçekçilik bozulmaz; sonra ReActor referans yüzü swap eder + GFPGAN
+    // ile restore. Gerçekçilik ve kimlik artık birbiriyle yarışmıyor.
     let refImageBase;
     try {
         refImageBase = await uploadRefImageToComfyUI(comfyUrl, baseName);
@@ -1240,8 +1245,6 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*lorawt3*': 0.0, // Makeup Slider kapalı — yüzü değiştirip FaceID kimliğini bozuyordu
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
-        '*facelorawt*': 0.7, // faceid-plusv2 companion LoRA gücü (kimlik için ŞART — bu olmadan benzemiyordu)
-        '*ipweight*': 0.95, // LoRA geldiği için 1.2'den indirildi (LoRA+yüksek weight aşırı keskinleştiriyordu)
         '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,

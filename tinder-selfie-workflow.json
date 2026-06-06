@@ -7,7 +7,7 @@
       "sampler_name": "*sampler*",
       "scheduler": "karras",
       "denoise": "*denoise*",
-      "model": ["60", 0],
+      "model": ["38", 0],
       "positive": ["6", 0],
       "negative": ["7", 0],
       "latent_image": ["5", 0]
@@ -26,12 +26,12 @@
     "_meta": {"title": "Boş Gizli Görüntü"}
   },
   "6": {
-    "inputs": {"text": "*input*", "clip": ["4", 1]},
+    "inputs": {"text": "*input*", "clip": ["38", 1]},
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "Pozitif İstem"}
   },
   "7": {
-    "inputs": {"text": "*ninput*", "clip": ["4", 1]},
+    "inputs": {"text": "*ninput*", "clip": ["38", 1]},
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "Negatif İstem"}
   },
@@ -41,7 +41,7 @@
     "_meta": {"title": "VAE Kod Çözme"}
   },
   "9": {
-    "inputs": {"filename_prefix": "*prefix*", "images": ["8", 0]},
+    "inputs": {"filename_prefix": "*prefix*", "images": ["70", 0]},
     "class_type": "SaveImage",
     "_meta": {"title": "Görüntüyü Kaydet"}
   },
@@ -65,47 +65,28 @@
     "class_type": "LoraLoader",
     "_meta": {"title": "LoRA - Slot 4"}
   },
-  "61": {
-    "inputs": {"lora_name": "ip-adapter-faceid-plusv2_sdxl_lora.safetensors", "strength_model": "*facelorawt*", "model": ["38", 0]},
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {"title": "FaceID plusv2 companion LoRA (kimlik için ŞART)"}
-  },
-  "62": {
-    "inputs": {"ipadapter_file": "ip-adapter-faceid-plusv2_sdxl.bin"},
-    "class_type": "IPAdapterModelLoader",
-    "_meta": {"title": "IPAdapter FaceID Modeli"}
-  },
-  "63": {
-    "inputs": {"clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"},
-    "class_type": "CLIPVisionLoader",
-    "_meta": {"title": "CLIP Vision Loader"}
-  },
   "64": {
     "inputs": {"image": "*refimage*"},
     "class_type": "LoadImage",
-    "_meta": {"title": "Referans Fotoğraf (eşleşme yüzü)"}
+    "_meta": {"title": "Referans Yüz (eşleşme kartı portresi)"}
   },
-  "65": {
-    "inputs": {"provider": "ROCM"},
-    "class_type": "IPAdapterInsightFaceLoader",
-    "_meta": {"title": "InsightFace Loader"}
-  },
-  "60": {
+  "70": {
     "inputs": {
-      "model": ["61", 0],
-      "ipadapter": ["62", 0],
-      "image": ["64", 0],
-      "weight": "*ipweight*",
-      "weight_faceidv2": 1.5,
-      "weight_type": "linear",
-      "combine_embeds": "concat",
-      "start_at": 0.0,
-      "end_at": 1.0,
-      "embeds_scaling": "V only",
-      "clip_vision": ["63", 0],
-      "insightface": ["65", 0]
+      "enabled": true,
+      "input_image": ["8", 0],
+      "source_image": ["64", 0],
+      "swap_model": "inswapper_128.onnx",
+      "facedetection": "retinaface_resnet50",
+      "face_restore_model": "GFPGANv1.4.pth",
+      "face_restore_visibility": 1,
+      "codeformer_weight": 0.5,
+      "detect_gender_input": "no",
+      "detect_gender_source": "no",
+      "input_faces_index": "0",
+      "source_faces_index": "0",
+      "console_log_level": 1
     },
-    "class_type": "IPAdapterFaceID",
-    "_meta": {"title": "IPAdapter FaceID Apply"}
+    "class_type": "ReActorFaceSwap",
+    "_meta": {"title": "ReActor Face Swap (kimlik = referans yüz)"}
   }
 }
