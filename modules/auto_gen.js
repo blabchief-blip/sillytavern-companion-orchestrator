@@ -109,6 +109,26 @@ const SCENE_INTIMATE_PATTERNS = [
   { rx: /\b(threesome|three\s+some|threeway|three-way)\b/gi, tags: ['threesome', 'group_sex', 'multiple_partners'] },
   { rx: /\b(group\s+sex|orgy|gang\s+bang)\b/gi, tags: ['orgy', 'group_sex', 'multiple_partners'] },
   { rx: /\b(double\s+penetration|DP)\b/gi, tags: ['double_penetration', 'group_sex'] },
+
+  // ===== Türkçe sahne kelimeleri (v0.8.13) =====
+  { rx: /\b(sikiyor|sikişiyor|sikiş|sikmek|sikti|sikildi)\b/gi, tags: ['sex', 'penetration', 'nsfw', 'intense'] },
+  { rx: /\b(am[ıiını]*|amcığ?\w*|vajina)\b/gi, tags: ['pussy', 'vaginal', 'nsfw'] },
+  { rx: /\b(yarr?ak\w*|penis|sik[i]?\b)\b/gi, tags: ['penis', 'nsfw'] },
+  { rx: /\b(göt[üuü]*|popo|kıç)\b/gi, tags: ['ass', 'butt'] },
+  { rx: /\b(anal\s+seks|götüne|götten)\b/gi, tags: ['anal', 'anal_sex', 'nsfw'] },
+  { rx: /\b(oral\s+seks|yalıyor|yalatıyor|fellatio)\b/gi, tags: ['oral', 'blowjob', 'tongue_out'] },
+  { rx: /\b(meme\w*|göğüs\w*|buze\w*)\b/gi, tags: ['breast', 'cleavage'] },
+  { rx: /\b(meme\s+ucu\w*|nipple\w*)\b/gi, tags: ['nipple', 'areola'] },
+  { rx: /\b(inleme|inliyor|inledi|ah\s+çekiyor)\b/gi, tags: ['moaning', 'pleasure', 'open_mouth'] },
+  { rx: /\b(orgazm\w*|boşaldı|boşalmak|doruk)\b/gi, tags: ['orgasm', 'climax', 'pleasure', 'ecstasy'] },
+  { rx: /\b(zevk\s+alıyor|zevkle|keyif\s+alıyor)\b/gi, tags: ['pleasure', 'aroused'] },
+  { rx: /\b(soyunuyor|soyundu|kıyafetini\s+çıkarıyor)\b/gi, tags: ['undressing', 'stripping', 'nude'] },
+  { rx: /\b(mastürbasyon|kendini\s+tatmin|parmağını\s+sokuyor)\b/gi, tags: ['masturbation', 'fingering', 'solo'] },
+  { rx: /\b(bağlıyor|bağlandı|kısıtlıyor)\b/gi, tags: ['bondage', 'bdsm', 'restrained'] },
+  { rx: /\b(dominant|ağa|efendi|hükmediy?or)\b/gi, tags: ['dominant', 'domination'] },
+  { rx: /\b(itaatkar|boyun\s+eğiyor|teslim\s+oluyor)\b/gi, tags: ['submissive', 'surrender'] },
+  { rx: /\b(üçlü|üç\s+kişi|grup\s+seks)\b/gi, tags: ['threesome', 'group_sex'] },
+  { rx: /\b(kreampay|içine\s+boşal\w*)\b/gi, tags: ['creampie', 'cum_inside', 'cum'] },
 ];
 
 // =====================================================================
@@ -295,16 +315,36 @@ class AutoGen {
         lastGenTs: 0,
         comfyuiUrl: orch.settings.image_gen?.comfyuiUrl || 'http://192.168.68.66:8001',
         workflowFile: '6Lora-CyberReal.json', // file adı string olmalı!
-        // v0.8.12: NSFW odaklı Pony LoRA stack — gerçekçi deri + explicit anatomi
-        loras: [
-          'RealSkin_xxXL_v1.safetensors',          // deri dokusu gerçekçiliği
-          'ZITnsfwLoRAv2.safetensors',             // NSFW enabler (Pony)
-          'PerfectBreastsPonyV2.safetensors',      // göğüs kalitesi / anatomi
-          'mature_female_slider_pony_v2.safetensors', // olgun kadın vücut oranları
+        // v0.8.13: 3 seviyeli dinamik LoRA stack — spice'a göre otomatik seçilir
+        // SFW (spice 0-2): realism/aydınlatma odaklı
+        lorasSfw: [
+          'RealSkin_xxXL_v1.safetensors',
+          'Realism_Engine_Klein_V2.safetensors',
+          'add-detail-xl.safetensors',
+          'S1_Dramatic_Lighting_v3.safetensors',
         ],
+        lorasSwfWts: [0.4, 0.5, 0.5, 0.4],
+        // NSFW (spice 3): explicit enabler + anatomi kalitesi
+        lorasNsfw: [
+          'RealSkin_xxXL_v1.safetensors',
+          'ZITnsfwLoRAv2.safetensors',
+          'PerfectBreastsPonyV2.safetensors',
+          'mature_female_slider_pony_v2.safetensors',
+        ],
+        lorasNsfwWts: [0.4, 0.7, 0.5, 0.5],
+        // Explicit (spice 4): sert explicit + poz odaklı LoRA'lar
+        lorasExplicit: [
+          'RealSkin_xxXL_v1.safetensors',
+          'Mystic-XXX-ZIT-V7.safetensors',
+          'groping_poses-000009.safetensors',
+          'mature_female_slider_pony_v2.safetensors',
+        ],
+        lorasExplicitWts: [0.35, 0.65, 0.45, 0.5],
+        // Legacy fallback (UI'dan manuel set edilirse kullanılır)
+        loras: ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'],
         lorawts: [0.4, 0.7, 0.5, 0.5],
-        // v0.8.12: sansür kelimelerini negatif'e ekle (model blur/mosaic eklemesin)
-        negativeOverride: 'lowres, bad anatomy, bad hands, blurry, watermark, text, censored, mosaic, blur, covered, clothed, clothes, underwear',
+        // v0.8.13: sansür + anatomik hata negatifleri
+        negativeOverride: 'lowres, bad anatomy, bad hands, blurry, watermark, text, censored, mosaic, blur, covered, clothed, clothes, underwear, bad_pussy, malformed_genitals, fused_genitalia, extra_limbs, missing_limbs, mutation, deformed',
         width: 832,
         height: 1216,
         steps: 28,
@@ -312,8 +352,10 @@ class AutoGen {
         sampler: 'euler_ancestral',
         scheduler: 'karras',
         model: 'cyberrealisticPony_v170.safetensors',
-        prefix: 'masterpiece, best quality, highly detailed, photorealistic',
+        // v0.8.13: Pony scoring sistemi — cyberrealisticPony bu tag'lere tepki verir
+        prefix: 'score_9, score_8_up, score_7_up, rating_explicit, masterpiece, best quality, highly detailed, photorealistic',
         qualityTags: [
+          'score_9', 'score_8_up', 'score_7_up', 'rating_explicit',
           'masterpiece', 'best quality', 'highly detailed',
           'photorealistic', 'sharp focus', 'cinematic lighting',
         ],
@@ -336,14 +378,30 @@ class AutoGen {
 
     this.settings = orch.settings.auto_gen;
 
-    // v0.8.12: NSFW migration — eski kurulumları güncelle
+    // v0.8.12–v0.8.13: NSFW migration — eski kurulumları güncelle
     {
       const s = this.settings;
-      // LoRA stack: incase_style (anime) → NSFW Pony stack
+      const NSFW_LORAS     = ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'];
+      const NSFW_WTS       = [0.4, 0.7, 0.5, 0.5];
+      const SFW_LORAS      = ['RealSkin_xxXL_v1.safetensors', 'Realism_Engine_Klein_V2.safetensors', 'add-detail-xl.safetensors', 'S1_Dramatic_Lighting_v3.safetensors'];
+      const SFW_WTS        = [0.4, 0.5, 0.5, 0.4];
+      const EXPLICIT_LORAS = ['RealSkin_xxXL_v1.safetensors', 'Mystic-XXX-ZIT-V7.safetensors', 'groping_poses-000009.safetensors', 'mature_female_slider_pony_v2.safetensors'];
+      const EXPLICIT_WTS   = [0.35, 0.65, 0.45, 0.5];
+      // LoRA stack: incase_style (anime) → yeni yapı
       if (Array.isArray(s.loras) && s.loras.includes('incase_style_v3-1_ponyxl_ilff.safetensors')) {
-        s.loras = ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'];
-        s.lorawts = [0.4, 0.7, 0.5, 0.5];
-        console.log('[Companion AutoGen] v0.8.12 migration: NSFW LoRA stack güncellendi');
+        s.loras = NSFW_LORAS; s.lorawts = NSFW_WTS;
+        console.log('[Companion AutoGen] v0.8.13 migration: NSFW LoRA stack güncellendi');
+      }
+      // Dinamik 3-stack kurulumu
+      if (!s.lorasSfw)      { s.lorasSfw = SFW_LORAS; s.lorasSwfWts = SFW_WTS; }
+      if (!s.lorasNsfw)     { s.lorasNsfw = NSFW_LORAS; s.lorasNsfwWts = NSFW_WTS; }
+      if (!s.lorasExplicit) { s.lorasExplicit = EXPLICIT_LORAS; s.lorasExplicitWts = EXPLICIT_WTS; }
+      // Prefix: Pony scoring tag'leri ekle
+      if (s.prefix && !s.prefix.includes('score_9')) {
+        s.prefix = 'score_9, score_8_up, score_7_up, rating_explicit, ' + s.prefix;
+      }
+      if (Array.isArray(s.qualityTags) && !s.qualityTags.includes('score_9')) {
+        s.qualityTags.unshift('score_9', 'score_8_up', 'score_7_up', 'rating_explicit');
       }
       // explicitMode + maxAllowedSpice guard'ları kaldır
       if (s.explicitMode === false) { s.explicitMode = true; }
@@ -351,9 +409,12 @@ class AutoGen {
       // CFG / steps yükselt
       if (s.cfg < 6) { s.cfg = 6; }
       if (s.steps < 28) { s.steps = 28; }
-      // Negatif prompt'a sansür kelimeleri ekle
+      // Negatif prompt: sansür + anatomik hata
       if (s.negativeOverride && !s.negativeOverride.includes('censored')) {
         s.negativeOverride += ', censored, mosaic, blur, covered, clothed, clothes, underwear';
+      }
+      if (s.negativeOverride && !s.negativeOverride.includes('bad_pussy')) {
+        s.negativeOverride += ', bad_pussy, malformed_genitals, fused_genitalia, extra_limbs, missing_limbs, mutation, deformed';
       }
     }
 
@@ -862,6 +923,24 @@ class AutoGen {
     if (typeof workflow === 'string') workflow = JSON.parse(workflow);
 
     // 2) Override placeholders
+    // v0.8.13: spice'a göre dinamik LoRA stack seç
+    const spiceLevel = this._getCurrentSpice();
+    let activeLoras, activeWts;
+    if (spiceLevel >= 4 && Array.isArray(this.settings.lorasExplicit)) {
+      activeLoras = this.settings.lorasExplicit;
+      activeWts   = this.settings.lorasExplicitWts || [0.35, 0.65, 0.45, 0.5];
+    } else if (spiceLevel >= 3 && Array.isArray(this.settings.lorasNsfw)) {
+      activeLoras = this.settings.lorasNsfw;
+      activeWts   = this.settings.lorasNsfwWts || [0.4, 0.7, 0.5, 0.5];
+    } else if (Array.isArray(this.settings.lorasSfw)) {
+      activeLoras = this.settings.lorasSfw;
+      activeWts   = this.settings.lorasSwfWts || [0.4, 0.5, 0.5, 0.4];
+    } else {
+      // fallback: eski tek-stack
+      activeLoras = this.settings.loras || [];
+      activeWts   = this.settings.lorawts || [];
+    }
+
     for (const nodeId in workflow) {
       const node = workflow[nodeId];
       if (!node?.inputs) continue;
@@ -876,14 +955,14 @@ class AutoGen {
         else if (v === '*cfg*') node.inputs[key] = this.settings.cfg;
         else if (v === '*width*') node.inputs[key] = this.settings.width;
         else if (v === '*height*') node.inputs[key] = this.settings.height;
-        else if (v === '*lora*') node.inputs[key] = this.settings.loras[0];
-        else if (v === '*lora2*') node.inputs[key] = this.settings.loras[1];
-        else if (v === '*lora3*') node.inputs[key] = this.settings.loras[2];
-        else if (v === '*lora4*') node.inputs[key] = this.settings.loras[3];
-        else if (v === '*lorawt*') node.inputs[key] = this.settings.lorawts[0];
-        else if (v === '*lorawt2*') node.inputs[key] = this.settings.lorawts[1];
-        else if (v === '*lorawt3*') node.inputs[key] = this.settings.lorawts[2];
-        else if (v === '*lorawt4*') node.inputs[key] = this.settings.lorawts[3];
+        else if (v === '*lora*')   node.inputs[key] = activeLoras[0];
+        else if (v === '*lora2*')  node.inputs[key] = activeLoras[1];
+        else if (v === '*lora3*')  node.inputs[key] = activeLoras[2];
+        else if (v === '*lora4*')  node.inputs[key] = activeLoras[3];
+        else if (v === '*lorawt*')  node.inputs[key] = activeWts[0];
+        else if (v === '*lorawt2*') node.inputs[key] = activeWts[1];
+        else if (v === '*lorawt3*') node.inputs[key] = activeWts[2];
+        else if (v === '*lorawt4*') node.inputs[key] = activeWts[3];
       }
     }
 

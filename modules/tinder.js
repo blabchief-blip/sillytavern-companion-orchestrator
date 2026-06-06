@@ -1186,30 +1186,35 @@ const NSFW_TIER_PRESETS = {
 // değil). Tier 3+ gevşer (nude pozitif tag, ama porn/explicit hâlâ reddedilir
 // — abuse ve grotesk'i önler). Tier 4'te sadece anatomik kalite kontrolü
 // kalır.
+// v0.8.13: Tier negative prompt'ları güçlendirildi.
+// Tier 1-2: explicit içerik bloklu (kıyafetli veya iç çamaşır).
+// Tier 3: nude pozitif → nude negatiften çıktı; sansür kelimeleri eklendi.
+// Tier 4: sadece grotesk/anatomik hata bloklu; her şey izinli.
 const NSFW_TIER_NEGATIVES = {
     1: [
-        'nude, naked, porn, explicit, sexual act',
-        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'nude, naked, porn, explicit, sexual act, nipples, genitals',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality, watermark',
         'identical faces, similar faces',
+        'censored, mosaic, blur',
     ].join(', '),
     2: [
         'nude, naked, porn, explicit, sexual act, exposed nipples, exposed genitals',
-        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality, watermark',
         'identical faces, similar faces',
+        'censored, mosaic, blur',
     ].join(', '),
     3: [
-        // nude çıkarıldı (pozitif tag), porn/explicit hâlâ var (grotesk önleme)
-        'porn, explicit sexual act, graphic content, blood, gore',
-        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        // nude çıkarıldı (pozitif tag); sansür + anatomik hata eklendi
+        'porn, graphic content, blood, gore',
+        'censored, mosaic, blur, covered, clothed',
+        'deformed, bad anatomy, bad_pussy, malformed_genitals, extra fingers, extra limbs, blurry, low quality, watermark',
         'identical faces, similar faces',
     ].join(', '),
     4: [
-        // Sadece anatomik kalite kontrolü — tier 4 trust 9+ gerektirdiği için
-        // ek guard character_profile.canEscalateToNsfwSelfie'de. Porn/explicit
-        // de kalktı çünkü oyuncak/ekspresif içerikte sadece grotesk/kan
-        // reddedilmesi yeterli.
+        // Sadece grotesk + anatomik hata — tüm explicit içerik izinli
         'graphic violence, blood, gore',
-        'deformed, bad anatomy, extra fingers, extra limbs, blurry, low quality',
+        'censored, mosaic, blur, covered',
+        'deformed, bad anatomy, bad_pussy, malformed_genitals, fused_genitalia, extra fingers, extra limbs, missing_limbs, mutation, blurry, low quality, watermark',
         'identical faces, similar faces',
     ].join(', '),
 };
@@ -1360,9 +1365,10 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*lorawt3*': 0.6,
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
-        // Slot 5: checkpoint ile aynı yapımcının realism LoRA'sı (ekstra cila)
-        '*lora5*': 'Realism Lora By Stable Yogi_V3_Lite.safetensors',
-        '*lorawt5*': 0.5,
+        // v0.8.13: Slot 5 → NSFW enabler. Realism Yogi yerine ZITnsfwLoRAv2:
+        // tier 3-4 selfie'de kıyafetsiz/explicit pozlar düzgün açılıyor.
+        '*lora5*': 'ZITnsfwLoRAv2.safetensors',
+        '*lorawt5*': 0.6,
         '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,
