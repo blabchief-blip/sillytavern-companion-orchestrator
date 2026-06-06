@@ -1009,7 +1009,7 @@ async function submitSelfieToComfyUI({ comfyUrl, baseName, refImage, prompt, neg
         '*lora4*': 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
         '*lorawt4*': 1.0,
         '*ipweight*': 0.85,
-        '*denoise*': 0.7,
+        '*denoise*': 1.0, // txt2img boş latent'ten: tam denoise (0.7 yıkanmış/eksik üretiyordu)
         '*refimage*': refImageBase,
         '*prefix*': `selfie_${baseName}_${Date.now()}`,
     };
