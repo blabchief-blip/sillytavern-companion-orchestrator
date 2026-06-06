@@ -1272,15 +1272,25 @@ class AutoGen {
   // Summary (status panel için)
   // -----------------------------------------------------------
   summary() {
+    const s = this.settings || {};
+    // Aktif LoRA stack sayısını bul (dinamik 3-stack veya legacy loras)
+    const spice = this._getCurrentSpice?.() ?? 0;
+    let loraCount = 0;
+    try {
+      if (spice >= 4 && Array.isArray(s.lorasExplicit)) loraCount = s.lorasExplicit.length;
+      else if (spice >= 3 && Array.isArray(s.lorasNsfw))  loraCount = s.lorasNsfw.length;
+      else if (Array.isArray(s.lorasSfw))                  loraCount = s.lorasSfw.length;
+      else if (Array.isArray(s.loras))                     loraCount = s.loras.length;
+    } catch (_) { loraCount = 0; }
     return {
-      enabled: this.settings.enabled,
-      trigger: this.settings.trigger,
-      workflow: this.settings.workflowFile,
-      loraCount: this.settings.loras.length,
-      lastGen: this.settings.history?.[0]?.timestamp
-        ? new Date(this.settings.history[0].timestamp).toLocaleTimeString('tr-TR')
+      enabled: s.enabled,
+      trigger: s.trigger,
+      workflow: s.workflowFile,
+      loraCount,
+      lastGen: s.history?.[0]?.timestamp
+        ? new Date(s.history[0].timestamp).toLocaleTimeString('tr-TR')
         : '—',
-      historyCount: this.settings.history?.length || 0,
+      historyCount: s.history?.length || 0,
     };
   }
 }
