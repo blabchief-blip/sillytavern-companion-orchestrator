@@ -357,7 +357,7 @@ export function registerAllCommands(orch) {
 
                 const charId = args[1];
                 if (!charId) {
-                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom>\n  /co char list';
+                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>\n  /co char list';
                 }
                 if (charId === 'list') {
                     const all = cp.list();
