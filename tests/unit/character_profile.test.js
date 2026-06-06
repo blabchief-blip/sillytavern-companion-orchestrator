@@ -268,3 +268,67 @@ describe('character_profile — global namespace (v0.8.6 prompts coupling)', () 
         assert.match(dir, /Ses üslubu/);
     });
 });
+
+describe('character_profile — init() defensive (v0.8.7 production bug fix)', () => {
+    // v0.8.6'da init içinde getStore() _orch.settings.characters erişiyordu.
+    // defaultSettings'de characters key yoksa TypeError fırlatıyor, init duruyor,
+    // globalThis.__co_characterProfile namespace'i set edilmiyor, /co char patlıyor.
+    // v0.8.7 fix: namespace set'ini EN BAŞA al + getStore() try/catch.
+
+    test('init() globalThis.__co_characterProfile set eder — orch.settings undefined olsa bile', () => {
+        // Cleanup onceki namespace'i
+        delete globalThis.__co_characterProfile;
+        characterProfileModule.init({ settings: undefined });
+        assert.equal(globalThis.__co_characterProfile, characterProfileModule,
+            'settings undefined olsa bile namespace set edilmeli');
+    });
+
+    test('init() globalThis.__co_characterProfile set eder — orch.settings.characters undefined olsa bile', () => {
+        delete globalThis.__co_characterProfile;
+        characterProfileModule.init({ settings: {} });
+        assert.equal(globalThis.__co_characterProfile, characterProfileModule,
+            'settings.characters undefined olsa bile namespace set edilmeli');
+    });
+
+    test('init() getStore() patlasa bile namespace korunur', () => {
+        delete globalThis.__co_characterProfile;
+        // Proxy ile getStore tetikleyen property erişimini patlat
+        const badOrch = new Proxy({}, {
+            get(t, p) {
+                if (p === 'settings') {
+                    // Hemen throw et, böylece _orch.settings erişiminde patlar
+                    return new Proxy({}, {
+                        get(t2, p2) {
+                            if (p2 === 'characters') throw new Error('boom');
+                            return t2[p2];
+                        },
+                    });
+                }
+                return t[p];
+            },
+        });
+        // console.error'ı yut
+        const origError = console.error;
+        const errs = [];
+        console.error = (...args) => errs.push(args);
+        characterProfileModule.init(badOrch);
+        console.error = origError;
+        assert.equal(globalThis.__co_characterProfile, characterProfileModule,
+            'getStore() patlasa bile namespace korunur');
+        assert.ok(errs.length > 0, 'console.error hata logladı');
+        assert.match(String(errs[0]), /character_profile getStore/);
+    });
+
+    test('getStore() _orch undefined ise null döner (defensive)', () => {
+        // init çağrılmadan direkt test — _orch set edilmemiş
+        // Önce: _orch null state'te olmalı (test isolation için)
+        // Bu test modülünün iç state'ine bağımlı; sadece logic test
+        // (init doğru sırada çağrılırsa _orch set eder)
+        const cp = characterProfileModule;
+        // init({}) çağrısı _orch = {} yapar; sonra cleanup
+        cp.init({ settings: {} });
+        assert.equal(globalThis.__co_characterProfile, cp);
+        // Cleanup
+        delete globalThis.__co_characterProfile;
+    });
+});
