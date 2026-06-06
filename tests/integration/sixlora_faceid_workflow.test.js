@@ -98,9 +98,26 @@ describe('6Lora-CyberReal-FaceID workflow dosyası', () => {
         const weight = workflow['103'].inputs.weight;
         assert.equal(typeof weight, 'number', 'Weight numeric olmalı (string wildcard olmamalı)');
         assert.ok(weight >= 0 && weight <= 1, 'Weight 0-1 aralığında olmalı');
-        // image string olmalı (validation file exists check yapar; default placeholder OK)
+        // image gerçek mevcut dosya olmalı (placeholder.png yoktu ComfyUI input/'da;
+        // smoke_test.png tinder-batch/'te mevcut ve uploadRefImageToComfyUI
+        // ile ComfyUI input/'a yüklenir)
         const image = workflow['102'].inputs.image;
         assert.equal(typeof image, 'string', 'image string olmalı');
+        assert.ok(image.length > 0, 'image boş olmamalı');
+        // smoke_test.png veya placeholder.png veya başka var olan dosya
+        assert.match(image, /\.(png|jpg|jpeg|webp)$/i, 'geçerli görsel uzantısı olmalı');
+    });
+
+    test('tinder.js 102.image\'ı runtime\'da refImageBase ile değiştiriyor', () => {
+        const tinderSrc = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'modules', 'tinder.js'),
+            'utf-8'
+        );
+        // Wildcard yerine runtime mutation
+        assert.match(tinderSrc, /workflow\['102'\]\?\.inputs\?\.image\s*!==\s*undefined/,
+            'tinder.js 102.image\'ı runtime\'da override etmeli');
+        assert.match(tinderSrc, /workflow\['102'\]\.inputs\.image\s*=\s*refImageBase/,
+            'tinder.js 102.image = refImageBase yapmalı');
     });
 
     test('IPAdapterModelLoader doğru FaceID model dosyasını yükler', () => {

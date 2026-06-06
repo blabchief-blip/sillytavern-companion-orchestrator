@@ -1368,6 +1368,13 @@ async function submit6LoraFaceIDSelfieToComfyUI({ comfyUrl, baseName, prompt, ne
     };
     const workflow = _substituteWildcards(template, substitutions);
 
+    // v0.8.8.4: 102 LoadImage.image default 'smoke_test.png' (tinder-batch/ altında
+    // mevcut). tinder.js substitution'ı *refimage* aramaz (workflow'ta yok);
+    // bunun yerine runtime'da 102.image'ı doğrudan refImageBase ile değiştir.
+    if (workflow['102']?.inputs?.image !== undefined) {
+        workflow['102'].inputs.image = refImageBase;
+    }
+
     // Submit
     let resp, data;
     try {

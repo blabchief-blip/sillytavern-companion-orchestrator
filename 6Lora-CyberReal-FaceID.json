@@ -195,7 +195,7 @@
   "102": {
     "class_type": "LoadImage",
     "inputs": {
-      "image": "placeholder.png"
+      "image": "smoke_test.png"
     }
   },
   "103": {
