@@ -56,6 +56,12 @@ let _ctx = null;
 
 function getStore() {
     if (!_orch) return null;
+    if (!_orch.settings) {
+        // v0.8.7 fix: index.js init sırasında settings henüz set edilmemiş
+        // olabilir (race condition) veya farklı bir module önce bozmuş olabilir.
+        // Defensive: settings objesini oluştur.
+        _orch.settings = {};
+    }
     if (!_orch.settings.characters) {
         _orch.settings.characters = {};
     }
@@ -350,10 +356,15 @@ export const characterProfileModule = {
     init(orch) {
         _orch = orch;
         _ctx = typeof SillyTavern !== 'undefined' ? SillyTavern.getContext() : null;
-        getStore(); // seed default
-        // v0.8.6: prompts.js bu namespace'i okuyor (lazy coupling)
+        // v0.8.7 fix: namespace set'ini EN BAŞA al, böylece getStore() patlasa
+        // bile commands.js /co char cp lookup çalışır (hata mesajı yerine
+        // graceful no-op). getStore() hâlâ seed için çağrılır, ama hata
+        // durumunda try/catch ile swallow edilir.
         if (typeof globalThis !== 'undefined') {
             globalThis.__co_characterProfile = this;
+        }
+        try { getStore(); } catch (e) {
+            console.error('[Companion Orchestrator] character_profile getStore() failed:', e?.message || e);
         }
     },
 
