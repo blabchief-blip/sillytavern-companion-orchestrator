@@ -23,18 +23,25 @@ beforeEach(() => {
 });
 
 describe('character_profile — schema & defaults', () => {
-    test('4 voice style mevcut', () => {
-        assert.equal(characterProfileModule.VOICE_STYLES.length, 4);
+    test('5 voice style mevcut (v0.8.8.6: playful eklendi)', () => {
+        assert.equal(characterProfileModule.VOICE_STYLES.length, 5);
         assert.ok(characterProfileModule.VOICE_STYLES.includes('flirty-direct'));
         assert.ok(characterProfileModule.VOICE_STYLES.includes('teasing-slow'));
         assert.ok(characterProfileModule.VOICE_STYLES.includes('submissive-whisper'));
         assert.ok(characterProfileModule.VOICE_STYLES.includes('dominant-command'));
+        assert.ok(characterProfileModule.VOICE_STYLES.includes('playful'));
     });
 
-    test('6 kink mevcut', () => {
-        assert.equal(characterProfileModule.KINKS.length, 6);
+    test('27 kink mevcut (v0.8.8.6: Melisa + genişletilmiş kink listesi)', () => {
+        // Önceki 6 + 21 yeni = 27
+        assert.equal(characterProfileModule.KINKS.length, 27);
+        // Eski 6
         assert.ok(characterProfileModule.KINKS.includes('voice-notes'));
         assert.ok(characterProfileModule.KINKS.includes('selfies'));
+        // v0.8.8.6 yeni
+        assert.ok(characterProfileModule.KINKS.includes('after-hours-flirting'));
+        assert.ok(characterProfileModule.KINKS.includes('office-roleplay'));
+        assert.ok(characterProfileModule.KINKS.includes('risqué-photos'));
     });
 
     test('3 default hard limit', () => {

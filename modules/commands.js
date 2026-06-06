@@ -483,6 +483,26 @@ export function registerAllCommands(orch) {
                     return 'Şu an sadece /co char <isim> nsfw <action> destekleniyor.';
                 }
                 const sub_action = args[3];
+                if (sub_action === 'quick-init' || sub_action === 'init' || sub_action === 'setup') {
+                    // v0.8.8.6: Karakter kartında tanımlı recommendedProfile'ı uygula.
+                    // Komut: /co char <isim> nsfw quick-init
+                    const r = cp.applyRecommendedProfile(charId);
+                    if (!r.ok) {
+                        if (r.error === 'no recommended profile') {
+                            return `${charId} için önerilen profil bulunamadı. /co char <isim> nsfw show ile mevcut ayarları gör, veya kart JSON'una persona.recommendedProfile ekle.`;
+                        }
+                        return `Hata: ${r.error}`;
+                    }
+                    const s = cp.summary(charId);
+                    return [
+                        `✅ ${charId} profil hazır:`,
+                        `  Ses: ${s.voice}`,
+                        `  Kinks: ${r.profile.kinks.length} (${r.profile.kinks.join(', ')})`,
+                        `  Hard limits: ${r.profile.hardLimits.length} (${r.profile.hardLimits.join(', ') || 'boş'})`,
+                        `  Trust: ${s.trust}`,
+                        `  Selfie: ${s.selfiePermission ? 'on' : 'off'}`,
+                    ].join('\n');
+                }
                 if (!sub_action || sub_action === 'show') {
                     const s = cp.summary(charId);
                     const p = cp.get(charId);

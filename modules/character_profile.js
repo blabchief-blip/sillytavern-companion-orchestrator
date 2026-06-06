@@ -29,8 +29,15 @@
 
 'use strict';
 
-const VOICE_STYLES = ['flirty-direct', 'teasing-slow', 'submissive-whisper', 'dominant-command'];
-const KINKS = ['voice-notes', 'selfies', 'intimate-texting', 'roleplay', 'pet-play', 'switch-dynamic'];
+const VOICE_STYLES = ['flirty-direct', 'teasing-slow', 'submissive-whisper', 'dominant-command', 'playful'];
+const KINKS = [
+    'voice-notes', 'selfies', 'intimate-texting', 'roleplay', 'pet-play', 'switch-dynamic',
+    // v0.8.8.6: Daha geniş kink listesi (Melisa kartı ve sonrası için)
+    'after-hours-flirting', 'office-roleplay', 'risqué-photos', 'exhibitionism',
+    'public', 'voyeurism', 'toys', 'threesome', 'group', 'anal',
+    'oral', 'rough', 'bondage', 'domination', 'submission', 'cum-control',
+    'feet', 'lingerie', 'bdsm', 'age-play', 'feminization'
+];
 const HARD_LIMITS_DEFAULT = ['violence', 'degradation', 'non-consent'];
 const PLATFORM_PREFS = ['whatsapp_style', 'telegram_style', 'signal_style', 'tinder_chat'];
 
@@ -53,6 +60,64 @@ function defaultProfile() {
 
 let _orch = null;
 let _ctx = null;
+
+/**
+ * v0.8.8.7: ST 1.18+ characters array formatları uyumlu karakter lookup.
+ * ST'de `characters` hem array, hem de object map olabilir, ayrıca
+ * `characterId` (aktif karakter) ve `this_chid` ayrı olabilir.
+ * Öncelik sırası:
+ * 1. Aktif karakter (ctx.characterId / ctx.this_chid)
+ * 2. ID/filename eşleşmesi
+ * 3. Name eşleşmesi
+ * Hata durumunda null döner.
+ */
+function findCharacterById(ctx, charId) {
+    if (!ctx) return null;
+    const chars = ctx.characters;
+    if (!chars) return null;
+
+    // Önce aktif karakter (eğer charId ile eşleşiyorsa)
+    const activeId = ctx.characterId ?? ctx.this_chid;
+    if (activeId !== undefined && activeId !== null) {
+        const active = Array.isArray(chars) ? chars[activeId] : chars[activeId];
+        if (active) {
+            if (
+                active.name === charId
+                || active.filename === charId
+                || active.avatar === charId
+                || String(active.id) === String(charId)
+                || String(activeId) === String(charId)
+            ) {
+                return active;
+            }
+        }
+    }
+
+    // ST 1.18 array format: Array.isArray(chars) === true
+    if (Array.isArray(chars)) {
+        // Önce doğrudan index olarak
+        if (chars[charId]) return chars[charId];
+        // Sonra find ile
+        const found = chars.find(c => c
+            && (c.name === charId
+                || c.filename === charId
+                || c.avatar === charId
+                || c.id === charId
+                || String(c.id) === String(charId)));
+        if (found) return found;
+    } else if (typeof chars === 'object') {
+        // Eski format: { [id]: data } veya { [name]: data }
+        if (chars[charId]) return chars[charId];
+        // Value'lardan birinde name eşleşmesi
+        for (const [k, v] of Object.entries(chars)) {
+            if (v && (v.name === charId || v.filename === charId || v.avatar === charId)) {
+                return v;
+            }
+        }
+    }
+
+    return null;
+}
 
 function getStore() {
     if (!_orch) return null;
@@ -301,6 +366,20 @@ export const characterProfileModule = {
                 self.set(charId, { voiceNoteEnabled: this.checked });
             });
 
+            // v0.8.8.6: Quick-init button + banner dismiss
+            $('#co_char_quick_init').off('click').on('click', function () {
+                const r = self.applyRecommendedProfile(charId);
+                if (r.ok) {
+                    $('#co_char_recommended_banner').slideUp(200);
+                    self.ui.refresh(orch);
+                } else {
+                    console.warn('[character_profile] quick-init failed:', r.error);
+                }
+            });
+            $('#co_char_recommended_dismiss').off('click').on('click', function () {
+                $('#co_char_recommended_banner').slideUp(200);
+            });
+
             // Initial populate
             self.ui.refresh(orch);
         },
@@ -350,6 +429,25 @@ export const characterProfileModule = {
             if ($selfie.length && $selfie.is(':checked') !== p.selfiePermission) $selfie.prop('checked', p.selfiePermission);
             const $vn = $('#co_char_voicenote');
             if ($vn.length && $vn.is(':checked') !== p.voiceNoteEnabled) $vn.prop('checked', p.voiceNoteEnabled);
+
+            // v0.8.8.6: Recommended profile banner — karakter için persona var mı?
+            try {
+                const stCtx = (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext?.());
+                if (stCtx) {
+                    const c = (stCtx.characters || []).find(x => x && (x.id === stCtx.characterId || x.name === charId));
+                    const persona = c?.persona || (c?.data && c.data.persona) || {};
+                    const hasRec = !!(persona.recommendedProfile || persona.voice || persona.kinks || persona.hard_limits !== undefined);
+                    const $banner = $('#co_char_recommended_banner');
+                    if ($banner.length) {
+                        if (hasRec) {
+                            $('#co_char_recommended_name').text(charId);
+                            $banner.slideDown(200);
+                        } else {
+                            $banner.slideUp(200);
+                        }
+                    }
+                }
+            } catch (_) { /* no-op */ }
         },
     },
 
@@ -418,6 +516,96 @@ export const characterProfileModule = {
             save();
         }
         return { ok: true, profile: defaultProfile() };
+    },
+
+    /**
+     * v0.8.8.6: Karakter kartında tanımlı önerilen profili uygula.
+     * Karakter seçildiğinde otomatik çağrılır (auto-init) veya
+     * /co char <name> nsfw quick-init komutuyla manuel tetiklenebilir.
+     *
+     * Karakter JSON'undan okur:
+     *   persona.recommendedProfile.voice
+     *   persona.recommendedProfile.trust (initial trust)
+     *   persona.recommendedProfile.hardLimits
+     *   persona.recommendedProfile.kinks
+     *   persona.recommendedProfile.selfiePermission
+     *   persona.voice, persona.hard_limits, persona.kinks, persona.trust_start
+     *   persona.selfie_permission
+     *
+     * Mevcut profile'ı override eder (full replace) — sadece auto-init veya
+     * explicit /co char nsfw quick-init ile çağrılır.
+     */
+    applyRecommendedProfile(charId) {
+        if (!charId) return { ok: false, error: 'charId required' };
+
+        // v0.8.8.7 fix: Her çağrıda fresh ST context al — init'te set edilen
+        // _ctx stale olabilir (ST sayfa yenilenmediyse characters boş döner).
+        // Birden fazla fallback: _ctx (init'te set), globalThis.SillyTavern
+        // (runtime), veya doğrudan this_chid ile aktif karakter.
+        const ctx = _ctx
+            || (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getContext === 'function' ? SillyTavern.getContext() : null)
+            || (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext ? globalThis.SillyTavern.getContext() : null);
+        if (!ctx) return { ok: false, error: 'ST context unavailable (refresh ST with Cmd+R)' };
+
+        // ST 1.18+ characters array formatı: { [characterId]: characterData }
+        // Eski ST'de: characters[chid] = data
+        // Karakteri bul: önce activeCharId, sonra id, sonra filename, sonra name
+        const charData = findCharacterById(ctx, charId);
+        if (!charData) {
+            // Debug: hangi characters yüklü?
+            const charKeys = ctx.characters
+                ? (Array.isArray(ctx.characters) ? ctx.characters.map(c => c?.name || c?.filename || c?.id) : Object.keys(ctx.characters))
+                : [];
+            return {
+                ok: false,
+                error: `character not loaded (aranan: "${charId}", yüklü karakterler: ${charKeys.length} — ${charKeys.slice(0, 5).join(', ')}${charKeys.length > 5 ? '...' : ''})`,
+            };
+        }
+
+        // persona veya data altında recommendedProfile ara
+        const persona = charData.persona || (charData.data && charData.data.persona) || {};
+        const rec = persona.recommendedProfile || null;
+        const legacyPersona = {
+            voice: persona.voice,
+            hardLimits: persona.hard_limits,
+            kinks: persona.kinks,
+            trust: persona.trust_start ?? persona.trust,
+            selfiePermission: persona.selfie_permission ?? persona.selfiePermission,
+        };
+
+        // Değerler: önce recommendedProfile, sonra persona alanları
+        const voice = rec?.voice || legacyPersona.voice;
+        const kinks = rec?.kinks || legacyPersona.kinks;
+        const hardLimits = rec?.hardLimits !== undefined ? rec.hardLimits : legacyPersona.hardLimits;
+        const trust = rec?.trust !== undefined ? rec.trust : legacyPersona.trust;
+        const selfiePermission = rec?.selfiePermission !== undefined ? rec.selfiePermission : legacyPersona.selfiePermission;
+
+        // En az bir alan tanımlı olmalı
+        if (!voice && !kinks && hardLimits === undefined && trust === undefined && selfiePermission === undefined) {
+            return { ok: false, error: 'no recommended profile' };
+        }
+
+        // Profili uygula (full replace, mevcut üzerine)
+        const current = this.get(charId);
+        const updated = {
+            ...current,
+            voice: voice || current.voice,
+            kinks: Array.isArray(kinks) ? kinks.filter(k => KINKS.includes(k)) : current.kinks,
+            hardLimits: Array.isArray(hardLimits) ? hardLimits : current.hardLimits,
+            selfiePermission: selfiePermission !== undefined ? !!selfiePermission : current.selfiePermission,
+            updatedAt: Date.now(),
+        };
+
+        // Trust ayrı saklanır (set ile)
+        this.set(charId, updated);
+        if (typeof trust === 'number' && trust >= 0) {
+            const store = getStore();
+            if (!store[charId]._trust) store[charId]._trust = 0;
+            store[charId]._trust = trust;
+        }
+
+        save();
+        return { ok: true, profile: this.get(charId), trust: this.getTrust(charId) };
     },
 
     list() {

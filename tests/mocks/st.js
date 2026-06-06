@@ -105,14 +105,29 @@ function createMockCtx(initial = {}) {
     };
 }
 
+// v0.8.8.7: getContext() return null toggle — runtime'da resetlenebilir
+let getContextNullNext = false;
+export function setNextGetContextNull(flag) {
+    getContextNullNext = !!flag;
+}
+
 export function installStMocks(initial = {}) {
     if (installed) {
         throw new Error('installStMocks called twice; call resetStMocks() first');
     }
     installed = true;
     ctx = createMockCtx(initial);
+    // v0.8.8.7: Optional toggle — setNextGetContextNull(true) sonraki
+    // getContext() çağrısı null döner. v0.8.8.7 fix test'i: runtime'da
+    // context stale olsa bile fresh fallback alır.
     globalThis.SillyTavern = {
-        getContext() { return ctx; },
+        getContext() {
+            if (getContextNullNext) {
+                getContextNullNext = false;
+                return null;
+            }
+            return ctx;
+        },
     };
     // Mock fetch (used by tinder module to load cards from /api/characters/list)
     // Save the original (Node 22+ has native fetch) so reset can restore it.
