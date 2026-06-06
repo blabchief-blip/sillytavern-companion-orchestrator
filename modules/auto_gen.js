@@ -313,8 +313,8 @@ class AutoGen {
           'photorealistic', 'sharp focus', 'cinematic lighting',
         ],
         useAvatar: true,
-        useFaceId: true,         // v0.8.7: IP-Adapter FaceID — aktif karakterin avatar yüzüyle tutarlı üretim
-        faceIdWeight: 1.2,       // FaceID weight (model+LoRA prior'ını yenmek için ~1.2)
+        useFaceId: true,         // v0.8.11: ReActor face-swap (FaceID'den geçildi — daha gerçekçi)
+        faceIdWeight: 1.2,       // (legacy, ReActor'da kullanılmıyor; FaceID için ileride gerekirse)
         useMood: true,
         useSpice: true,
         useScenario: true,
@@ -861,18 +861,20 @@ class AutoGen {
       }
     }
 
-    // v0.8.7: IP-Adapter FaceID — aktif karakterin avatar yüzüyle tutarlı
-    // üretim (selfie ile aynı zincir). Avatar ComfyUI'ye yüklenir, workflow'a
-    // FaceID node'ları enjekte edilir (KSampler.model FaceID'den geçer).
+    // v0.8.11: ReActor face-swap — aktif karakterin avatar yüzünü üretilen
+    // görsele swap et (selfie pipeline ile aynı yaklaşım). FaceID'den geçildi:
+    // FaceID gerçekçilik↔kimlik'i aynı diffusion'a yükleyip plastik doku katıyordu.
+    // ReActor'da: taban görsel orijinal şekilde üretilir (gerçekçi) → son adımda
+    // avatar yüzü swap edilir (inswapper_128) + GFPGANv1.4 restore.
     // Avatar yoksa / upload başarısızsa sessizce atla — düz üretim devam eder.
     if (this.settings.useFaceId) {
       try {
         const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
         if (refName) {
-          this._injectFaceId(workflow, refName);
+          this._injectReActor(workflow, refName);
         }
       } catch (e) {
-        console.warn('[Companion AutoGen] FaceID enjeksiyonu atlandı:', e?.message || e);
+        console.warn('[Companion AutoGen] ReActor enjeksiyonu atlandı:', e?.message || e);
       }
     }
 
@@ -965,6 +967,51 @@ class AutoGen {
           },
         };
         node.inputs.model = [fid, 0];
+      }
+    }
+  }
+
+  // -----------------------------------------------------------
+  // v0.8.11: ReActor face-swap enjeksiyonu. SaveImage'ın bağlı olduğu
+  // VAEDecode çıkışına ReActorFaceSwap node'u ekler; kaynak yüz = avatar.
+  // Selfie workflow'u ile aynı swap parametreleri kullanılır.
+  // -----------------------------------------------------------
+  _injectReActor(workflow, refName) {
+    const ids = Object.keys(workflow).map(Number).filter(n => !Number.isNaN(n));
+    let nxt = (ids.length ? Math.max(...ids) : 0) + 1;
+    const NID = () => String(nxt++);
+
+    const loadImgId = NID();
+    workflow[loadImgId] = {
+      class_type: 'LoadImage',
+      inputs: { image: refName },
+      _meta: { title: 'Referans Yüz (avatar)' },
+    };
+
+    for (const [, node] of Object.entries(workflow)) {
+      if (node?.class_type === 'SaveImage' && node.inputs?.images) {
+        const src = node.inputs.images; // e.g. ["8", 0] — VAEDecode çıkışı
+        const reactorId = NID();
+        workflow[reactorId] = {
+          class_type: 'ReActorFaceSwap',
+          inputs: {
+            enabled: true,
+            input_image: src,
+            source_image: [loadImgId, 0],
+            swap_model: 'inswapper_128.onnx',
+            facedetection: 'retinaface_resnet50',
+            face_restore_model: 'GFPGANv1.4.pth',
+            face_restore_visibility: 1,
+            codeformer_weight: 0.5,
+            detect_gender_input: 'no',
+            detect_gender_source: 'no',
+            input_faces_index: '0',
+            source_faces_index: '0',
+            console_log_level: 1,
+          },
+          _meta: { title: 'ReActor Face Swap (kimlik = avatar)' },
+        };
+        node.inputs.images = [reactorId, 0];
       }
     }
   }
