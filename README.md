@@ -1,8 +1,8 @@
 # Companion Orchestrator
 
-A unified SillyTavern extension that bundles **20 character-management modules** in a single, low-friction install. Built for power users who want fine-grained control over memory, mood, scenarios, lorebook, writing style, character LoRA, image generation, and more — all from the extension settings panel and `/co` slash commands.
+A unified SillyTavern extension that bundles **32 character-management modules** in a single, low-friction install. Built for power users who want fine-grained control over memory, mood, scenarios, lorebook, writing style, character LoRA, image generation, and more — all from the extension settings panel and `/co` slash commands.
 
-> **Status:** v0.7.0 — public release. Tested on SillyTavern 1.18.0+ (release + staging branches).
+> **Status:** v0.8.6 — per-character NSFW profiles, trust-conditional lorebook, auto trust progression. Tested on SillyTavern 1.18.0+ (release + staging branches).
 
 ## Features
 
@@ -114,6 +114,29 @@ Per-character LoRA configuration: model path, strength, trigger words, sampling 
 - Auto-activates the right LoRA when switching characters
 - Profile editor in settings panel
 
+### 🎭 Per-Character NSFW Profile (v0.8.6) 🆕
+Personalize the NSFW trajectory for every character independently.
+- **Voice style** (4): flirty-direct, teasing-slow, intellectual, soft-emotional
+- **Kinks** (6 selectable): gentle-dom, praise, marking, sensory, exhibitionism, roleplay
+- **Hard limits** (3 defaults, override-able): no-minors, no-snuff, no-noncon
+- **Trust system** (0–10): unlocks escalation at configurable threshold (default 5)
+- **Platform preference** (whatsapp / telegram / imessage / signal)
+- **Selfie / voice-note permissions** (per-character)
+- **Custom directive** (free-form author note override)
+- **Intimacy markers** (v0.8.6): bind lorebook entries to trust thresholds
+  - e.g. `entry_intimate_42` activates when `trust >= 7`
+  - 6 operators: `>=, <=, >, <, ==, !=`
+  - Auto-injects into chat when number is shared (Tinder)
+- **Auto-trust progression** (4 triggers):
+  - Tinder number share → +3
+  - Scenario apply → +1
+  - phone_shell assistant message → +0.1
+  - `save()` hook → prompt refresh
+- **UI panel** in settings.html — no F12 console needed
+- **Slash commands**:
+  - `/co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>`
+  - `/co char list`
+
 ### 📝 Prompt Templates
 Reusable multi-block prompt templates (system + author + jailbreak slots) with variable substitution.
 - Variable library, drag-to-reorder
@@ -123,7 +146,7 @@ Reusable multi-block prompt templates (system + author + jailbreak slots) with v
 
 ## Architecture
 
-- Single bundled extension (20 modules in one)
+- Single bundled extension (32 modules in one)
 - Per-module toggle + master enable
 - Refresh-on-chat-change (all panels re-hydrate when you switch characters)
 - Cross-module storage isolation (unique `STORE_KEY` per module)
@@ -161,6 +184,10 @@ All modules are reachable via the `/co` (alias `/companion`) slash command. Use 
 /co pose list|apply|create        - pose presets
 /co template list|apply           - prompt templates
 /co lora list|apply|edit          - character LoRA profiles
+/co char <isim> nsfw <action>      - per-character NSFW profile (v0.8.6)
+    show|voice|add-kink|remove-kink|add-limit|trust|reset|
+    platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers
+/co char list                     - all character profiles
 /co export [section]              - export JSON
 /co import <file> [--merge]       - import JSON
 ```
@@ -187,6 +214,8 @@ npm run test:llm    # LLM behavior only
 ```
 
 CI runs on every push via `.github/workflows/test.yml` (Node 20, 22, 24 on macOS).
+
+**Test coverage:** 830 tests across 23 modules (v0.8.7). Zero external dependencies — pure `node --test`.
 
 ## License
 

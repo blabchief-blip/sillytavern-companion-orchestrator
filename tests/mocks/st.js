@@ -70,7 +70,7 @@ function createMockCtx(initial = {}) {
         },
     };
     return {
-        characterId: initial.characterId ?? 'char-1',
+        characterId: (initial.characterId !== undefined ? initial.characterId : 'char-1'),
         groupId: initial.groupId ?? null,
         chat,
         characters,

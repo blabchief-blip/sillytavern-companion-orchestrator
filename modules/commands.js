@@ -230,6 +230,19 @@ export const slashCommands = {
             const sugs = MOD.lorebook.suggest({ limit });
             return MOD.lorebook.formatSuggestions(sugs);
         },
+        // v0.8.7: /co lore list [search] [book=NAME]
+        // UID aramak için: /co lore list rıza
+        // Belirli lorebook: /co lore list --book=Main
+        list: (args) => {
+            if (!MOD.lorebook.listAvailableEntries) return 'listAvailableEntries API yok.';
+            const bookArg = args.find(a => a.startsWith('--book='))?.split('=')[1] || null;
+            const search = args.find(a => !a.startsWith('--')) || null;
+            const entries = MOD.lorebook.listAvailableEntries({ book: bookArg, search });
+            if (entries.length === 0) return 'Hiç world info entry bulunamadı. (ST\'de world info yüklü mü?)';
+            return entries.map(e =>
+                `${e.uid} [${e.book}]${e.enabled ? '' : ' (DISABLED)'}: ${e.comment}${e.keys?.length ? ' — keys: ' + e.keys.join(', ') : ''}`
+            ).join('\n');
+        },
     },
 };
 
@@ -355,9 +368,51 @@ export function registerAllCommands(orch) {
                 const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
                 if (!cp) return 'character_profile modülü yüklenmedi.';
 
-                const charId = args[1];
+                let charId = args[1];
+                // v0.8.6: Aktif karakteri otomatik algıla
+                // - /co char (charId yok) → ST aktif karakter
+                // - /co char nsfw <action> (args[1]='nsfw' gibi reserved keyword) → ST aktif karakter
+                // 'nsfw' reserved keyword, charId olarak kullanılmamalı.
+                if (!charId || charId === 'nsfw' || charId === 'list') {
+                    // 'list' için otomatik algılama yapma (kullanıcı list istiyor)
+                    if (charId === 'list') {
+                        // aşağıdaki list handler'ı çalışacak
+                    } else {
+                        try {
+                            const stCtx = (typeof globalThis !== 'undefined' && globalThis.SillyTavern?.getContext?.());
+                            if (stCtx) {
+                                const cid = stCtx.characterId;
+                                if (cid !== undefined && cid !== null) {
+                                    const chars = stCtx.characters;
+                                    if (Array.isArray(chars)) {
+                                        let c = chars.find(x => x && x.id === cid);
+                                        if (!c && chars[cid]) c = chars[cid];
+                                        if (c?.name) {
+                                            if (charId === 'nsfw') {
+                                                // Kullanıcı /co char nsfw <action> yazdı.
+                                                // charId atlandı, nsfw action olarak kullanıldı.
+                                                // args dizisini splice et: ['char', 'nsfw', 'show']
+                                                // → ['char', 'Test Char', 'nsfw', 'show']
+                                                args.splice(1, 0, c.name);
+                                                charId = c.name;
+                                            } else {
+                                                // v0.8.7 fix: /co char (no-arg) → ST aktif karakter.
+                                                // charId sadece set etmek args[2]='nsfw' eylemini es geçerdi
+                                                // → "Şu an sadece /co char <isim> nsfw..." hatası.
+                                                // Çözüm: args splice et → ['char'] → ['char', 'Test Char', 'nsfw']
+                                                // sonra sub_action=args[3] undefined → show default.
+                                                args.splice(1, 0, c.name, 'nsfw');
+                                                charId = c.name;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_) { /* best-effort */ }
+                    }
+                }
                 if (!charId) {
-                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom>\n  /co char list';
+                    return 'Kullanım:\n  /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>\n  /co char list\n  (veya ST\'de aktif karakter seç, /co char <isim> yazmadan direkt nsfw yazabilirsin)';
                 }
                 if (charId === 'list') {
                     const all = cp.list();
@@ -480,7 +535,59 @@ export function registerAllCommands(orch) {
                     if (!r.ok) return `Hata: ${r.error}`;
                     return `${charId} custom directive set: ${text.slice(0, 60)}${text.length > 60 ? '...' : ''}`;
                 }
-                return 'Kullanım: /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom>';
+                if (sub_action === 'add-marker' || sub_action === 'remove-marker' || sub_action === 'list-markers') {
+                    // v0.8.6: intimacyMarkers — trust-conditional lorebook entries
+                    // /co char Soo nsfw add-marker <uid> ["comment"] [triggerOn]
+                    // /co char Soo nsfw remove-marker <uid>
+                    // /co char Soo nsfw list-markers
+                    const cur = cp.get(charId);
+                    let markers = (cur.intimacyMarkers || []).map(m => {
+                        // Legacy string[] compat → object normalize
+                        if (typeof m === 'string') return { uid: m, triggerOn: 'trust >= 5', comment: m };
+                        return m;
+                    });
+                    if (sub_action === 'list-markers') {
+                        if (markers.length === 0) return `${charId}: hiç intimacy marker yok. add-marker <uid> ile ekle.`;
+                        return markers.map((m, i) => {
+                            const t = cp.getTrust(charId);
+                            const trigMatch = String(m.triggerOn || '').match(/trust\s*(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)?)/i);
+                            const passes = trigMatch ? (() => {
+                                const op = trigMatch[1]; const th = parseFloat(trigMatch[2]);
+                                if (op === '>=') return t >= th;
+                                if (op === '<=') return t <= th;
+                                if (op === '>') return t > th;
+                                if (op === '<') return t < th;
+                                if (op === '==') return Math.abs(t - th) < 0.01;
+                                return false;
+                            })() : false;
+                            return `${i + 1}. ${m.uid}${m.comment ? ` ("${m.comment}")` : ''} — ${m.triggerOn || '(yok)'} [trust=${t.toFixed(1)} ${passes ? '✅' : '⏳'}]`;
+                        }).join('\n');
+                    }
+                    if (sub_action === 'add-marker') {
+                        const uid = args[4];
+                        if (!uid) return 'Kullanım: /co char <isim> nsfw add-marker <uid> ["comment"] [triggerOn]';
+                        const comment = (args[5] || '').replace(/^["']|["']$/g, '');
+                        const triggerOn = args[6] || 'trust >= 7';
+                        if (markers.some(m => m.uid === uid)) {
+                            return `${charId}: ${uid} zaten marker listesinde. remove-marker ile çıkar.`;
+                        }
+                        markers.push({ uid, comment, triggerOn });
+                        const r = cp.set(charId, { intimacyMarkers: markers });
+                        if (!r.ok) return `Hata: ${r.error}`;
+                        return `${charId} marker eklendi: ${uid} (${triggerOn})`;
+                    }
+                    // remove-marker
+                    const uid = args[4];
+                    if (!uid) return 'Kullanım: /co char <isim> nsfw remove-marker <uid>';
+                    const filtered = markers.filter(m => m.uid !== uid);
+                    if (filtered.length === markers.length) {
+                        return `${charId}: ${uid} marker listesinde yok.`;
+                    }
+                    const r = cp.set(charId, { intimacyMarkers: filtered });
+                    if (!r.ok) return `Hata: ${r.error}`;
+                    return `${charId} marker çıkarıldı: ${uid} (kalan: ${filtered.length})`;
+                }
+                return 'Kullanım: /co char <isim> nsfw <show|voice|add-kink|remove-kink|add-limit|trust|reset|platform|selfie|voice-note|custom|add-marker|remove-marker|list-markers>';
             }
             if (sub === 'tinder') {
                 // v0.8.2: /co tinder <action> [args...]
