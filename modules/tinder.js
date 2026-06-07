@@ -1583,6 +1583,10 @@ async function submit6LoraFaceIDSelfieToComfyUI({ comfyUrl, baseName, prompt, ne
 // ekli halleri de otomatik kapsanır: numara, numaran, numaranı, numarası).
 const EXCHANGE_KEYWORDS = /(numara|number|telefon|phone|whatsapp|watsap|telegram|signal|iletisim|iletişim|ulas|ula[şs])|(\bwp\b)|(\btg\b)/i;
 
+// v0.8.18: Kullanıcının selfie/fotoğraf isteğini doğal dilde algıla (TR+EN).
+// Eşleşirse karakterin cevabına gerçek bir selfie üretilip iliştirilir.
+const SELFIE_KEYWORDS = /(selfie|öz[çc]ekim|foto[ğg]?raf|resm(in|ini)?|resim|foto\b|fotonu|g[öo]rsel|pic\b|photo|picture|nudes?|[çc][ıi]plak)/i;
+
 // Refusal dialogue varyantları (3 kategori × 2-3 varyant)
 const REFUSAL_DIALOGUES = {
     locked: {
@@ -1771,6 +1775,59 @@ tinderModule.listExchanges = function () {
 tinderModule.detectExchangeRequest = function (userMessage) {
     if (!userMessage || typeof userMessage !== 'string') return false;
     return EXCHANGE_KEYWORDS.test(userMessage);
+};
+
+// v0.8.18: Kullanıcı mesajında selfie/fotoğraf isteği var mı?
+tinderModule.detectSelfieRequest = function (userMessage) {
+    if (!userMessage || typeof userMessage !== 'string') return false;
+    return SELFIE_KEYWORDS.test(userMessage);
+};
+
+// v0.8.18: Spice seviyesinden NSFW selfie tier'ı türet (0=SFW, 1-4=NSFW).
+// Guard generateSelfie'de değil commands.js'de; texting akışında kullanıcı
+// zaten konuşmayı yönlendirdiği için spice'a göre otomatik tier seçilir.
+function _spiceToSelfieTier(orch) {
+    try {
+        const sp = orch?.settings?.spice;
+        const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        const charId = ctx?.characterId;
+        let lvl = 0;
+        if (sp?.state && charId != null && sp.state[charId]) lvl = sp.state[charId].current ?? 0;
+        else if (typeof sp?.current === 'number') lvl = sp.current;
+        lvl = Number(lvl) || 0;
+        if (lvl >= 4) return 3;   // explicit → nude_selfie
+        if (lvl === 3) return 2;  // sensual → lingerie
+        if (lvl === 2) return 1;  // flirty → suggestive
+        return 0;                 // SFW
+    } catch (_) { return 0; }
+}
+
+// v0.8.18: Selfie üret + verilen mesaja (karakterin cevabı) iliştir.
+// imageUrl mesajın extra.image'ına yazılır, MESSAGE_UPDATED emit edilir →
+// phone_shell baloncuğa görseli ekler. Hata olursa sessizce geç.
+tinderModule._autoGenerateSelfie = async function (orch, targetMsg, targetId) {
+    try {
+        const tier = _spiceToSelfieTier(orch);
+        let res = await tinderModule.generateSelfie(tier > 0 ? { tier } : {});
+        // NSFW guard/hatada SFW'ye düş
+        if (!res?.ok && tier > 0) res = await tinderModule.generateSelfie({});
+        if (!res?.ok || !res.imageUrl) {
+            console.warn('[tinder] auto-selfie üretilemedi:', res?.error);
+            return;
+        }
+        const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        if (targetMsg) {
+            if (!targetMsg.extra) targetMsg.extra = {};
+            targetMsg.extra.image = res.imageUrl;
+            targetMsg.extra.inline_image = true;
+            if (ctx?.saveChat) { try { await ctx.saveChat(); } catch (_) {} }
+            const ev = ctx?.eventSource, et = ctx?.eventTypes;
+            if (ev?.emit && et?.MESSAGE_UPDATED) ev.emit(et.MESSAGE_UPDATED, targetId);
+        }
+        console.log('[tinder] ✅ auto-selfie iliştirildi (tier ' + tier + ')');
+    } catch (e) {
+        console.warn('[tinder] auto-selfie hata:', e?.message || e);
+    }
 };
 
 /**
@@ -2017,8 +2074,21 @@ tinderModule.onMessageSent = function (orch, data) {
     // Aktif matchId yoksa no-op. Active match tracking settings.tinder.activeMatchId.
     const matchId = orch?.settings?.tinder?.activeMatchId;
     if (!matchId) return;
-    const text = String(data?.message?.mes || '').trim();
+    // data ST 1.18'de messageId (string) olabilir → chat'ten metni çöz
+    let text = String(data?.message?.mes || '').trim();
+    if (!text && data != null && (typeof data === 'string' || typeof data === 'number')) {
+        try {
+            const ctx = SillyTavern.getContext();
+            text = String(ctx?.chat?.[data]?.mes || '').trim();
+        } catch (_) {}
+    }
     if (!text) return;
+    // v0.8.18: kullanıcı selfie/fotoğraf istedi mi? Bir sonraki karakter
+    // cevabında gerçek selfie üretilip iliştirilsin diye işaretle.
+    if (tinderModule.detectSelfieRequest(text)) {
+        tinderModule._pendingSelfie = true;
+        console.log('[tinder] 📸 selfie isteği algılandı (pending)');
+    }
     tinderModule.incrementMessageCount(matchId);
     // Stage güncellendi, persist et
     if (orch?.save) orch.save();
@@ -2027,7 +2097,18 @@ tinderModule.onMessageSent = function (orch, data) {
 tinderModule.onMessageReceived = function (orch, data) {
     const matchId = orch?.settings?.tinder?.activeMatchId;
     if (!matchId) return;
-    const text = String(data?.message?.mes || '').trim();
+    // data ST 1.18'de messageId (string) → chat'ten mesaj objesini çöz
+    let msgObj = data?.message || null;
+    let msgId = (data && data.message) ? (data.messageId ?? null) : data;
+    if (!msgObj && (typeof data === 'string' || typeof data === 'number')) {
+        try { msgObj = SillyTavern.getContext()?.chat?.[data] || null; } catch (_) {}
+    }
+    const text = String(msgObj?.mes || data?.message?.mes || '').trim();
+    // v0.8.18: bekleyen selfie isteği varsa karakterin bu cevabına selfie iliştir
+    if (tinderModule._pendingSelfie) {
+        tinderModule._pendingSelfie = false;
+        tinderModule._autoGenerateSelfie(orch, msgObj, msgId);
+    }
     if (!text) return;
     // Karakterin cevabında numara paylaşımı var mı? Otomatik exchange tetikle.
     // detectExchangeRequest() keyword heuristic kullanıyor.
@@ -2041,6 +2122,7 @@ tinderModule.onMessageReceived = function (orch, data) {
     }
 };
 
+tinderModule._pendingSelfie = false; // v0.8.18: bekleyen selfie isteği bayrağı
 tinderModule.EXCHANGE_KEYWORDS = EXCHANGE_KEYWORDS;
 tinderModule.STAGE_THRESHOLDS = STAGE_THRESHOLDS;
 

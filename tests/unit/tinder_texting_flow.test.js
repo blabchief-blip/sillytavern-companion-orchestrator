@@ -62,3 +62,23 @@ test('texting transform — data wrapper\'ı olmayan düz kartta da çalışır'
     assert.match(d.scenario, /Mia/);
     assert.match(d.first_mes, /art/i);
 });
+
+// =========================================================================
+// v0.8.18: Selfie isteği doğal dilde algılanır
+// =========================================================================
+import { tinderModule } from '../../modules/tinder.js';
+
+test('detectSelfieRequest — TR/EN selfie istekleri algılanır', () => {
+    assert.equal(tinderModule.detectSelfieRequest('selfie alabilir miyim?'), true);
+    assert.equal(tinderModule.detectSelfieRequest('bir fotoğraf atar mısın'), true);
+    assert.equal(tinderModule.detectSelfieRequest('özçekim gönder'), true);
+    assert.equal(tinderModule.detectSelfieRequest('send me a pic'), true);
+    assert.equal(tinderModule.detectSelfieRequest('resmini görebilir miyim'), true);
+});
+
+test('detectSelfieRequest — alakasız mesaj false döner', () => {
+    assert.equal(tinderModule.detectSelfieRequest('nasılsın bugün?'), false);
+    assert.equal(tinderModule.detectSelfieRequest('analog synth seviyorum'), false);
+    assert.equal(tinderModule.detectSelfieRequest(''), false);
+    assert.equal(tinderModule.detectSelfieRequest(null), false);
+});
