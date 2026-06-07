@@ -123,10 +123,14 @@ function _appendImageToBubble(bubble, imageUrl) {
     const img = document.createElement('img');
     img.src = imageUrl;
     img.setAttribute('data-co-img', '1');
+    // v0.8.23: thumbnail boyutu — tam çözünürlük (832x1216) baloncuğu eziyordu.
+    // Sınırlı küçük önizleme; tıklayınca tam boyut yeni sekmede.
     Object.assign(img.style, {
-        display: 'block', maxWidth: '100%', borderRadius: '10px',
-        marginTop: '6px', cursor: 'pointer',
+        display: 'block', width: 'auto', height: 'auto',
+        maxWidth: '220px', maxHeight: '300px', objectFit: 'cover',
+        borderRadius: '10px', marginTop: '6px', cursor: 'pointer',
     });
+    img.title = 'Büyütmek için tıkla';
     img.addEventListener('click', () => { try { window.open(imageUrl, '_blank'); } catch (_) {} });
     // meta varsa onun ÜSTÜNE ekle (görsel → zaman damgası sırası)
     const meta = bubble.querySelector('div');
