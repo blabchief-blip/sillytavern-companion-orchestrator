@@ -108,6 +108,34 @@ const BUILTIN_PRESETS = {
         description: 'Implied, tender, fades to metaphor.',
         systemAddition: '[Writing style: Suggestive and tender. Imply intimacy rather than depict. Use metaphor, pause, breath, and gesture. The reader feels the heat through what is not said.]',
     },
+    // v0.8.16: Vulgar preset ailesi — dil seviyesi 2 (argo). Karakterin sesi
+    // karakterin kendi profili tarafından belirlenir, bu presetler sadece
+    // modelin dil kayıt düzeyini yükseltir. Hard limit'ler hâlâ korunur.
+    vulgar_kinetic: {
+        name: 'Vulgar — Kinetic (Sahne Ateşi 🔥)',
+        description: 'Sahne ateşi 3+ — kısa çığlık cümleler, ritmik tekrar, eylem-yoğun, argo.',
+        systemAddition: '[Writing style: Vulgar / Kinetic. The scene is hot. Short, urgent sentences. Repetition that builds rhythm. Action-forward narration. The character speaks in their natural voice but with raw, unfiltered language — curse words, onomatopoeia, breathless interjections. Turkish examples are appropriate: "sik beni becer içimden geç", "daha sert", "durma devam et", "amına koyayım", "salak beni mahvettin". English examples: "fuck me harder", "don\'t stop", "right there", "you\'re destroying me". The reader should feel the heat in the prose itself — not described, performed. Use line breaks for staccato rhythm. Sensory detail without poeticizing. The character does not narrate eloquently; they gasp, swear, plead, demand. Do not cross hard limits (violence, non-consent, degradation) — those override this preset completely.]',
+    },
+    vulgar_dominant: {
+        name: 'Vulgar — Dominant (Emreden)',
+        description: 'Sahne ateşi 3+ + dominant karakter — emreden, kontrol eden, azarlayan argo.',
+        systemAddition: '[Writing style: Vulgar / Dominant. The scene is hot and the character is in control. Imperative voice. Commands, not requests. Short sharp sentences that brook no argument. The character does not ask, they tell. Turkish examples: "kıpırdama", "ayağa kalk ve dön", "söyle bana ne istiyorsun", "yut hepsini", "beni izle gözlerini kaçırma". English examples: "on your knees", "look at me when I talk to you", "you don\'t get to come until I say", "beg for it". The dominant voice does not narrate its dominance — it issues orders and the narration reports compliance. Maintain character voice but elevate the crudeness. Do not cross hard limits — degradation in particular is forbidden unless explicitly allowed.]',
+    },
+    vulgar_submissive: {
+        name: 'Vulgar — Submissive (Yalvaran)',
+        description: 'Sahne ateşi 3+ + submissive karakter — yalvaran, inleyen, çaresiz argo.',
+        systemAddition: '[Writing style: Vulgar / Submissive. The scene is hot and the character has surrendered. Pleas, broken sentences, half-finished thoughts. The character asks, begs, pleads. Turkish examples: "lütfen lütfen durma", "dayanamıyorum", "ne yaparsan yap", "sana aitim", "salak manyak gibi olmuşum senin yüzünden", "aman Tanrım". English examples: "please please please", "I can\'t", "I\'m yours", "use me", "don\'t stop don\'t stop". The voice is soft and broken, not aggressive. The character is overwhelmed and the prose should show that — fragmented thoughts, repetition of small words, rising pitch implied by sentence structure. Do not cross hard limits.]',
+    },
+    vulgar_tender: {
+        name: 'Vulgar — Tender (Sert Ama İçten)',
+        description: 'Sahne ateşi 4 + içten — sert argo ama duygu yoğun, samimi.',
+        systemAddition: '[Writing style: Vulgar / Tender. The scene is at its peak and the character is both raw and intimate. Crude language mixed with genuine feeling. Pet names woven into curses. Turkish examples: "salak manyak gibi seviyorum seni", "bok gibi güzel olmuşsun", "lanet olsun senin yüzünden ağlıyorum", "sik beni ama sonra sarıl bana". English examples: "fuck you for making me feel this", "you absolute bastard I love you", "I hate how much I need you". The voice is not apologetic about the language — it owns it — but the tenderness underneath is real. The character does not narrate their feelings; they just say them, crudely. Do not cross hard limits.]',
+    },
+    vulgar_explicit: {
+        name: 'Vulgar — Explicit (Azgın Ham)',
+        description: 'Sahne ateşi 4 + trust 8+ — ham, hayvanî dürtü, kısa çığlık, ritmik tekrar, max argo.',
+        systemAddition: '[Writing style: Vulgar / Explicit (Level 3/3). The scene is at maximum heat and trust is high. Animal instinct. Short screams, onomatopoeia, broken syntax. The character is not thinking in complete sentences — they are reacting. Turkish examples: "ahh—ahh—ahh", "daha—daha", "siktir git ama gitme", "ölüyorum ölüyorum", "amına koyim durma", "benim—benim—benim". English examples: "ah—ah—ah", "more—more—more", "fuck fuck fuck", "I\'m gonna—", "don\'t—don\'t stop—", "mine—mine—mine". Staccato rhythm, line breaks for breath. Repetition as the primary structural device. Sensory detail reduced to the most basic — heat, friction, sound. The character does not describe what is happening; they react to it in the moment. Maintain voice but strip everything that is not raw reaction. Hard limits still apply — this preset does not permit non-consent, violence, or degradation unless those are explicitly listed as allowed for this character. If the character has hard limit "degradation", reduce to kinetic level immediately.]',
+    },
     raw: {
         name: 'Raw / Unpolished',
         description: 'Honest, rough, anti-pretty.',
@@ -290,6 +318,50 @@ export const promptsModule = {
             ? (cp.buildSystemDirective(charId) || '')
             : '';
         _ctx.setExtensionPrompt('CO_CHARACTER_NSFW', directive, 0, 0);
+    },
+
+    /**
+     * v0.8.16: Sahne ateşine göre vulgar preset öner ve otomatik uygula.
+     * Karakterin voice stilini ve effective vulgarity seviyesini dikkate alır.
+     *
+     * @param {number} heatScore - spice heat (0-4)
+     * @returns {{preset: string, applied: boolean, reason: string}}
+     */
+    suggestVulgarPreset(heatScore = 0) {
+        const cp = (typeof globalThis !== 'undefined' && globalThis.__co_characterProfile);
+        const charId = _ctx?.characterId || (_ctx?.character && _ctx.character.name);
+        if (!cp || !charId) return { preset: null, applied: false, reason: 'no character/profile' };
+
+        const profile = cp.get(charId);
+        // vulgarityEscalation kapalıysa no-op
+        if (profile?.vulgarityEscalation === false) {
+            return { preset: null, applied: false, reason: 'vulgarityEscalation disabled' };
+        }
+        // Heat < 2 → escalation yok
+        if (heatScore < 2) {
+            return { preset: null, applied: false, reason: `heat ${heatScore} below threshold` };
+        }
+
+        const voice = profile?.voice || 'flirty-direct';
+        const vulgarity = cp.effectiveVulgarity(charId, heatScore);
+        let preset = null;
+        if (vulgarity >= 3) preset = 'vulgar_explicit';
+        else if (vulgarity === 2) {
+            if (voice === 'dominant-command') preset = 'vulgar_dominant';
+            else if (voice === 'submissive-whisper') preset = 'vulgar_submissive';
+            else if (heatScore >= 4) preset = 'vulgar_tender';
+            else preset = 'vulgar_kinetic';
+        }
+
+        if (!preset) return { preset: null, applied: false, reason: `vulgarity ${vulgarity} no preset` };
+
+        // Otomatik apply et
+        const r = this.apply(preset);
+        return {
+            preset,
+            applied: r?.ok === true,
+            reason: r?.ok ? 'ok' : (r?.error || 'unknown'),
+        };
     },
 
     create({ key, name, description = '', systemAddition = '' }) {

@@ -532,6 +532,27 @@
                     <label class="checkbox_label" style="font-size: 0.85em;"><input id="co_char_selfie" type="checkbox" /> Selfie isteği açık</label>
                     <label class="checkbox_label" style="font-size: 0.85em;"><input id="co_char_voicenote" type="checkbox" /> Sesli mesaj yanıtı açık</label>
                 </div>
+
+                <!-- v0.8.16: Vulgarity baseline (0-3) + escalation toggle -->
+                <div class="co-row" style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <label style="flex: 1; min-width: 180px;">
+                        <span style="display:block; font-size:0.85em; opacity:0.8;">Dil seviyesi (vulgarity 0-3, voice'dan türetilir):</span>
+                        <select id="co_char_vulgarity" class="text_pole" style="width: 100%;">
+                            <option value="-1">(voice'dan türet)</option>
+                            <option value="0">🧊 0 — temiz/edebî</option>
+                            <option value="1">🍷 1 — orta (argo yok)</option>
+                            <option value="2">🔥 2 — argo ("sik beni")</option>
+                            <option value="3">💥 3 — azgın ham ("amına koyayım")</option>
+                        </select>
+                    </label>
+                    <label class="checkbox_label" style="font-size: 0.85em;">
+                        <input id="co_char_vulgarity_esc" type="checkbox" />
+                        Heat arttıkça otomatik yükselt
+                    </label>
+                </div>
+                <p style="font-size: 0.8em; opacity: 0.7; margin: 2px 0 6px 0;">
+                    🔞 Hard limit "degradation" varsa dil seviyesi otomatik 1'de cap'lenir.
+                </p>
             </div>
 
             <hr />
