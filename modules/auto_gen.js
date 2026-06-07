@@ -1106,9 +1106,14 @@ class AutoGen {
         const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
         if (refName) {
           this._injectReActor(workflow, refName);
+          console.log('[AutoGen] ✅ ReActor inject OK, avatar:', refName);
+        } else {
+          console.warn('[AutoGen] ⚠️ ReActor atlandı: avatar upload null döndü (charId:', this._getCtx()?.characterId, '| avatar:', this._getCtx()?.characters?.[this._getCtx()?.characterId]?.avatar, ')');
+          this.toast('⚠️ ReActor: avatar upload başarısız (console\'a bak)', 'warning');
         }
       } catch (e) {
-        console.warn('[Companion AutoGen] ReActor enjeksiyonu atlandı:', e?.message || e);
+        console.warn('[AutoGen] ReActor enjeksiyonu atlandı:', e?.message || e);
+        this.toast(`⚠️ ReActor hata: ${e?.message}`, 'warning');
       }
     }
 
