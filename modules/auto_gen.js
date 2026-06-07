@@ -577,19 +577,29 @@ class AutoGen {
       await new Promise(r => setTimeout(r, this.settings.microsleepMs));
     }
 
-    // ST MESSAGE_RECEIVED: data = { message: ChatMessage, mes_id }
-    // ChatMessage has { mes, is_user, name, ... }
-    // Direct emit (debug): data = { mes, is_user }
-    const chatMessage = data?.message || data;
-    const isAi = chatMessage && !chatMessage.is_user && (chatMessage.mes || chatMessage.message);
+    // CHARACTER_MESSAGE_RENDERED / MESSAGE_RECEIVED event'i (messageId: number, type) gönderiyor.
+    // data = number (mesaj index) → chat array'den çek.
+    const ctx2 = this._getCtx();
+    let chatMessage;
+    if (typeof data === 'number') {
+      chatMessage = ctx2?.chat?.[data] || null;
+    } else {
+      // Fallback: eski object format veya debug emit
+      chatMessage = data?.message || data || null;
+    }
+    if (!chatMessage) {
+      // Son AI mesajını fallback olarak kullan
+      const chat = ctx2?.chat || [];
+      for (let i = chat.length - 1; i >= 0; i--) {
+        if (!chat[i].is_user && chat[i].mes) { chatMessage = chat[i]; break; }
+      }
+    }
+    const isAi = chatMessage && !chatMessage.is_user && chatMessage.mes;
     if (this.settings.trigger === 'ai' && !isAi) return;
     if (this.settings.trigger === 'user' && chatMessage?.is_user) return;
 
-    // Get last AI message
-    const lastMsg = isAi ? chatMessage : null;
-    if (!lastMsg || lastMsg.is_user) {
-      return;
-    }
+    const lastMsg = chatMessage;
+    if (!lastMsg || lastMsg.is_user) return;
 
     console.log('[Companion AutoGen] 🎬 Trigger fired, generating for:', (lastMsg.mes || '').slice(0, 50));
     await this.generate(lastMsg);
