@@ -1,0 +1,27 @@
+{
+  "1": {
+    "inputs": { "image": "*image*" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Kullanıcı Fotoğrafı" }
+  },
+  "2": {
+    "inputs": {
+      "image": ["1", 0],
+      "do_sample": true,
+      "temperature": 0.4,
+      "max_tokens": 256,
+      "caption_type": "Descriptive",
+      "caption_length": "medium-length",
+      "extra_options": "",
+      "name_input": "",
+      "custom_prompt": ""
+    },
+    "class_type": "easy joyCaption2API",
+    "_meta": { "title": "JoyCaption (NSFW içerik analizi)" }
+  },
+  "3": {
+    "inputs": { "anything": ["2", 0] },
+    "class_type": "easy showAnything",
+    "_meta": { "title": "Caption Çıktısı" }
+  }
+}

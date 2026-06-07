@@ -420,6 +420,7 @@ const phoneShellModule = {
         // v0.8.25/28: açık menüleri kapat
         try { _closeSelfieMenu(); } catch (_) {}
         try { _closeEmojiPicker(); } catch (_) {}
+        try { _closeUserPhotoPicker(); } catch (_) {}
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = false;
         }
@@ -1038,10 +1039,83 @@ function _showSelfieMenu(anchor, theme) {
         });
         menu.appendChild(item);
     }
+    // v0.8.30: ayraç + "Fotoğrafımı gönder" (kullanıcı kendi fotosunu yollar)
+    const sep = document.createElement('div');
+    Object.assign(sep.style, { borderTop: '1px solid rgba(0,0,0,0.12)', margin: '4px 6px' });
+    menu.appendChild(sep);
+    const sendOwn = document.createElement('div');
+    sendOwn.textContent = '📎 Fotoğrafımı gönder';
+    Object.assign(sendOwn.style, { padding: '11px 14px', borderRadius: '8px', cursor: 'pointer' });
+    sendOwn.addEventListener('mouseenter', () => { sendOwn.style.background = 'rgba(0,0,0,0.07)'; });
+    sendOwn.addEventListener('mouseleave', () => { sendOwn.style.background = 'transparent'; });
+    sendOwn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _closeSelfieMenu();
+        _showUserPhotoPicker();
+    });
+    menu.appendChild(sendOwn);
     host.appendChild(menu);
     _selfieMenuEl = menu;
     // dışarı tıklayınca kapat (bir sonraki tick'te bağla ki bu tık kapatmasın)
     setTimeout(() => { if (typeof document !== 'undefined') document.addEventListener('click', _closeSelfieMenu); }, 0);
+}
+
+// v0.8.30: kullanıcı foto seçici — user-photos/index.json'dan grid; seçince gönder.
+let _photoPickerEl = null;
+function _closeUserPhotoPicker() {
+    if (_photoPickerEl && _photoPickerEl.parentNode) _photoPickerEl.parentNode.removeChild(_photoPickerEl);
+    _photoPickerEl = null;
+    if (typeof document !== 'undefined') document.removeEventListener('click', _closeUserPhotoPicker);
+}
+async function _showUserPhotoPicker() {
+    if (_photoPickerEl) { _closeUserPhotoPicker(); return; }
+    const host = _shellEl || (typeof document !== 'undefined' ? document.body : null);
+    if (!host) return;
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+        position: 'absolute', zIndex: '100001', background: '#fff', color: '#111',
+        borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+        padding: '8px', left: '8px', bottom: '64px', width: '280px', maxHeight: '320px',
+        overflowY: 'auto',
+    });
+    const base = '/scripts/extensions/third-party/companion-orchestrator/user-photos/';
+    let photos = [];
+    try {
+        const m = await import('./tinder.js');
+        photos = await m.tinderModule.loadUserPhotos();
+    } catch (_) {}
+    if (!photos.length) {
+        const empty = document.createElement('div');
+        empty.style.padding = '12px';
+        empty.style.fontSize = '0.9em';
+        empty.textContent = 'Fotoğraf yok. user-photos/ klasörüne ekleyip index.json\'a yaz.';
+        panel.appendChild(empty);
+    } else {
+        const grid = document.createElement('div');
+        Object.assign(grid.style, { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' });
+        for (const p of photos) {
+            const cell = document.createElement('div');
+            Object.assign(cell.style, {
+                position: 'relative', paddingBottom: '100%', borderRadius: '8px',
+                overflow: 'hidden', cursor: 'pointer', background: 'rgba(0,0,0,0.1)',
+            });
+            const img = document.createElement('img');
+            img.src = base + encodeURIComponent(p.file);
+            Object.assign(img.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover' });
+            cell.appendChild(img);
+            cell.title = p.label || p.file;
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _closeUserPhotoPicker();
+                import('./tinder.js').then(m => { try { m.tinderModule.sendUserPhoto(p, _orch); } catch (_) {} });
+            });
+            grid.appendChild(cell);
+        }
+        panel.appendChild(grid);
+    }
+    host.appendChild(panel);
+    _photoPickerEl = panel;
+    setTimeout(() => { if (typeof document !== 'undefined') document.addEventListener('click', _closeUserPhotoPicker); }, 0);
 }
 
 // v0.8.28: emoji seçici — tıklanan emoji input'a eklenir.

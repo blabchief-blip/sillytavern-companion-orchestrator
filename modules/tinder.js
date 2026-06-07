@@ -2220,6 +2220,95 @@ tinderModule.onMessageReceived = function (orch, data) {
     }
 };
 
+// =========================================================================
+// v0.8.30: Kullanıcı fotoğrafı gönderme + JoyCaption ile içerik analizi (NSFW)
+// =========================================================================
+const _USER_PHOTO_BASE = '/scripts/extensions/third-party/companion-orchestrator/user-photos/';
+const _CAPTION_WF_URL = '/scripts/extensions/third-party/companion-orchestrator/user-photo-caption.json';
+
+// Kullanıcı foto kütüphanesini (index.json) oku → [{file,label}]
+tinderModule.loadUserPhotos = async function () {
+    try {
+        const r = await fetch(_USER_PHOTO_BASE + 'index.json', { credentials: 'include', cache: 'no-cache' });
+        if (!r.ok) return [];
+        const arr = await r.json();
+        if (!Array.isArray(arr)) return [];
+        return arr.map(x => (typeof x === 'string' ? { file: x, label: null } : x)).filter(x => x && x.file);
+    } catch (_) { return []; }
+};
+
+// Bir fotoğrafı ComfyUI JoyCaption ile analiz et → caption metni (yoksa null).
+tinderModule._captionPhoto = async function (imageUrl, orch) {
+    const comfyUrl = orch?.settings?.image_gen?.comfyuiUrl
+        || (typeof window !== 'undefined' && window.CO_COMFYUI_URL)
+        || 'http://192.168.68.66:8001';
+    // 1) Görseli indir
+    const ir = await fetch(imageUrl, { credentials: 'include' });
+    if (!ir.ok) return null;
+    const blob = await ir.blob();
+    // 2) ComfyUI input'a yükle
+    const safe = 'userphoto_' + String(imageUrl).split('/').pop().replace(/[^\w.-]/g, '_');
+    const form = new FormData();
+    form.append('image', new File([blob], safe, { type: blob.type || 'image/png' }));
+    form.append('overwrite', 'true');
+    form.append('type', 'input');
+    const up = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form });
+    if (!up.ok) return null;
+    const upName = (await up.json().catch(() => ({}))).name || safe;
+    // 3) Caption workflow yükle + *image* yerleştir
+    const wfResp = await fetch(_CAPTION_WF_URL, { credentials: 'include', cache: 'no-cache' });
+    if (!wfResp.ok) return null;
+    let wf = JSON.parse(await wfResp.text());
+    for (const id in wf) {
+        const node = wf[id];
+        if (node?.inputs) for (const k in node.inputs) if (node.inputs[k] === '*image*') node.inputs[k] = upName;
+    }
+    // 4) Çalıştır + poll
+    const pr = await fetch(`${comfyUrl}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: wf }) });
+    if (!pr.ok) return null;
+    const pid = (await pr.json()).prompt_id;
+    for (let i = 0; i < 90; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const hr = await fetch(`${comfyUrl}/history/${pid}`);
+        if (!hr.ok) continue;
+        const h = await hr.json();
+        const entry = h[pid];
+        if (!entry) continue;
+        if (entry.status?.status_str === 'error') return null;
+        const outs = entry.outputs || {};
+        for (const nid in outs) {
+            const o = outs[nid];
+            // easy showAnything: text bir array veya ui.text olabilir
+            const t = (Array.isArray(o.text) ? o.text.join(' ') : o.text)
+                || (o.ui && (Array.isArray(o.ui.text) ? o.ui.text.join(' ') : o.ui.text));
+            if (t && String(t).trim()) return String(t).trim();
+        }
+        if (Object.keys(outs).length) return null; // bitti ama metin yok
+    }
+    return null;
+};
+
+// Kullanıcı fotoğrafını gönder: balonda göster + caption'la + ST'ye ilet.
+tinderModule.sendUserPhoto = async function (photo, orch) {
+    const psMod = (await import('./phone_shell.js')).phoneShellModule;
+    const file = typeof photo === 'string' ? photo : photo.file;
+    const label = (typeof photo === 'object' && photo.label) ? photo.label : null;
+    const url = _USER_PHOTO_BASE + encodeURIComponent(file);
+    // 1) kullanıcı balonunda göster
+    try { psMod?.appendMessage?.('user', label ? `📷 ${label}` : '📷', { image: url }); } catch (_) {}
+    try { psMod?.addSystemNote?.('📷 fotoğraf analiz ediliyor…'); } catch (_) {}
+    // 2) caption (graceful)
+    let caption = null;
+    try { caption = await tinderModule._captionPhoto(url, orch); } catch (e) { console.warn('[tinder] caption hata:', e?.message || e); }
+    // 3) ST'ye ilet → karakter ne gönderildiğini anlasın
+    const uName = orch?.settings ? (SillyTavern?.getContext?.()?.name1 || 'Kullanıcı') : 'Kullanıcı';
+    const desc = caption || label || 'bir fotoğraf';
+    const msg = `*[${uName} sana bir fotoğraf gönderdi — içeriği: ${desc}]*`;
+    try { psMod?.sendToST?.(msg); } catch (_) {}
+    try { psMod?.addSystemNote?.(caption ? '✅ fotoğraf gönderildi' : '⚠️ içerik analiz edilemedi (foto yine de gönderildi)'); } catch (_) {}
+    return { ok: true, caption };
+};
+
 tinderModule._pendingSelfie = false; // v0.8.18: bekleyen selfie isteği bayrağı
 tinderModule.EXCHANGE_KEYWORDS = EXCHANGE_KEYWORDS;
 tinderModule.STAGE_THRESHOLDS = STAGE_THRESHOLDS;

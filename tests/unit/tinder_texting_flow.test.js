@@ -98,3 +98,17 @@ test('detectPlatformSwitch — niyet yoksa null (yanlış pozitif önleme)', () 
     assert.equal(tinderModule.detectPlatformSwitch('selam nasılsın'), null);
     assert.equal(tinderModule.detectPlatformSwitch(''), null);
 });
+
+// =========================================================================
+// v0.8.30: Kullanıcı foto gönderme API yüzeyi
+// =========================================================================
+test('foto gönderme metodları mevcut (API yüzeyi)', () => {
+    assert.equal(typeof tinderModule.loadUserPhotos, 'function');
+    assert.equal(typeof tinderModule.sendUserPhoto, 'function');
+    assert.equal(typeof tinderModule._captionPhoto, 'function');
+});
+
+test('loadUserPhotos — fetch yoksa boş dizi (graceful)', async () => {
+    const photos = await tinderModule.loadUserPhotos();
+    assert.ok(Array.isArray(photos));
+});
