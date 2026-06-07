@@ -132,6 +132,30 @@ const SCENE_INTIMATE_PATTERNS = [
 ];
 
 // =====================================================================
+// v0.8.15: Sahne tag'i → poz referans dosyası eşlemesi (ControlNet için)
+// Anahtar = tag (SCENE_INTIMATE_PATTERNS / SPICE_POSE çıktılarıyla aynı),
+// değer = pose-library/ altındaki dosya yolu. Öncelik sıralı: ilk eşleşen
+// kazanır (explicit pozlar üstte, genel pozlar altta). Dosya yoksa atlanır.
+// =====================================================================
+const SCENE_POSE_REFS = [
+  // ---- explicit (çift) ----
+  { tags: ['missionary'],                      file: 'explicit/missionary.png' },
+  { tags: ['cowgirl_position', 'reverse_cowgirl'], file: 'explicit/cowgirl.png' },
+  { tags: ['doggystyle', 'from_behind'],       file: 'explicit/doggystyle.png' },
+  { tags: ['blowjob', 'fellatio', 'cunnilingus'], file: 'explicit/oral.png' },
+  { tags: ['spooning'],                        file: 'explicit/spooning.png' },
+  { tags: ['anal', 'anal_sex'],                file: 'explicit/doggystyle.png' },
+  // ---- yakınlık (çift) ----
+  { tags: ['straddling', 'on_lap', 'riding'],  file: 'couple/straddling.png' },
+  { tags: ['pinned_against_wall', 'pressed_against'], file: 'couple/against_wall.png' },
+  { tags: ['embrace', 'cuddling', 'neck_kiss'],file: 'couple/embrace.png' },
+  { tags: ['french_kiss', 'kiss'],             file: 'couple/kiss.png' },
+  // ---- solo ----
+  { tags: ['lying_on_back', 'legs_spread', 'spread_legs'], file: 'solo/lying.png' },
+  { tags: ['arching_back', 'arching'],         file: 'solo/arching.png' },
+  { tags: ['sitting', 'sitting_close', 'on_lap'], file: 'solo/sitting.png' },
+  { tags: ['standing'],                        file: 'solo/standing.png' },
+];
 
 const ACTION_PATTERNS = [
   // Hareket
@@ -370,6 +394,14 @@ class AutoGen {
         useSceneIntimate: true,  // v0.6.3: scene text → NSFW tag extraction (regex fallback when LLM fails)
         explicitMode: true,      // v0.8.12: varsayılan açık — spice 4 (explicit) bloklanmıyor
         maxAllowedSpice: 4,      // v0.8.12: tam explicit içeriğe izin ver
+        // v0.8.15: ControlNet poz kontrolü — sahne tipine göre poz referansı
+        // ComfyUI'ya yüklenip conditioning'e ControlNet uygulanır. Poz kütüphanesi
+        // (pose-library/) boşsa veya eşleşme yoksa sessizce atlanır (graceful).
+        useControlNet: false,    // varsayılan KAPALI — poz kütüphanesi dolunca açılır
+        controlNetModel: 'control-lora-depth-rank256.safetensors', // SDXL-uyumlu (openpose SD1.5 olduğu için depth)
+        controlNetStrength: 0.55,
+        controlNetStartPercent: 0.0,
+        controlNetEndPercent: 0.7, // sonlara doğru bırak — yüz/detay serbest kalsın
         history: [],
         debug: false,
         injectToChat: true,
@@ -556,7 +588,18 @@ class AutoGen {
       }
 
       // 2) Apply workflow overrides
-      const workflow = await this.loadAndOverrideWorkflow(prompt);
+      // v0.8.15: ControlNet poz seçimi için sahne tag'lerini topla
+      // (LLM tag'leri + mesaj metninden regex + spice poz tag'leri).
+      let sceneTags = [];
+      try {
+        const msgText = lastAiMessage.mes || lastAiMessage.message || '';
+        sceneTags = [
+          ...(Array.isArray(llmTags) ? llmTags : []),
+          ...this._extractSceneIntimateTags(msgText),
+          ...this._getSpiceTags(),
+        ];
+      } catch (_) { sceneTags = []; }
+      const workflow = await this.loadAndOverrideWorkflow(prompt, sceneTags);
       if (!workflow) {
         console.warn('[Companion AutoGen] No workflow available, aborting');
         return;
@@ -903,7 +946,7 @@ class AutoGen {
   // -----------------------------------------------------------
   // Workflow override (port from image_gen + kazuma_bridge)
   // -----------------------------------------------------------
-  async loadAndOverrideWorkflow(prompt) {
+  async loadAndOverrideWorkflow(prompt, sceneTags = null) {
     const ctx = this._getCtx() || this.ctx;
     if (!ctx?.getRequestHeaders) {
       console.warn('[Companion AutoGen] loadAndOverrideWorkflow: no ctx.getRequestHeaders');
@@ -968,6 +1011,26 @@ class AutoGen {
         else if (v === '*lorawt2*') node.inputs[key] = activeWts[1];
         else if (v === '*lorawt3*') node.inputs[key] = activeWts[2];
         else if (v === '*lorawt4*') node.inputs[key] = activeWts[3];
+      }
+    }
+
+    // v0.8.15: ControlNet poz — sahne tag'lerine göre poz referansı uygula.
+    // Conditioning'i (KSampler positive/negative) ControlNet'ten geçirir.
+    // useControlNet kapalıysa / eşleşme yoksa / poz dosyası yoksa atlanır.
+    if (this.settings.useControlNet && Array.isArray(sceneTags) && sceneTags.length) {
+      try {
+        const poseFile = this._selectPoseRef(sceneTags);
+        if (poseFile) {
+          const poseRefName = await this._uploadPoseRefToComfy(this.settings.comfyuiUrl, poseFile);
+          if (poseRefName) {
+            this._injectControlNet(workflow, poseRefName);
+            if (this.settings.debug) console.log('[Companion AutoGen] 🎯 ControlNet poz:', poseFile);
+          } else if (this.settings.debug) {
+            console.log('[Companion AutoGen] Poz dosyası bulunamadı (kütüphane boş):', poseFile);
+          }
+        }
+      } catch (e) {
+        console.warn('[Companion AutoGen] ControlNet enjeksiyonu atlandı:', e?.message || e);
       }
     }
 
@@ -1037,6 +1100,86 @@ class AutoGen {
     if (!up.ok) return null;
     const j = await up.json().catch(() => ({}));
     return j.name || safe;
+  }
+
+  // -----------------------------------------------------------
+  // v0.8.15: ControlNet poz — sahne tag'lerine göre poz referansı seç.
+  // SCENE_POSE_REFS sıralı; ilk eşleşen kazanır (explicit > couple > solo).
+  // Eşleşme yoksa null → ControlNet atlanır.
+  // -----------------------------------------------------------
+  _selectPoseRef(tags) {
+    if (!Array.isArray(tags) || !tags.length) return null;
+    const tagSet = new Set(tags.map(t => String(t).toLowerCase()));
+    for (const entry of SCENE_POSE_REFS) {
+      if (entry.tags.some(t => tagSet.has(t.toLowerCase()))) return entry.file;
+    }
+    return null;
+  }
+
+  // Poz referans görselini extension klasöründen çekip ComfyUI input'a yükle.
+  // Dosya yoksa (kütüphane henüz boş) null döner → ControlNet graceful atlanır.
+  async _uploadPoseRefToComfy(comfyUrl, poseFile) {
+    try {
+      const url = `/scripts/extensions/third-party/companion-orchestrator/pose-library/${poseFile}`;
+      const resp = await fetch(url, { credentials: 'include' });
+      if (!resp.ok) return null; // dosya yok → kütüphane boş
+      const blob = await resp.blob();
+      const safe = 'pose_' + String(poseFile).replace(/[^\w.-]/g, '_');
+      const form = new FormData();
+      form.append('image', new File([blob], safe, { type: 'image/png' }));
+      form.append('overwrite', 'true');
+      form.append('type', 'input');
+      const up = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form });
+      if (!up.ok) return null;
+      const j = await up.json().catch(() => ({}));
+      return j.name || safe;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ControlNet zincirini conditioning'e enjekte et. KSampler'ın positive/negative
+  // girişleri ControlNetApplyAdvanced çıkışlarına yönlendirilir.
+  _injectControlNet(workflow, poseRefName) {
+    const ids = Object.keys(workflow).map(Number).filter(n => !Number.isNaN(n));
+    let nxt = (ids.length ? Math.max(...ids) : 0) + 1;
+    const NID = () => String(nxt++);
+
+    const cnLoader = NID();
+    workflow[cnLoader] = {
+      class_type: 'ControlNetLoader',
+      inputs: { control_net_name: this.settings.controlNetModel },
+      _meta: { title: 'ControlNet Yükle (poz)' },
+    };
+    const poseImg = NID();
+    workflow[poseImg] = {
+      class_type: 'LoadImage',
+      inputs: { image: poseRefName },
+      _meta: { title: 'Poz Referansı' },
+    };
+
+    const strength = (typeof this.settings.controlNetStrength === 'number') ? this.settings.controlNetStrength : 0.55;
+    const startP = (typeof this.settings.controlNetStartPercent === 'number') ? this.settings.controlNetStartPercent : 0.0;
+    const endP = (typeof this.settings.controlNetEndPercent === 'number') ? this.settings.controlNetEndPercent : 0.7;
+
+    for (const [, node] of Object.entries(workflow)) {
+      if (node?.class_type === 'KSampler' && node.inputs?.positive && node.inputs?.negative) {
+        const apply = NID();
+        workflow[apply] = {
+          class_type: 'ControlNetApplyAdvanced',
+          inputs: {
+            positive: node.inputs.positive,
+            negative: node.inputs.negative,
+            control_net: [cnLoader, 0],
+            image: [poseImg, 0],
+            strength, start_percent: startP, end_percent: endP,
+          },
+          _meta: { title: 'ControlNet Uygula (poz)' },
+        };
+        node.inputs.positive = [apply, 0];
+        node.inputs.negative = [apply, 1];
+      }
+    }
   }
 
   // -----------------------------------------------------------
@@ -1317,6 +1460,7 @@ export const autoGenModule = {
   getHistory: () => autoGenInstance.getHistory(),
   buildPrompt: (msg) => autoGenInstance.buildPrompt(msg),
   extractSceneTags: (text) => autoGenInstance._extractSceneIntimateTags(text),
+  selectPoseRef: (tags) => autoGenInstance._selectPoseRef(tags),
   summary: () => autoGenInstance.summary(),
   // Settings reference
   get settings() { return autoGenInstance.settings; },
