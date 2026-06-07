@@ -221,10 +221,18 @@ const _ALLOWED_TAGS = new Set(['FONT', 'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'SPA
 const _ALLOWED_ATTRS = new Set(['color']);
 const _DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']); // içerikle birlikte sil
 function _sanitizeHtml(html) {
-    const text = String(html || '');
+    let text = String(html || '');
     if (typeof document === 'undefined' || !document.createElement) {
-        // DOM yoksa (test) düz metne indir
+        // DOM yoksa (test): entity decode (basit) + tag strip
+        text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         return text.replace(/<[^>]*>/g, '');
+    }
+    // v0.8.29: LLM bazen escaped HTML kartı (&lt;div style=...&gt;) basıyor →
+    // önce entity'leri çöz ki gerçek tag olsun, sonra whitelist sanitize strip etsin.
+    if (/&lt;|&gt;|&amp;/.test(text)) {
+        const ta = document.createElement('textarea');
+        ta.innerHTML = text;
+        text = ta.value;
     }
     const tpl = document.createElement('template');
     tpl.innerHTML = text;
@@ -626,6 +634,7 @@ const phoneShellModule = {
         if (!text) return;
         import('./tinder.js').then(m => {
             try { m.tinderModule?.flagSelfieIfRequested?.(text); } catch (_) {}
+            try { m.tinderModule?.maybeSwitchPlatform?.(text, _orch); } catch (_) {} // v0.8.29
         }).catch(() => {});
     },
 

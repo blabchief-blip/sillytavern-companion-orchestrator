@@ -1783,6 +1783,61 @@ tinderModule.detectSelfieRequest = function (userMessage) {
     return SELFIE_KEYWORDS.test(userMessage);
 };
 
+// v0.8.29: Kullanıcı başka platforma geçmek mi istiyor? → platform key veya null.
+// Platform adı + geçiş niyeti (geç/devam/atla/taşı...) gerekir (yanlış pozitif önleme).
+tinderModule.detectPlatformSwitch = function (userMessage) {
+    if (!userMessage || typeof userMessage !== 'string') return null;
+    const t = userMessage.toLowerCase();
+    const intent = /(ge[çc]|ge[çc]elim|devam\s+edelim|atla|gidelim|ta[şs][ıi]|ge[çc]i[şs]|ekle)/i.test(t);
+    let plat = null;
+    if (/\b(whatsapp|watsap|wp)\b/i.test(t)) plat = 'whatsapp_style';
+    else if (/\b(telegram|tg)\b/i.test(t)) plat = 'telegram_style';
+    else if (/\bsignal\b/i.test(t)) plat = 'signal_style';
+    if (!plat) return null;
+    return intent ? plat : null;
+};
+
+// v0.8.29: Genel platform geçişi — phone shell temasını değiştirir + geçmişi
+// taşır + platform_transition prompt'unu inject eder. _onNumberShared'in
+// platform-agnostik hali (whatsapp için _onNumberShared'i tercih et).
+tinderModule.switchPlatform = async function (matchId, platformKey) {
+    const _toast = (msg, type) => {
+        try {
+            const tt = (typeof toastr !== 'undefined' && toastr) || (typeof window !== 'undefined' && window.toastr);
+            if (tt && tt[type]) tt[type](msg, 'Platform'); else console.log('[tinder]', msg);
+        } catch (_) {}
+    };
+    try {
+        let psMod = null, ptMod = null;
+        try { ptMod = (await import('./platform_transition.js')).platformTransitionModule; } catch (_) {}
+        try { psMod = (await import('./phone_shell.js')).phoneShellModule; } catch (_) {}
+        if (ptMod?.transitionTo && matchId) { try { ptMod.transitionTo(matchId, platformKey); } catch (_) {} }
+        if (psMod) {
+            try { psMod.addSystemNote?.('🔄 ' + (platformKey.replace('_style','')) + '\'a geçiliyor…'); } catch (_) {}
+            if (psMod.mount) psMod.mount();
+            if (psMod.setPlatform) psMod.setPlatform(platformKey);
+            if (psMod.importChatHistory) { try { psMod.importChatHistory(20); } catch (_) {} }
+        }
+        _toast('🔄 ' + platformKey.replace('_style','') + '\'a geçildi', 'success');
+        return { ok: true, platform: platformKey };
+    } catch (e) {
+        console.warn('[tinder] switchPlatform hata:', e?.message || e);
+        return { ok: false, error: String(e?.message || e) };
+    }
+};
+
+// v0.8.29: Kullanıcı mesajında platform geçiş niyeti varsa tetikle.
+// phone_shell._notifyUserMessage'tan (event'siz, güvenilir) çağrılır.
+tinderModule.maybeSwitchPlatform = function (text, orch) {
+    const plat = tinderModule.detectPlatformSwitch(text);
+    if (!plat) return false;
+    const matchId = orch?.settings?.tinder?.activeMatchId || null;
+    if (plat === 'whatsapp_style' && matchId) tinderModule._onNumberShared(matchId).catch(() => {});
+    else tinderModule.switchPlatform(matchId, plat); // matchId yoksa da tema değişir
+    console.log('[tinder] 🔄 platform geçişi tetiklendi:', plat);
+    return true;
+};
+
 // v0.8.18: Spice seviyesinden NSFW selfie tier'ı türet (0=SFW, 1-4=NSFW).
 // Guard generateSelfie'de değil commands.js'de; texting akışında kullanıcı
 // zaten konuşmayı yönlendirdiği için spice'a göre otomatik tier seçilir.

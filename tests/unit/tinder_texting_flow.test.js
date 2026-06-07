@@ -82,3 +82,19 @@ test('detectSelfieRequest — alakasız mesaj false döner', () => {
     assert.equal(tinderModule.detectSelfieRequest(''), false);
     assert.equal(tinderModule.detectSelfieRequest(null), false);
 });
+
+// =========================================================================
+// v0.8.29: Platform geçiş niyeti algılama
+// =========================================================================
+test('detectPlatformSwitch — niyet + platform → key döner', () => {
+    assert.equal(tinderModule.detectPlatformSwitch('hadi whatsapp\'a geçelim'), 'whatsapp_style');
+    assert.equal(tinderModule.detectPlatformSwitch('devam edelim whatsapp'), 'whatsapp_style');
+    assert.equal(tinderModule.detectPlatformSwitch('telegram\'a geçsek'), 'telegram_style');
+    assert.equal(tinderModule.detectPlatformSwitch('signal\'a taşıyalım'), 'signal_style');
+});
+
+test('detectPlatformSwitch — niyet yoksa null (yanlış pozitif önleme)', () => {
+    assert.equal(tinderModule.detectPlatformSwitch('whatsapp kullanıyor musun'), null);
+    assert.equal(tinderModule.detectPlatformSwitch('selam nasılsın'), null);
+    assert.equal(tinderModule.detectPlatformSwitch(''), null);
+});
