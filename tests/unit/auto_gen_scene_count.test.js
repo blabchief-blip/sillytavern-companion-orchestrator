@@ -312,3 +312,72 @@ describe('v0.8.31 — buildPrompt sceneTags scope fix (regression)', () => {
     assert.equal(result, autoGenModule.settings.prefix);
   });
 });
+
+describe('v0.8.32 — _ensureFaceInPrompt (InsightFace No face detected fix)', () => {
+  // InsightFace "No face detected" hatası, hedef görselde yüz olmadığında patlar.
+  // _ensureFaceInPrompt pozitif CLIPTextEncode'a "face, looking at viewer" ekler
+  // ve negatif'ten "no face, faceless" çıkarır.
+  beforeEach(() => {
+    resetStMocks();
+    installStMocks();
+    const orch = buildOrchestrator();
+    autoGenModule.init(orch);
+  });
+
+  test('Pozitif promptta "face" yoksa ekler', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing, lying on bed, 1girl, 1boy' }, _meta: { title: 'Positive' } },
+      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'Negative: blurry, bad anatomy' }, _meta: { title: 'Negative' } },
+    };
+    const touched = autoGenModule.ensureFaceInPrompt(wf);
+    assert.equal(touched, 1);
+    assert.ok(wf['1'].inputs.text.includes('face'), 'Pozitife "face" eklenmeli');
+    assert.ok(wf['1'].inputs.text.includes('looking at viewer'), 'Pozitife "looking at viewer" eklenmeli');
+    assert.ok(wf['1'].inputs.text.includes('1girl, 1boy'), 'Orijinal içerik korunmalı');
+  });
+
+  test('Pozitif promptta zaten "face" varsa dokunmaz', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing, face, 1girl, 1boy' }, _meta: { title: 'Positive' } },
+    };
+    const touched = autoGenModule.ensureFaceInPrompt(wf);
+    assert.equal(touched, 0);
+    assert.equal(wf['1'].inputs.text, 'kissing, face, 1girl, 1boy');
+  });
+
+  test('Negatif prompttan "no face" çıkarır', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing, 1girl' }, _meta: { title: 'Positive' } },
+      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'Negative: blurry, no face, faceless, bad anatomy' }, _meta: { title: 'Negative' } },
+    };
+    const touched = autoGenModule.ensureFaceInPrompt(wf);
+    assert.equal(touched, 2, '2 node (1 pozitif + 1 negatif temizlik)');
+    assert.ok(!/no face/i.test(wf['2'].inputs.text), 'Negatifte "no face" kalmamalı');
+    assert.ok(!/faceless/i.test(wf['2'].inputs.text), 'Negatifte "faceless" kalmamalı');
+    assert.ok(/blurry|bad anatomy/i.test(wf['2'].inputs.text), 'Diğer negatif tagler korunmalı');
+  });
+
+  test('title yoksa text başlangıcına göre pozitif/negatif ayırt eder', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing' } }, // _meta yok
+      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'Negative: bad, no face' } },
+    };
+    autoGenModule.ensureFaceInPrompt(wf);
+    assert.ok(wf['1'].inputs.text.includes('face'), 'title olmasa da pozitif sayılmalı');
+    assert.ok(!/no face/i.test(wf['2'].inputs.text), 'Negative: prefix negatif sayılmalı');
+  });
+
+  test('CLIPTextEncode olmayan node\'lara dokunmaz', () => {
+    const wf = {
+      '1': { class_type: 'KSampler', inputs: { steps: 28 } },
+      '2': { class_type: 'EmptyLatentImage', inputs: { width: 1024, height: 1024 } },
+    };
+    const touched = autoGenModule.ensureFaceInPrompt(wf);
+    assert.equal(touched, 0);
+  });
+
+  test('Boş workflow crash etmez', () => {
+    const touched = autoGenModule.ensureFaceInPrompt({});
+    assert.equal(touched, 0);
+  });
+});

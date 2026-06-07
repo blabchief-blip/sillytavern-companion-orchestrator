@@ -1471,6 +1471,8 @@ class AutoGen {
         console.log('[AutoGen] ReActor: charId=', _charId, 'avatar=', _avatar, 'comfyUrl=', this.settings.comfyuiUrl);
         const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
         if (refName) {
+          // v0.8.32: ReActor da avatar'ı swap eder, hedef görselde yüz olmalı
+          this._ensureFaceInPrompt(workflow);
           this._injectReActor(workflow, refName);
           console.log('[AutoGen] ✅ ReActor inject OK, avatar:', refName);
         } else {
@@ -1489,6 +1491,10 @@ class AutoGen {
         console.log('[AutoGen] FaceID: charId=', _charId, 'avatar=', _avatar, 'comfyUrl=', this.settings.comfyuiUrl);
         const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
         if (refName) {
+          // v0.8.32: Pozitif prompt'ta yüz garantile, negatiften "no face" çıkar.
+          // InsightFace "No face detected" hatası pozitif prompt'ta yüz
+          // garantisi olmadığında + görselin büyük kısmı yüz değilse patlar.
+          this._ensureFaceInPrompt(workflow);
           // Group sahnesinde weight düşür (kimlik zayıf ama bozuk olmasın)
           const isGroup = this._isGroupScene(sceneTags);
           const w = isGroup ? (this.settings.faceIdWeightGroup ?? 0.5) : (this.settings.faceIdWeight ?? 0.85);
@@ -1700,6 +1706,46 @@ class AutoGen {
   }
 
   // -----------------------------------------------------------
+  // v0.8.32: Pozitif prompt'ta yüz garantisi oluştur.
+  // InsightFace "No face detected" hatası çoğunlukla hedef görselde
+  // (VAE decode çıktısı) yüz olmadığında patlar — prompt'ta "face",
+  // "looking at viewer" gibi yüz kılavuz kelimeleri yoksa ComfyUI
+  // kompozisyon bazen yüzsüz (vücut/arkaplan dominant) üretir.
+  // Bu fonksiyon CLIPTextEncode pozitif input'a "face" ekler ve
+  // negatif'ten "no face, faceless" çıkarır.
+  // -----------------------------------------------------------
+  _ensureFaceInPrompt(workflow) {
+    const FACE_POSITIVE = 'face, detailed face, looking at viewer';
+    const FACE_NEGATIVE_CLEAN = /\bno\s*face\b|\bfaceless\b|\fhead\s*out\s*of\s*frame\b/gi;
+    let touched = 0;
+    for (const [, node] of Object.entries(workflow)) {
+      if (!node?.inputs) continue;
+      if (node.class_type === 'CLIPTextEncode') {
+        // Pozitif: title'ı 'Positive' veya text'te 'negative' yoksa pozitif say
+        const title = (node._meta?.title || '').toLowerCase();
+        const txt = String(node.inputs.text || '');
+        if (title.includes('negative') || txt.startsWith('Negative:') || txt.startsWith('negative:')) {
+          // Negatif: "no face" ve "faceless" varsa çıkar
+          if (FACE_NEGATIVE_CLEAN.test(txt)) {
+            node.inputs.text = txt.replace(FACE_NEGATIVE_CLEAN, '').replace(/\s{2,}/g, ' ').trim();
+            touched++;
+          }
+        } else {
+          // Pozitif: "face" yoksa ekle
+          if (!/face|looking at viewer/i.test(txt)) {
+            node.inputs.text = `${txt.trim()}, ${FACE_POSITIVE}`;
+            touched++;
+          }
+        }
+      }
+    }
+    if (touched > 0) {
+      console.log('[AutoGen] v0.8.32 _ensureFaceInPrompt:', touched, 'CLIPTextEncode node güncellendi');
+    }
+    return touched;
+  }
+
+  // -----------------------------------------------------------
   // v0.8.11: ReActor face-swap enjeksiyonu. SaveImage'ın bağlı olduğu
   // VAEDecode çıkışına ReActorFaceSwap node'u ekler; kaynak yüz = avatar.
   // Selfie workflow'u ile aynı swap parametreleri kullanılır.
@@ -1778,6 +1824,22 @@ class AutoGen {
       const data = await resp.json();
       const entry = data[promptId];
       if (entry?.status?.completed) {
+        // v0.8.32: Workflow node hatası varsa (InsightFace, OOM, vs.) yakala
+        // ve user'a bildir. Status.completed true olabilir ama output olmayabilir.
+        const statusInfo = entry.status || {};
+        const messages = statusInfo.messages || [];
+        const executionError = messages.find(m => m?.[0] === 'execution_error');
+        if (executionError) {
+          const errMsg = executionError[1]?.exception_message || 'Bilinmeyen hata';
+          const errType = executionError[1]?.exception_type || 'Exception';
+          console.error('[AutoGen] ComfyUI execution error:', errType, errMsg);
+          if (/InsightFace|face detected/i.test(errMsg)) {
+            this.toast('⚠️ Yüz bulunamadı — görselde yüz olmayabilir. Sahne tek kişilik veya close-up olmalı.', 'error');
+          } else {
+            this.toast(`⚠️ ComfyUI hata: ${errType} — ${errMsg.slice(0, 80)}`, 'error');
+          }
+          return null;
+        }
         const filename = entry.outputs?.['9']?.images?.[0]?.filename;
         return filename || null;
       }
@@ -1980,6 +2042,7 @@ export const autoGenModule = {
   selectPoseRef: (tags) => autoGenInstance._selectPoseRef(tags),
   resolveSceneCount: (text, sceneTags) => autoGenInstance._resolveSceneCount(text, sceneTags),
   resolveFaceMode: (sceneTags) => autoGenInstance._resolveFaceMode(sceneTags),
+  ensureFaceInPrompt: (workflow) => autoGenInstance._ensureFaceInPrompt(workflow),
   isGroupScene: (sceneTags) => autoGenInstance._isGroupScene(sceneTags),
   isCoupleScene: (sceneTags) => autoGenInstance._isCoupleScene(sceneTags),
   countPeopleInGroupPose: (text, sceneTags) => autoGenInstance._countPeopleInGroupPose(text, sceneTags),
