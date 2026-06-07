@@ -381,3 +381,66 @@ describe('v0.8.32 — _ensureFaceInPrompt (InsightFace No face detected fix)', (
     assert.equal(touched, 0);
   });
 });
+
+describe('v0.8.32 — stripFaceIdFromWorkflow (InsightFace retry fail-safe)', () => {
+  // InsightFace "No face detected" → workflow'u IPAdapterFaceID'den arındırıp
+  // yeniden gönder. Diffusion base modeli yüzsüz de olsa temiz üretim yapar.
+  beforeEach(() => {
+    resetStMocks();
+    installStMocks();
+    const orch = buildOrchestrator();
+    autoGenModule.init(orch);
+  });
+
+  test('IPAdapterFaceID node + bağlı CLIPVision/LoadImage silinir', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing, 1girl' }, _meta: { title: 'Positive' } },
+      '2': { class_type: 'CLIPTextEncode', inputs: { text: 'Negative: blurry' }, _meta: { title: 'Negative' } },
+      '3': { class_type: 'CLIPVisionLoader', inputs: { clip_name: 'ip-adapter-faceid-plusv2_sdxl.bin' } },
+      '4': { class_type: 'LoadImage', inputs: { image: 'avatar.png' } },
+      '5': { class_type: 'IPAdapterFaceID', inputs: { weight: 0.85, image: ['4', 0], clip_vision: ['3', 0] } },
+      '6': { class_type: 'KSampler', inputs: { positive: ['5', 0], negative: ['2', 0] } },
+    };
+    const result = autoGenModule.stripFaceIdFromWorkflow(wf);
+    assert.ok(result, 'stripped workflow null olmamalı');
+    assert.equal(result['5'], undefined, 'IPAdapterFaceID silinmeli');
+    assert.equal(result['3'], undefined, 'CLIPVisionLoader silinmeli');
+    assert.equal(result['4'], undefined, 'LoadImage silinmeli');
+    // KSampler positive default pozitife bağlanmalı
+    assert.deepEqual(result['6'].inputs.positive, ['1', 0], 'KSampler pozitif default node\'a bağlanmalı');
+  });
+
+  test('IPAdapterFaceID olmayan workflow değişmeden döner', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing' } },
+      '2': { class_type: 'KSampler', inputs: { positive: ['1', 0], negative: [] } },
+    };
+    const result = autoGenModule.stripFaceIdFromWorkflow(wf);
+    assert.ok(result);
+    assert.equal(result['1'].class_type, 'CLIPTextEncode', 'CLIPTextEncode korunmalı');
+    assert.equal(result['2'].class_type, 'KSampler', 'KSampler korunmalı');
+  });
+
+  test('Orijinal workflow clone — strip sonrası orijinal bozulmaz', () => {
+    const wf = {
+      '1': { class_type: 'CLIPTextEncode', inputs: { text: 'kissing' }, _meta: { title: 'Positive' } },
+      '2': { class_type: 'IPAdapterFaceID', inputs: { weight: 0.85 } },
+      '3': { class_type: 'KSampler', inputs: { positive: ['2', 0], negative: [] } },
+    };
+    const result = autoGenModule.stripFaceIdFromWorkflow(wf);
+    assert.ok(result);
+    // Orijinal bozulmamış olmalı
+    assert.equal(wf['2'].class_type, 'IPAdapterFaceID', 'orijinal IPAdapterFaceID korunmalı');
+    // Result'ta silinmiş olmalı
+    assert.equal(result['2'], undefined, 'result IPAdapterFaceID silinmeli');
+  });
+
+  test('Boş/null workflow crash etmez', () => {
+    // Boş workflow → boş döner (graceful)
+    const result = autoGenModule.stripFaceIdFromWorkflow({});
+    assert.ok(result, 'boş workflow null/undefined dönmemeli');
+    assert.equal(typeof result, 'object');
+    // null → null
+    assert.equal(autoGenModule.stripFaceIdFromWorkflow(null), null);
+  });
+});

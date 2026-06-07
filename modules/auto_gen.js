@@ -789,6 +789,38 @@ class AutoGen {
 
       // 4) Wait for completion
       const filename = await this.waitForCompletion(promptId);
+
+      // v0.8.32 retry: InsightFace "No face detected" geldiyse workflow'u
+      // IPAdapterFaceID node'larından arındırıp yeniden gönder. Diffusion
+      // base modeli yüzsüz de olsa temiz bir görsel üretir.
+      if (!filename && this._lastExecutionError?.includes('InsightFace') && this._lastExecutionError?.includes('No face detected')) {
+        console.warn('[AutoGen] v0.8.32 retry: InsightFace fail, IPAdapterFaceID kaldırılıp retry');
+        this.toast('⚠️ Yüz bulunamadı, FaceID kaldırılarak tekrar deneniyor...', 'warning');
+        const stripped = this._stripFaceIdFromWorkflow(workflow);
+        if (stripped) {
+          const retryId = await this.sendToComfy(stripped);
+          if (retryId) {
+            const retryFilename = await this.waitForCompletion(retryId);
+            if (retryFilename) {
+              // 5) Inject to chat
+              if (this.settings.injectToChat) {
+                await this.injectToChat(retryFilename, prompt, lastAiMessage);
+              }
+              // 6) Save history
+              this._saveHistory({
+                timestamp: Date.now(),
+                prompt, filename: retryFilename, messageId: lastAiMessage.messageId,
+                llmTags, sceneTags, retryFromInsightFace: true,
+              });
+              this._lastExecutionError = null;
+              return;
+            }
+          }
+        }
+        this._lastExecutionError = null;
+        return;
+      }
+
       if (!filename) return;
 
       // 5) Inject to chat — lastAiMessage'ın kendisine inject et
@@ -1706,6 +1738,95 @@ class AutoGen {
   }
 
   // -----------------------------------------------------------
+  // v0.8.32: Workflow'dan IPAdapterFaceID node'larını ve onlara bağlı
+  // CLIPVisionEncode/LoadImage node'larını çıkar. InsightFace yüz bulamayınca
+  // bu node'lar olmadan yeniden göndererek temiz diffusion üretimi yapar.
+  // Clone alıp değiştir, orijinal workflow bozulmasın.
+  // -----------------------------------------------------------
+  _stripFaceIdFromWorkflow(workflow) {
+    try {
+      const wf = JSON.parse(JSON.stringify(workflow));
+      // IPAdapterFaceID node'larını bul, bağlı oldukları CLIPVision/LoadImage'ı da sil
+      const faceIdNodeIds = new Set();
+      const clipVisionIds = new Set();
+      const loadImageIds = new Set();
+      // Önce IPAdapterFaceID'leri topla
+      for (const [nid, node] of Object.entries(wf)) {
+        if (node?.class_type === 'IPAdapterFaceID') faceIdNodeIds.add(nid);
+      }
+      // IPAdapterFaceID node'larının input'larında referans verilen CLIPVision/LoadImage
+      // node'larını da sil (faceID onlara bağlı, yalnız kalırlar).
+      for (const faceIdId of faceIdNodeIds) {
+        const faceNode = wf[faceIdId];
+        if (!faceNode?.inputs) continue;
+        for (const key of Object.keys(faceNode.inputs)) {
+          const v = faceNode.inputs[key];
+          if (!Array.isArray(v) || !v[0]) continue;
+          const refId = String(v[0]);
+          const refNode = wf[refId];
+          if (!refNode?.class_type) continue;
+          if (refNode.class_type === 'CLIPVisionLoader' || refNode.class_type?.includes('CLIPVision')) {
+            clipVisionIds.add(refId);
+          }
+          if (refNode.class_type === 'LoadImage' || refNode.class_type === 'IPAdapterEncoder') {
+            loadImageIds.add(refId);
+          }
+        }
+      }
+      // KSampler'ın positive/negative girişleri faceID zincirine bağlı olabilir
+      // — bunları default positive/negative node'a geri bağla
+      const positiveNodes = [];
+      const negativeNodes = [];
+      for (const [nid, node] of Object.entries(wf)) {
+        if (node?.class_type === 'CLIPTextEncode') {
+          const title = (node._meta?.title || '').toLowerCase();
+          const txt = String(node.inputs?.text || '');
+          if (title.includes('negative') || txt.startsWith('Negative:') || txt.startsWith('negative:')) {
+            negativeNodes.push(nid);
+          } else {
+            positiveNodes.push(nid);
+          }
+        }
+      }
+      // KSampler'ı bul
+      for (const [nid, node] of Object.entries(wf)) {
+        if (node?.class_type !== 'KSampler' || !node.inputs) continue;
+        let modified = false;
+        // positive
+        if (Array.isArray(node.inputs.positive) && faceIdNodeIds.has(String(node.inputs.positive[0]))) {
+          // Default pozitif node'a bağla
+          const posNode = positiveNodes[0];
+          if (posNode) {
+            node.inputs.positive = [posNode, 0];
+            modified = true;
+          }
+        }
+        // negative
+        if (Array.isArray(node.inputs.negative) && faceIdNodeIds.has(String(node.inputs.negative[0]))) {
+          const negNode = negativeNodes[0];
+          if (negNode) {
+            node.inputs.negative = [negNode, 0];
+            modified = true;
+          }
+        }
+        if (modified) {
+          console.log('[AutoGen] v0.8.32 _stripFaceId: KSampler input\'ları default\'a bağlandı:', nid);
+        }
+      }
+      // Silinecek node'ları toplu sil
+      const toDelete = new Set([...faceIdNodeIds, ...clipVisionIds, ...loadImageIds]);
+      for (const nid of toDelete) {
+        delete wf[nid];
+        console.log('[AutoGen] v0.8.32 _stripFaceId: silinen node:', nid);
+      }
+      return wf;
+    } catch (e) {
+      console.error('[AutoGen] v0.8.32 _stripFaceId hata:', e);
+      return null;
+    }
+  }
+
+  // -----------------------------------------------------------
   // v0.8.32: Pozitif prompt'ta yüz garantisi oluştur.
   // InsightFace "No face detected" hatası çoğunlukla hedef görselde
   // (VAE decode çıktısı) yüz olmadığında patlar — prompt'ta "face",
@@ -1833,17 +1954,20 @@ class AutoGen {
           const errMsg = executionError[1]?.exception_message || 'Bilinmeyen hata';
           const errType = executionError[1]?.exception_type || 'Exception';
           console.error('[AutoGen] ComfyUI execution error:', errType, errMsg);
+          this._lastExecutionError = `${errType}: ${errMsg}`;
           if (/InsightFace|face detected/i.test(errMsg)) {
-            this.toast('⚠️ Yüz bulunamadı — görselde yüz olmayabilir. Sahne tek kişilik veya close-up olmalı.', 'error');
+            this.toast('⚠️ Yüz bulunamadı — FaceID kaldırılarak tekrar denenecek', 'warning');
           } else {
             this.toast(`⚠️ ComfyUI hata: ${errType} — ${errMsg.slice(0, 80)}`, 'error');
           }
           return null;
         }
         const filename = entry.outputs?.['9']?.images?.[0]?.filename;
+        this._lastExecutionError = null;
         return filename || null;
       }
     }
+    this._lastExecutionError = null;
     this.toast('⏱️ Üretim zaman aşımına uğradı', 'warning');
     return null;
   }
@@ -2043,6 +2167,7 @@ export const autoGenModule = {
   resolveSceneCount: (text, sceneTags) => autoGenInstance._resolveSceneCount(text, sceneTags),
   resolveFaceMode: (sceneTags) => autoGenInstance._resolveFaceMode(sceneTags),
   ensureFaceInPrompt: (workflow) => autoGenInstance._ensureFaceInPrompt(workflow),
+  stripFaceIdFromWorkflow: (workflow) => autoGenInstance._stripFaceIdFromWorkflow(workflow),
   isGroupScene: (sceneTags) => autoGenInstance._isGroupScene(sceneTags),
   isCoupleScene: (sceneTags) => autoGenInstance._isCoupleScene(sceneTags),
   countPeopleInGroupPose: (text, sceneTags) => autoGenInstance._countPeopleInGroupPose(text, sceneTags),
