@@ -484,7 +484,13 @@ class AutoGen {
         ],
         useAvatar: true,
         useFaceId: true,         // v0.8.11: ReActor face-swap (FaceID'den geçildi — daha gerçekçi)
-        faceIdWeight: 1.2,       // (legacy, ReActor'da kullanılmıyor; FaceID için ileride gerekirse)
+        useFaceMode: 'auto',     // v0.8.31: 'auto' | 'reactor' | 'faceid' | 'none' — sahne tipine göre otomatik
+                                 //   auto: 1 kişi → reactor, 2+ kişi → faceid (önerilen)
+                                 //   reactor: her zaman ReActor (eski davranış, multi-face bozabilir)
+                                 //   faceid: her zaman FaceID IP-Adapter (yavaş ama tutarlı)
+                                 //   none: yüz koruması yok, sadece prompt
+        faceIdWeight: 0.85,      // v0.8.31: FaceID ağırlığı (group'ta 0.5-0.7 önerilir)
+        faceIdWeightGroup: 0.5,  // v0.8.31: group/explicit sahnelerde düşük weight (kimlik zayıf ama temiz)
         useMood: true,
         useSpice: true,
         useScenario: true,
@@ -557,6 +563,10 @@ class AutoGen {
       }
       // v0.8.15: ControlNet poz ayarları (eski kurulumda yoksa ekle)
       if (s.useControlNet === undefined) s.useControlNet = true;
+      // v0.8.31: Face mode ayarları (eski kurulumda yoksa ekle)
+      if (s.useFaceMode === undefined) s.useFaceMode = 'auto';
+      if (s.faceIdWeight === undefined) s.faceIdWeight = 0.85;
+      if (s.faceIdWeightGroup === undefined) s.faceIdWeightGroup = 0.5;
       if (!s.controlNetModel) s.controlNetModel = 'control-lora-depth-rank256.safetensors';
       if (s.controlNetStrength === undefined) s.controlNetStrength = 0.55;
       if (s.controlNetStartPercent === undefined) s.controlNetStartPercent = 0.0;
@@ -926,11 +936,246 @@ class AutoGen {
       }
     }
 
-    // Booru-style: 1girl prefix
-    tags.add('1girl');
-    tags.add('solo');
+    // Booru-style: count prefix — SAHNE BAZLI (v0.8.31)
+    // Önce: 1girl, solo her zaman ekleniyordu → couple/group sahnelerde
+    // ComfyUI "tek kişi" üretiyordu. Şimdi: poz referansı + sahne tag'lerine
+    // göre dinamik count (1girl/1boy, 2girls/1boy, 2girls/2boys, ...).
+    const sceneCounts = this._resolveSceneCount(text, sceneTags);
+    sceneCounts.forEach(t => tags.add(t));
 
     return Array.from(tags).join(', ');
+  }
+
+  // ----------------------------------------------------------------
+  // v0.8.31: Sahne tipine göre doğru count tag'leri hesapla.
+  // Önceki davranış: hep "1girl, solo" → couple/group sahnelerde tek kişi.
+  // Yeni davranış: poz kategorisi + sahne tag'lerine göre gerçekçi count.
+  // ----------------------------------------------------------------
+  _resolveSceneCount(text, sceneTags) {
+    const counts = new Set();
+    const t = String(text || '').toLowerCase();
+    const tagsLower = new Set((sceneTags || []).map(x => String(x).toLowerCase()));
+
+    // 1) Poz kategorisini belirle (sceneTags'ten klasör prefix'i)
+    let category = null;
+    for (const tag of tagsLower) {
+      if (tag.startsWith('explicit/') || tag.startsWith('oral_variants/') || tag.startsWith('combo/')) {
+        category = 'explicit';
+        break;
+      }
+      if (tag.startsWith('couple/') || tag.startsWith('group_intimate') || tag.startsWith('mff') || tag.startsWith('kiss_couple')) {
+        category = 'couple';
+        break;
+      }
+      if (tag.startsWith('group/') || tag.startsWith('threeway') || tag.startsWith('threesome') || tag.startsWith('orgy') || tag.startsWith('foursome') || tag.startsWith('gangbang') || tag.startsWith('mff_') || tag.startsWith('fmf_')) {
+        category = 'group';
+        break;
+      }
+      if (tag.startsWith('solo/') || tag.startsWith('oral') || tag.startsWith('selfie') || tag === 'lying' || tag === 'sitting' || tag === 'standing') {
+        category = 'solo';
+        break;
+      }
+    }
+
+    // 2) Eğer kategori belirlenemedi, sahnede 2+ kişi sinyali var mı?
+    if (!category) {
+      if (/\b(her|him|he|she|they|them|partner|man|woman|guy|girl|boy)\b/.test(t)) {
+        // Possible 2+ — ama emin değiliz, couple default
+        category = 'couple';
+      } else {
+        category = 'solo';
+      }
+    }
+
+    // 3) Cinsiyet kombinasyonu
+    const lesbian = /lesbian|female_only|2girls|trib|strap|tribadism/.test(t) || tagsLower.has('lesbian') || tagsLower.has('trib');
+    const gay = /gay|male_only|2boys|femboy/.test(t) || tagsLower.has('gay') || tagsLower.has('m2m');
+
+    // 4) Count tag'lerini hesapla
+    if (category === 'solo') {
+      counts.add('1girl');
+      counts.add('solo');
+    } else if (category === 'couple') {
+      if (lesbian) {
+        counts.add('2girls');
+        counts.add('yuri');
+      } else if (gay) {
+        counts.add('2boys');
+        counts.add('yaoi');
+      } else {
+        // Heteroseksüel default
+        counts.add('1girl');
+        counts.add('1boy');
+      }
+    } else if (category === 'group') {
+      // group klasöründeki pozlardan kişi sayısı
+      const peopleCount = this._countPeopleInGroupPose(text, sceneTags);
+      // MFF vs FMF ayrımı: tag isminden veya path'ten çıkar
+      // (group/threeway_mff → MFF, group/threeway_fmf → FMF)
+      // NOT: substring match ('fmf' veya 'fmm') güvenli değil çünkü path'lerde çakışıyor.
+      // Bunun yerine tag/path birebir karşılaştırma:
+      const mffTags = new Set(['threeway_mff', 'threesome_mff', 'mff_threesome', 'mff_kiss', 'group/threeway_mff', 'group/mff_kiss', 'group/group_intimate_kiss']);
+      const fmfTags = new Set(['threeway_fmf', 'threesome_fmf', 'fmf_threesome', 'threesome_fmm_oral', 'fmm_double_blowjob', 'double_blowjob', 'group/threeway_fmf', 'group/threesome_fmm_oral']);
+      let isMff = false;
+      let isFmf = false;
+      for (const tag of tagsLower) {
+        if (mffTags.has(tag)) isMff = true;
+        if (fmfTags.has(tag)) isFmf = true;
+      }
+      if (peopleCount === 3) {
+        if (isMff && !isFmf) {
+          counts.add('2girls');
+          counts.add('1boy');
+        } else if (isFmf && !isMff) {
+          counts.add('1girl');
+          counts.add('2boys');
+        } else {
+          counts.add('2girls');
+          counts.add('1boy'); // default 3 kişilik
+        }
+      } else if (peopleCount === 4) {
+        counts.add('2girls');
+        counts.add('2boys');
+      } else if (peopleCount === 5) {
+        counts.add('1girl');
+        counts.add('4boys'); // gangbang default
+      } else {
+        counts.add('2girls');
+        counts.add('2boys'); // default 4 kişilik
+      }
+    } else if (category === 'explicit') {
+      if (lesbian) {
+        counts.add('2girls');
+        counts.add('yuri');
+      } else {
+        counts.add('1girl');
+        counts.add('1boy');
+      }
+    }
+
+    return Array.from(counts);
+  }
+
+  // ----------------------------------------------------------------
+  // v0.8.31: Group pose'dan kişi sayısını çıkar.
+  // ----------------------------------------------------------------
+  _countPeopleInGroupPose(text, sceneTags) {
+    const tagsLower = new Set((sceneTags || []).map(x => String(x).toLowerCase()));
+    // threesome → 3, foursome → 4, gangbang → 5
+    // Hem tag alias'larını hem de tam path'leri (group/threeway_mff) kabul et
+    const threewayAliases = ['threeway', 'threesome', 'double_penetration', 'double_blowjob', 'triple_oral', 'oral_threesome'];
+    const foursomeAliases = ['orgy', 'foursome', 'mmff', 'orgy_4p'];
+    const gangbangAliases = ['gangbang', 'gang_bang', 'multiple_men'];
+
+    // Önce path prefix'i kontrol et (group/*, orgy/ vb.)
+    let categoryMatch = null;
+    for (const tag of tagsLower) {
+      if (tag.startsWith('group/')) { categoryMatch = 'group'; break; }
+    }
+    // Sonra alias eşleşmesi
+    for (const tag of tagsLower) {
+      const lower = tag.toLowerCase();
+      // threesome
+      if (threewayAliases.some(a => lower.includes(a)) || tagsLower.has('threeway_mff') || tagsLower.has('threeway_fmf') ||
+          tagsLower.has('threesome_mff') || tagsLower.has('threesome_fmf') ||
+          tagsLower.has('threesome_oral') || tagsLower.has('threesome_fmm_oral') ||
+          tagsLower.has('double_penetration') || tagsLower.has('dp') || tagsLower.has('double_penetrate') ||
+          tagsLower.has('double_blowjob') || tagsLower.has('fmm_double_blowjob') || tagsLower.has('mff_double_blowjob') ||
+          tagsLower.has('mff_kiss') || tagsLower.has('mff_threesome') || tagsLower.has('fmf_threesome') ||
+          tagsLower.has('group_intimate_kiss') || tagsLower.has('group_kiss') ||
+          (categoryMatch === 'group' && (lower.includes('threeway') || lower.includes('threesome') || lower.includes('double_pen') || lower.includes('double_blow')))) {
+        return 3;
+      }
+      // foursome
+      if (foursomeAliases.some(a => lower.includes(a)) || tagsLower.has('orgy_bbq') || tagsLower.has('orgy_fmmf') ||
+          tagsLower.has('orgy_4p') || tagsLower.has('foursome') || tagsLower.has('foursome_bbq') || tagsLower.has('mmff_foursome') ||
+          (categoryMatch === 'group' && (lower.includes('orgy') || lower.includes('foursome') || lower.includes('bbq')))) {
+        return 4;
+      }
+      // gangbang
+      if (gangbangAliases.some(a => lower.includes(a)) || tagsLower.has('gangbang') || tagsLower.has('gang_bang') || tagsLower.has('multiple_men')) {
+        return 5;
+      }
+    }
+    return 4; // safe default
+  }
+
+  // ----------------------------------------------------------------
+  // v0.8.31: Face mode çözümle.
+  // - 'auto' (default): 1 kişi (solo/selfie) → ReActor, 2+ kişi → FaceID
+  // - 'reactor': her zaman ReActor
+  // - 'faceid': her zaman FaceID
+  // - 'none': yüz koruması yok
+  // - Legacy: useFaceId=false → 'none', useFaceId=true (mode yoksa) → 'reactor'
+  // ----------------------------------------------------------------
+  _resolveFaceMode(sceneTags) {
+    const mode = this.settings.useFaceMode;
+    // Legacy fallback
+    if (!mode || mode === 'auto') {
+      // useFaceId false ise → none
+      if (this.settings.useFaceId === false) return 'none';
+      // useFaceMode auto: sahne tipine göre karar
+      if (this._isGroupScene(sceneTags)) return 'faceid';
+      if (this._isCoupleScene(sceneTags)) return 'faceid';
+      return 'reactor'; // solo/selfie
+    }
+    return mode;
+  }
+
+  _isGroupScene(sceneTags) {
+    if (!Array.isArray(sceneTags)) return false;
+    const set = new Set(sceneTags.map(t => String(t).toLowerCase()));
+    // Hem tag alias'larını hem de tam path'leri (group/threeway_mff) kabul et
+    const groupIndicators = [
+      // threesome
+      'threeway_mff', 'threeway_fmf', 'threesome_mff', 'threesome_fmf',
+      'threesome_oral', 'threesome_fmm_oral', 'oral_threesome', 'triple_oral',
+      'double_penetration', 'dp', 'double_penetrate',
+      'double_blowjob', 'fmm_double_blowjob', 'mff_double_blowjob',
+      'mff_threesome', 'fmf_threesome', 'mff_kiss', 'fmf_kiss',
+      // foursome
+      'orgy_bbq', 'orgy_fmmf', 'orgy_4p', 'foursome', 'foursome_bbq', 'mmff_foursome',
+      // gangbang
+      'gangbang', 'gang_bang', 'multiple_men',
+      // group kiss
+      'group_intimate_kiss', 'group_kiss',
+      // generic
+      'mff', 'fmf',
+    ];
+    for (const ind of groupIndicators) {
+      if (set.has(ind)) return true;
+    }
+    // Path prefix kontrolü (group/threeway_mff, group/orgy_fmmf, ...)
+    for (const tag of set) {
+      if (tag.startsWith('group/')) return true;
+    }
+    return false;
+  }
+
+  _isCoupleScene(sceneTags) {
+    if (!Array.isArray(sceneTags)) return false;
+    // Explicit/couple/oral_variants sahnelerde ReActor bozabilir → FaceID öner
+    const coupleKeywords = [
+      'kiss', 'kissing', 'couple', 'straddling', 'pinned_against_wall', 'pressed_against',
+      'embrace', 'cuddling', 'forehead_kiss', 'lap_makeout', 'shower_together',
+      'bath_together', 'couch_makeout', 'slow_dance', 'standing_kiss_wall',
+      'doggystyle', 'cowgirl_position', 'reverse_cowgirl', 'missionary',
+      'anal', 'anal_sex', 'oral', 'blowjob', 'fellatio', 'cunnilingus',
+      'sixty_nine', 'prone_bone', 'spooning', 'standing_doggy',
+      'missionary', 'anal_doggy', 'anal_cowgirl',
+      'facial', 'deepthroat', 'throat_fuck', 'cunnilingus_giver', 'cunnilingus_receiver',
+      'blowjob', 'fellatio', 'eating_pussy', 'receiving_cunnilingus',
+    ];
+    const set = new Set(sceneTags.map(t => String(t).toLowerCase()));
+    for (const k of coupleKeywords) {
+      if (set.has(k)) return true;
+    }
+    // Path prefix kontrolü (couple/*, explicit/*, oral_variants/*, combo/*)
+    for (const tag of set) {
+      if (tag.startsWith('couple/') || tag.startsWith('explicit/') ||
+          tag.startsWith('oral_variants/') || tag.startsWith('combo/')) return true;
+    }
+    return false;
   }
 
   // -----------------------------------------------------------
@@ -1202,14 +1447,20 @@ class AutoGen {
       }
     }
 
+    // v0.8.31: Face mode (auto/reactor/faceid/none) — sahne tipine göre
+    // otomatik mod seçimi. Eski davranış: hep ReActor → 2+ kişilik sahnelerde
+    // yüz tanıyamayıp bozuyordu. Yeni: 1 kişi → ReActor, 2+ kişi → FaceID.
     // v0.8.11: ReActor face-swap — aktif karakterin avatar yüzünü üretilen
     // görsele swap et (selfie pipeline ile aynı yaklaşım). FaceID'den geçildi:
     // FaceID gerçekçilik↔kimlik'i aynı diffusion'a yükleyip plastik doku katıyordu.
     // ReActor'da: taban görsel orijinal şekilde üretilir (gerçekçi) → son adımda
     // avatar yüzü swap edilir (inswapper_128) + GFPGANv1.4 restore.
     // Avatar yoksa / upload başarısızsa sessizce atla — düz üretim devam eder.
-    console.log('[AutoGen] useFaceId:', this.settings.useFaceId);
-    if (this.settings.useFaceId) {
+    const faceMode = this._resolveFaceMode(sceneTags);
+    console.log('[AutoGen] useFaceMode:', this.settings.useFaceMode, '→ resolved:', faceMode, '| useFaceId(legacy):', this.settings.useFaceId, '| sceneTags:', sceneTags?.slice(0, 5));
+    if (faceMode === 'none') {
+      console.warn('[AutoGen] ⚠️ Face mode: none — yüz koruması yok.');
+    } else if (faceMode === 'reactor') {
       try {
         const _ctx2 = this._getCtx();
         const _charId = _ctx2?.characterId;
@@ -1227,9 +1478,36 @@ class AutoGen {
         console.warn('[AutoGen] ReActor enjeksiyonu atlandı:', e?.message || e);
         this.toast(`⚠️ ReActor hata: ${e?.message}`, 'warning');
       }
+    } else if (faceMode === 'faceid') {
+      try {
+        const _ctx2 = this._getCtx();
+        const _charId = _ctx2?.characterId;
+        const _avatar = _ctx2?.characters?.[_charId]?.avatar;
+        console.log('[AutoGen] FaceID: charId=', _charId, 'avatar=', _avatar, 'comfyUrl=', this.settings.comfyuiUrl);
+        const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
+        if (refName) {
+          // Group sahnesinde weight düşür (kimlik zayıf ama bozuk olmasın)
+          const isGroup = this._isGroupScene(sceneTags);
+          const w = isGroup ? (this.settings.faceIdWeightGroup ?? 0.5) : (this.settings.faceIdWeight ?? 0.85);
+          this._injectFaceId(workflow, refName);
+          // _injectFaceId default 0.85 kullanıyor; istersek override ederiz
+          for (const [nid, node] of Object.entries(workflow)) {
+            if (node?.class_type === 'IPAdapterFaceID' && node.inputs?.weight !== undefined) {
+              node.inputs.weight = w;
+            }
+          }
+          console.log('[AutoGen] ✅ FaceID inject OK, avatar:', refName, '| weight:', w, '| isGroup:', isGroup);
+        } else {
+          console.warn('[AutoGen] ⚠️ FaceID atlandı: avatar upload null (charId:', _charId, '| avatar:', _avatar, ')');
+          this.toast('⚠️ FaceID: avatar null — console\'a bak', 'warning');
+        }
+      } catch (e) {
+        console.warn('[AutoGen] FaceID enjeksiyonu atlandı:', e?.message || e);
+        this.toast(`⚠️ FaceID hata: ${e?.message}`, 'warning');
+      }
     } else {
-      console.warn('[AutoGen] ⚠️ useFaceId=false — ReActor devre dışı. Settings\'ten aç.');
-      this.toast('⚠️ Yüz Tutarlılığı (ReActor) kapalı — Companion State Injection\'dan aç', 'warning');
+      console.warn('[AutoGen] ⚠️ useFaceId=false — yüz koruması devre dışı. Settings\'ten aç.');
+      this.toast('⚠️ Yüz Tutarlılığı kapalı — Companion State Injection\'dan aç', 'warning');
     }
 
     return workflow;
@@ -1697,6 +1975,11 @@ export const autoGenModule = {
   buildPrompt: (msg) => autoGenInstance.buildPrompt(msg),
   extractSceneTags: (text) => autoGenInstance._extractSceneIntimateTags(text),
   selectPoseRef: (tags) => autoGenInstance._selectPoseRef(tags),
+  resolveSceneCount: (text, sceneTags) => autoGenInstance._resolveSceneCount(text, sceneTags),
+  resolveFaceMode: (sceneTags) => autoGenInstance._resolveFaceMode(sceneTags),
+  isGroupScene: (sceneTags) => autoGenInstance._isGroupScene(sceneTags),
+  isCoupleScene: (sceneTags) => autoGenInstance._isCoupleScene(sceneTags),
+  countPeopleInGroupPose: (text, sceneTags) => autoGenInstance._countPeopleInGroupPose(text, sceneTags),
   summary: () => autoGenInstance.summary(),
   // Settings reference
   get settings() { return autoGenInstance.settings; },
