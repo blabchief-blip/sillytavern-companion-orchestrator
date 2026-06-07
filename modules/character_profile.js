@@ -647,7 +647,9 @@ export const characterProfileModule = {
         if (!store[charId]) store[charId] = { nsfwProfile: defaultProfile() };
         const p = getProfile(charId);
         const current = store[charId]._trust || 0;
-        store[charId]._trust = Math.min(current + n, p.maxTrust);
+        // BUG FIX: alt clamp eksikti — negative n ile trust negatife düşüyordu.
+        // Üst: maxTrust (default 10), alt: 0. Clamp her iki taraftan.
+        store[charId]._trust = Math.max(0, Math.min(current + n, p.maxTrust));
         save();
         return store[charId]._trust;
     },
