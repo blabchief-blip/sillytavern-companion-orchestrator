@@ -954,19 +954,21 @@ function _closeSelfieMenu() {
 }
 function _showSelfieMenu(anchor, theme) {
     if (_selfieMenuEl) { _closeSelfieMenu(); return; }
+    // Menüyü shell'in İÇİNE koy (absolute) — fullscreen overlay + body transform
+    // durumlarında fixed/documentElement yaklaşımı görünmeyebiliyordu.
+    const host = _shellEl || (typeof document !== 'undefined' ? document.body : null);
+    if (!host) return;
     const menu = document.createElement('div');
     Object.assign(menu.style, {
-        position: 'fixed', zIndex: '100000', background: '#fff', color: '#111',
-        borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.3)',
-        padding: '6px', minWidth: '180px', fontSize: '0.95em',
+        position: 'absolute', zIndex: '100001', background: '#fff', color: '#111',
+        borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+        padding: '6px', minWidth: '200px', fontSize: '1em',
+        left: '12px', bottom: '64px',  // input barının hemen üstü
     });
-    const rect = anchor.getBoundingClientRect();
-    menu.style.left = Math.round(rect.left) + 'px';
-    menu.style.bottom = Math.round(window.innerHeight - rect.top + 6) + 'px';
     for (const opt of _SELFIE_MENU) {
         const item = document.createElement('div');
         item.textContent = opt.label;
-        Object.assign(item.style, { padding: '9px 12px', borderRadius: '8px', cursor: 'pointer' });
+        Object.assign(item.style, { padding: '11px 14px', borderRadius: '8px', cursor: 'pointer' });
         item.addEventListener('mouseenter', () => { item.style.background = 'rgba(0,0,0,0.07)'; });
         item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
         item.addEventListener('click', (e) => {
@@ -976,7 +978,7 @@ function _showSelfieMenu(anchor, theme) {
         });
         menu.appendChild(item);
     }
-    document.documentElement.appendChild(menu);
+    host.appendChild(menu);
     _selfieMenuEl = menu;
     // dışarı tıklayınca kapat (bir sonraki tick'te bağla ki bu tık kapatmasın)
     setTimeout(() => document.addEventListener('click', _closeSelfieMenu), 0);
