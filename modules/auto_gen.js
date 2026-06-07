@@ -243,6 +243,19 @@ const SCENE_POSE_REFS = [
   { tags: ['shower_intimate', 'shower_embrace', 'shower_steam_couple'], file: 'couple/shower_intimate.png' },
   { tags: ['pool_hot_tub', 'hot_tub_couple', 'pool_embrace'], file: 'couple/pool_hot_tub.png' },
   { tags: ['balcony_night', 'balcony_couple', 'city_lights_couple'], file: 'couple/balcony_night.png' },
+
+  // ---- v0.8.x Batch 4: group (3-4+ kişilik, Group LoRA ile stabilize) ----
+  // threesome (3 kişilik)
+  { tags: ['threeway_mff', 'threesome_mff', 'mff_threesome'], file: 'group/threeway_mff.png' },
+  { tags: ['threeway_fmf', 'threesome_fmf', 'fmf_threesome'], file: 'group/threeway_fmf.png' },
+  { tags: ['double_penetration', 'dp', 'double_penetrate'], file: 'group/double_penetration.png' },
+  { tags: ['threesome_oral', 'oral_threesome', 'triple_oral'], file: 'group/threesome_oral.png' },
+  { tags: ['threesome_fmm_oral', 'fmm_double_blowjob', 'double_blowjob'], file: 'group/threesome_fmm_oral.png' },
+  // orgy / gangbang (4+ kişilik)
+  { tags: ['orgy_bbq', 'orgy_4p', 'foursome_bbq'], file: 'group/orgy_bbq.png' },
+  { tags: ['orgy_fmmf', 'foursome', 'mmff_foursome'], file: 'group/orgy_fmmf.png' },
+  { tags: ['gangbang', 'gang_bang', 'multiple_men'], file: 'group/gangbang.png' },
+  { tags: ['group_intimate_kiss', 'group_kiss', 'mff_kiss'], file: 'group/group_intimate_kiss.png' },
 ];
 
 const ACTION_PATTERNS = [

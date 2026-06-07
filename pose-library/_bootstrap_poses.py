@@ -127,12 +127,48 @@ POSES = [
     # ---- public tease (gerçekçi, off-office) ----
     ("public/car_backseat.png", "couple in backseat of car, kissing, her hand on his chest, intimate, full body side view through window"),
     ("public/taxi_backseat.png", "single woman in backseat of taxi, looking out window, profile view, casual clothes, full body side view"),
+
+    # ---- v0.8.x Batch 4: group (3-4+ kişilik) — Group LoRA ile stabilize ----
+    # 3 kişilik — threesome
+    ("group/threeway_mff.png",          "three people having sex, threesome, one man in center with two women, man penetrating one woman while eating out the other, bedroom full body view", "group"),
+    ("group/threeway_fmf.png",          "three people having sex, threesome, one woman in center with two men, double penetration, one man in front one in back, bedroom full body view", "group"),
+    ("group/double_penetration.png",    "three people, one woman on all fours being penetrated by two men at once, double penetration dp, full body rear view", "group"),
+    ("group/threesome_oral.png",        "three people, one woman performing oral sex on a man while another woman kisses and touches her, threesome oral scene, full body side view", "group"),
+    ("group/threesome_fmm_oral.png",    "three people, one woman receiving double blowjob from two men kneeling in front, full body front view", "group"),
+    # 4+ kişilik — orgy / gangbang
+    ("group/orgy_bbq.png",              "four people having sex, group sex orgy, two men and two women, multiple positions on bed, full body overhead view", "group"),
+    ("group/orgy_fmmf.png",             "four people having sex, two women and two men, MMFF foursome, kissing and touching each other, bed full body view", "group"),
+    ("group/gangbang.png",              "five people, one woman with four men, gangbang, all men focused on single woman, bed full body view", "group"),
+    ("group/group_intimate_kiss.png",   "three people kissing and embracing, two women kissing one man, MFF intimate kiss chain, full body front view", "group"),
 ]
 
 NEG = "lowres, bad anatomy, deformed, extra limbs, missing limbs, mutation, blurry, watermark, text, multiple views, cropped"
 PREFIX = "score_9, score_8_up, score_7_up, simple background, clear full body composition, "
+# Group pozları için ek LoRA: çoklu kişi kompozisyonunu stabilize eder
+GROUP_LORA = "Group (2).safetensors"
+GROUP_LORA_STRENGTH = 0.85
 
-def build_wf(prompt, seed):
+def build_wf(prompt, seed, lora_name=None, lora_strength=None):
+    """Workflow oluştur. lora_name verilirse LoraLoader node eklenir (group pozları için)."""
+    if lora_name:
+        lora_node = "10"
+        return {
+            "4": {"inputs": {"ckpt_name": MODEL}, "class_type": "CheckpointLoaderSimple"},
+            "5": {"inputs": {"width": 832, "height": 1216, "batch_size": 1}, "class_type": "EmptyLatentImage"},
+            lora_node: {"inputs": {"model": ["4", 0], "clip": ["4", 1],
+                                     "lora_name": lora_name,
+                                     "strength_model": lora_strength,
+                                     "strength_clip": lora_strength},
+                          "class_type": "LoraLoader"},
+            "11": {"inputs": {"text": PREFIX + prompt, "clip": [lora_node, 1]}, "class_type": "CLIPTextEncode"},
+            "12": {"inputs": {"text": NEG, "clip": [lora_node, 1]}, "class_type": "CLIPTextEncode"},
+            "3": {"inputs": {"seed": seed, "steps": 26, "cfg": 6, "sampler_name": "euler_ancestral",
+                              "scheduler": "karras", "denoise": 1, "model": [lora_node, 0],
+                              "positive": ["11", 0], "negative": ["12", 0], "latent_image": ["5", 0]},
+                  "class_type": "KSampler"},
+            "8": {"inputs": {"samples": ["3", 0], "vae": ["4", 2]}, "class_type": "VAEDecode"},
+            "9": {"inputs": {"filename_prefix": "poseref", "images": ["8", 0]}, "class_type": "SaveImage"},
+        }
     return {
         "4": {"inputs": {"ckpt_name": MODEL}, "class_type": "CheckpointLoaderSimple"},
         "5": {"inputs": {"width": 832, "height": 1216, "batch_size": 1}, "class_type": "EmptyLatentImage"},
@@ -155,11 +191,27 @@ def get(path):
     return json.loads(urllib.request.urlopen(COMFY + path, timeout=30).read())
 
 def main():
-    for i, (relpath, prompt) in enumerate(POSES):
+    skipped = 0
+    generated = 0
+    for i, entry in enumerate(POSES):
+        # Tuple: (relpath, prompt) veya (relpath, prompt, "group")
+        relpath = entry[0]
+        prompt = entry[1]
+        lora_name = None
+        lora_strength = None
+        if len(entry) >= 3 and entry[2] == "group":
+            lora_name = GROUP_LORA
+            lora_strength = GROUP_LORA_STRENGTH
         out = os.path.join(HERE, relpath)
-        print(f"[{i+1}/{len(POSES)}] {relpath} ...", flush=True)
+        tag = " [LoRA]" if lora_name else ""
+        # Skip if file already exists (incremental bootstrap)
+        if os.path.exists(out) and os.path.getsize(out) > 100000:
+            print(f"[{i+1}/{len(POSES)}] {relpath} ... ✓ zaten var ({os.path.getsize(out)//1024} KB), atlanıyor", flush=True)
+            skipped += 1
+            continue
+        print(f"[{i+1}/{len(POSES)}] {relpath}{tag} ...", flush=True)
         seed = 1000 + i * 7
-        pid = post("/prompt", {"prompt": build_wf(prompt, seed)})["prompt_id"]
+        pid = post("/prompt", {"prompt": build_wf(prompt, seed, lora_name, lora_strength)})["prompt_id"]
         # poll history
         fname = None
         for _ in range(120):
@@ -185,7 +237,11 @@ def main():
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as f:
             f.write(img)
+        generated += 1
         print(f"   ✓ kaydedildi ({len(img)//1024} KB)")
+    print(f"\n{'='*60}")
+    print(f"📊 Özet: {generated} yeni üretildi, {skipped} atlandı (zaten vardı), toplam {len(POSES)} poz")
+    print(f"{'='*60}")
 
 if __name__ == "__main__":
     import urllib.parse

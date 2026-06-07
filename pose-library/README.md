@@ -33,6 +33,18 @@ pose-library/
 - Parti/kutlama (3): party_grind, new_year_kiss, anniversary_dance
 - Spicy trust 9+ (3): shower_intimate, pool_hot_tub, balcony_night
 
+**v0.8.x Batch 4 — Toplam 89 poz, 13 kategori (Group LoRA ile stabilize):**
+
+```
+  group/ (9)            — threeway_mff, threeway_fmf, double_penetration, threesome_oral, threesome_fmm_oral, orgy_bbq, orgy_fmmf, gangbang, group_intimate_kiss
+```
+
+**Group (Batch 4):**
+- Threesome (5): threeway_mff (M+F+F), threeway_fmf (F+M+M), double_penetration, threesome_oral, threesome_fmm_oral
+- Orgy/gangbang (4): orgy_bbq (4 kişi), orgy_fmmf (2F+2M), gangbang (1F+4M), group_intimate_kiss
+
+**Group LoRA:** `Group (2).safetensors` (ComfyUI'da kurulu), `strength_model=0.85`, `strength_clip=0.85`. Çoklu kişi kompozisyonunu stabilize eder, 5+ kişili sahnelerde bile anatomiyi korur.
+
 ## Görsel formatı
 
 - **ControlNet modeli:** `control-lora-depth-rank256.safetensors` (SDXL/Pony uyumlu)
