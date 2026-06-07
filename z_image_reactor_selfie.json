@@ -1,0 +1,72 @@
+{
+  "_comment": "Z-Image Turbo + ReActor face swap selfie workflow (validated 2026-06-07, 99s, working)",
+  "_source": "Comfy-Org/workflow_templates templates/image_z_image_turbo.json + ReActor (Gourieff/comfyui-reactor)",
+  "_notes": "Use: UNETLoader (z_image_turbo_bf16) + CLIPLoader (qwen_3_4b, type=lumina2) + ModelSamplingAuraFlow (shift=3) + EmptySD3LatentImage + KSampler (steps=12, cfg=1.2) + VAEDecode + ReActorFaceSwap (inswapper_128.onnx) + SaveImage. Placeholders: *input* (positive), *ninput* (negative, becomes ConditioningZeroOut path), *ref_face* (reference image filename), *seed*, *steps*, *cfg*.",
+  "9": {
+    "inputs": {"image": "*ref_face*"},
+    "class_type": "LoadImage"
+  },
+  "11": {
+    "inputs": {"model": ["28", 0], "shift": 3.0},
+    "class_type": "ModelSamplingAuraFlow"
+  },
+  "13": {
+    "inputs": {"width": 832, "height": 1216, "batch_size": 1},
+    "class_type": "EmptySD3LatentImage"
+  },
+  "27": {
+    "inputs": {"text": "*input*", "clip": ["30", 0]},
+    "class_type": "CLIPTextEncode"
+  },
+  "28": {
+    "inputs": {"unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default"},
+    "class_type": "UNETLoader"
+  },
+  "29": {"inputs": {"vae_name": "ae.safetensors"}, "class_type": "VAELoader"},
+  "3": {
+    "inputs": {
+      "seed": "*seed*",
+      "steps": "*steps*",
+      "cfg": "*cfg*",
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": ["11", 0],
+      "positive": ["27", 0],
+      "negative": ["33", 0],
+      "latent_image": ["13", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "30": {
+    "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "model_options": "default"},
+    "class_type": "CLIPLoader"
+  },
+  "33": {
+    "inputs": {"conditioning": ["27", 0]},
+    "class_type": "ConditioningZeroOut"
+  },
+  "8": {"inputs": {"samples": ["3", 0], "vae": ["29", 0]}, "class_type": "VAEDecode"},
+  "12": {
+    "inputs": {
+      "enabled": true,
+      "input_image": ["8", 0],
+      "source_image": ["9", 0],
+      "swap_model": "inswapper_128.onnx",
+      "facedetection": "retinaface_resnet50",
+      "face_restore_model": "codeformer-v0.1.0.pth",
+      "face_restore_visibility": 1.0,
+      "codeformer_weight": 0.5,
+      "detect_gender_input": "no",
+      "detect_gender_source": "no",
+      "input_faces_index": "0",
+      "source_faces_index": "0",
+      "console_log_level": 1
+    },
+    "class_type": "ReActorFaceSwap"
+  },
+  "20": {
+    "inputs": {"filename_prefix": "CO-ZRT-*seed*", "images": ["12", 0]},
+    "class_type": "SaveImage"
+  }
+}
