@@ -397,7 +397,7 @@ class AutoGen {
         // v0.8.15: ControlNet poz kontrolü — sahne tipine göre poz referansı
         // ComfyUI'ya yüklenip conditioning'e ControlNet uygulanır. Poz kütüphanesi
         // (pose-library/) boşsa veya eşleşme yoksa sessizce atlanır (graceful).
-        useControlNet: false,    // varsayılan KAPALI — poz kütüphanesi dolunca açılır
+        useControlNet: true,     // v0.8.15: poz kütüphanesi dolu (13 referans bootstrap edildi)
         controlNetModel: 'control-lora-depth-rank256.safetensors', // SDXL-uyumlu (openpose SD1.5 olduğu için depth)
         controlNetStrength: 0.55,
         controlNetStartPercent: 0.0,
@@ -446,6 +446,12 @@ class AutoGen {
         s.comfyuiUrl = 'http://192.168.68.67:8001';
         console.log('[Companion AutoGen] v0.8.14 migration: ComfyUI URL .66→.67');
       }
+      // v0.8.15: ControlNet poz ayarları (eski kurulumda yoksa ekle)
+      if (s.useControlNet === undefined) s.useControlNet = true;
+      if (!s.controlNetModel) s.controlNetModel = 'control-lora-depth-rank256.safetensors';
+      if (s.controlNetStrength === undefined) s.controlNetStrength = 0.55;
+      if (s.controlNetStartPercent === undefined) s.controlNetStartPercent = 0.0;
+      if (s.controlNetEndPercent === undefined) s.controlNetEndPercent = 0.7;
       // Negatif prompt: sansür + anatomik hata
       if (s.negativeOverride && !s.negativeOverride.includes('censored')) {
         s.negativeOverride += ', censored, mosaic, blur, covered, clothed, clothes, underwear';
@@ -1155,7 +1161,15 @@ class AutoGen {
     workflow[poseImg] = {
       class_type: 'LoadImage',
       inputs: { image: poseRefName },
-      _meta: { title: 'Poz Referansı' },
+      _meta: { title: 'Poz Referansı (ham görsel)' },
+    };
+    // Depth preprocessor: ham poz görselinden depth map çıkar (depth ControlNet
+    // depth map ister, ham RGB değil). Bu sayede poz kütüphanesi normal görsel olabilir.
+    const depth = NID();
+    workflow[depth] = {
+      class_type: 'DepthAnythingV2Preprocessor',
+      inputs: { image: [poseImg, 0], ckpt_name: 'depth_anything_v2_vitl.pth', resolution: 512 },
+      _meta: { title: 'Depth Çıkar (poz→depth)' },
     };
 
     const strength = (typeof this.settings.controlNetStrength === 'number') ? this.settings.controlNetStrength : 0.55;
@@ -1171,7 +1185,7 @@ class AutoGen {
             positive: node.inputs.positive,
             negative: node.inputs.negative,
             control_net: [cnLoader, 0],
-            image: [poseImg, 0],
+            image: [depth, 0],
             strength, start_percent: startP, end_percent: endP,
           },
           _meta: { title: 'ControlNet Uygula (poz)' },
