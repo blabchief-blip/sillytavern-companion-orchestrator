@@ -75,6 +75,32 @@ const BUILTIN_POSES = {
     spice: 4,
     tags: ['under_blanket', 'wearing_oversized_shirt', 'tousled_hair', 'sleepy_expression', 'morning_light', 'domestic', 'cozy', 'intimate', 'bare_legs'],
   },
+
+  // ---- v0.8.x — Melisa-specific (trust 9+, deeply intimate, post-climax) ----
+  wearing_his_shirt: {
+    name: '👕 Onun Gömleği (Trust 9+)',
+    spice: 4,
+    trust_floor: 9,
+    tags: ['wearing_his_shirt', 'unbuttoned', 'collarbone_visible', 'bare_shoulders', 'bare_legs', 'barefoot', 'morning_after', 'tousled_hair', 'soft_expression', 'warm_morning_light', 'domestic', 'post_climax', 'intimate', 'tender', 'cozy'],
+  },
+  morning_cuddle: {
+    name: '☀️ Sabah Sarılması (Trust 9+)',
+    spice: 4,
+    trust_floor: 9,
+    tags: ['morning_cuddle', 'tangled_sheets', 'head_on_chest', 'arm_draped', 'sleepy_smile', 'bare_shoulders', 'soft_morning_light', 'peaceful', 'tender', 'post_climax'],
+  },
+  sleepy_kitchen: {
+    name: '🍳 Mutfakta (Trust 9+)',
+    spice: 3,
+    trust_floor: 9,
+    tags: ['kitchen_morning', 'wearing_his_shirt', 'barefoot', 'coffee_making', 'hip_out', 'looking_over_shoulder', 'soft_kitchen_light', 'domestic', 'cozy', 'intimate', 'tousled_hair'],
+  },
+  shower_steam: {
+    name: '🚿 Duş Buharı (Trust 9+)',
+    spice: 4,
+    trust_floor: 9,
+    tags: ['post_shower', 'wet_hair', 'towel_wrapped', 'water_droplets', 'steam', 'bare_shoulders', 'flushed_skin', 'bathroom_mirror', 'soft_light', 'intimate', 'tender', 'tousled'],
+  },
 };
 
 class PosePresets {

@@ -140,21 +140,74 @@ const SCENE_INTIMATE_PATTERNS = [
 const SCENE_POSE_REFS = [
   // ---- explicit (çift) ----
   { tags: ['missionary'],                      file: 'explicit/missionary.png' },
-  { tags: ['cowgirl_position', 'reverse_cowgirl'], file: 'explicit/cowgirl.png' },
+  { tags: ['cowgirl_position'],                file: 'explicit/cowgirl.png' },
+  { tags: ['reverse_cowgirl', 'reverse_cowgirl_position'], file: 'explicit/reverse_cowgirl.png' },
   { tags: ['doggystyle', 'from_behind'],       file: 'explicit/doggystyle.png' },
-  { tags: ['blowjob', 'fellatio', 'cunnilingus'], file: 'explicit/oral.png' },
+  { tags: ['standing_doggy', 'bent_over', 'bent_over_table', 'standing_from_behind'], file: 'explicit/standing_doggy.png' },
+  { tags: ['blowjob', 'fellatio', 'cunnilingus', 'oral'], file: 'explicit/oral.png' },
+  { tags: ['sixty_nine', '69_position', 'mutual_oral'], file: 'explicit/sixty_nine.png' },
+  { tags: ['prone_bone', 'prone', 'lying_face_down'], file: 'explicit/prone_bone.png' },
   { tags: ['spooning'],                        file: 'explicit/spooning.png' },
   { tags: ['anal', 'anal_sex'],                file: 'explicit/doggystyle.png' },
-  // ---- yakınlık (çift) ----
+  // ---- couple (samimi, clothed veya yarı çıplak) ----
   { tags: ['straddling', 'on_lap', 'riding'],  file: 'couple/straddling.png' },
   { tags: ['pinned_against_wall', 'pressed_against'], file: 'couple/against_wall.png' },
   { tags: ['embrace', 'cuddling', 'neck_kiss'],file: 'couple/embrace.png' },
-  { tags: ['french_kiss', 'kiss'],             file: 'couple/kiss.png' },
+  { tags: ['french_kiss', 'kiss', 'kissing'],  file: 'couple/kiss.png' },
+  { tags: ['lap_sit_legs_over', 'legs_over', 'couch_intimate'], file: 'couple/lap_sit_legs_over.png' },
+  { tags: ['facing_window', 'window_scene', 'night_window'], file: 'couple/facing_window.png' },
+  { tags: ['dining_table', 'table_pressed', 'dining_intimate'], file: 'couple/dining_table.png' },
   // ---- solo ----
   { tags: ['lying_on_back', 'legs_spread', 'spread_legs'], file: 'solo/lying.png' },
   { tags: ['arching_back', 'arching'],         file: 'solo/arching.png' },
-  { tags: ['sitting', 'sitting_close', 'on_lap'], file: 'solo/sitting.png' },
+  { tags: ['sitting', 'sitting_close'],        file: 'solo/sitting.png' },
   { tags: ['standing'],                        file: 'solo/standing.png' },
+  { tags: ['over_the_shoulder', 'looking_back', 'rear_view_solo'], file: 'solo/over_the_shoulder.png' },
+  { tags: ['bathroom_mirror', 'mirror_selfie_solo', 'mirror_selfie'], file: 'solo/bathroom_mirror.png' },
+  // ---- clothed (public/office, non-sexual) ----
+  { tags: ['flirting_office_desk', 'leaning_desk', 'office_pose'], file: 'clothed/flirting_office_desk.png' },
+  { tags: ['flirting_elevator', 'elevator_pose'], file: 'clothed/flirting_elevator.png' },
+  { tags: ['flirting_balcony', 'balcony_pose', 'night_balcony'], file: 'clothed/flirting_balcony.png' },
+
+  // ---- v0.8.x Batch 2: oral variants ----
+  { tags: ['facial', 'cum_on_face'], file: 'oral_variants/facial.png' },
+  { tags: ['deepthroat', 'throat_fuck'], file: 'oral_variants/deepthroat.png' },
+  { tags: ['cunnilingus_giver', 'eating_pussy'], file: 'oral_variants/cunnilingus_giver.png' },
+  { tags: ['cunnilingus_receiver', 'receiving_cunnilingus'], file: 'oral_variants/cunnilingus_receiver.png' },
+  // ---- combo ----
+  { tags: ['anal_doggy', 'anal_from_behind'], file: 'combo/anal_doggy.png' },
+  { tags: ['anal_cowgirl', 'anal_riding'], file: 'combo/anal_cowgirl.png' },
+  // ---- couple (intimate variants) ----
+  { tags: ['shower_together', 'shower_couple'], file: 'couple/shower_together.png' },
+  { tags: ['bath_together', 'bathtub_couple'], file: 'couple/bath_together.png' },
+  { tags: ['couch_makeout', 'couch_kiss', 'making_out'], file: 'couple/couch_makeout.png' },
+  { tags: ['morning_under_covers', 'under_covers_couple', 'bedhead_couple'], file: 'couple/morning_under_covers.png' },
+  // ---- solo (günlük hayat) ----
+  { tags: ['selfie_couch', 'couch_selfie'], file: 'solo/selfie_couch.png' },
+  { tags: ['squatting', 'deep_squat', 'fitness_squat'], file: 'solo/squatting.png' },
+  { tags: ['stretching_yoga', 'yoga_pose', 'warrior_pose'], file: 'solo/stretching_yoga.png' },
+  // ---- office ----
+  { tags: ['presentation_pose', 'whiteboard_pose', 'presenting'], file: 'office/presentation_pose.png' },
+  { tags: ['desk_working', 'working_at_desk', 'office_sitting'], file: 'office/desk_working.png' },
+  { tags: ['water_cooler', 'water_cooler_chat'], file: 'office/water_cooler.png' },
+  // ---- work ----
+  { tags: ['laptop_cafe', 'cafe_working', 'remote_work'], file: 'work/laptop_cafe.png' },
+  { tags: ['standing_desk', 'standing_work', 'high_desk'], file: 'work/standing_desk.png' },
+  // ---- party ----
+  { tags: ['club_dancing', 'dancing_club', 'club_pose'], file: 'party/club_dancing.png' },
+  { tags: ['cocktail_bar', 'bar_sitting', 'bar_pose'], file: 'party/cocktail_bar.png' },
+  { tags: ['balcony_smoking', 'party_balcony', 'night_balcony_solo'], file: 'party/balcony_smoking.png' },
+  // ---- beach ----
+  { tags: ['beach_walking', 'shore_walk', 'sundress_walk'], file: 'beach/beach_walking.png' },
+  { tags: ['poolside', 'pool_chair', 'lounging_pool'], file: 'beach/poolside.png' },
+  { tags: ['sunbathing', 'tanning', 'beach_laying'], file: 'beach/sunbathing.png' },
+  // ---- home ----
+  { tags: ['cooking', 'kitchen_cooking', 'home_cooking'], file: 'home/cooking.png' },
+  { tags: ['reading_book', 'book_reading', 'couch_reading'], file: 'home/reading_book.png' },
+  { tags: ['couch_tv', 'watching_tv', 'couch_sitting'], file: 'home/couch_tv.png' },
+  // ---- public tease ----
+  { tags: ['car_backseat', 'backseat_kiss', 'car_intimate'], file: 'public/car_backseat.png' },
+  { tags: ['taxi_backseat', 'taxi_pose', 'cab_ride'], file: 'public/taxi_backseat.png' },
 ];
 
 const ACTION_PATTERNS = [
