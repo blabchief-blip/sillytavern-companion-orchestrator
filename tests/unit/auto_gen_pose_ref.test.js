@@ -200,4 +200,114 @@ describe('auto_gen poz referans seçimi', () => {
     // Tüm batch 2 tag'leri test edildi, hepsi geçti: 12 batch 2 test'i
     // Batch 1 + 2 + combo implicit = 54
   });
+
+  // ---- v0.8.x Batch 3: couple 11 → 37 ----
+
+  test('couple romantik 5 yeni poz eşlenir', () => {
+    assert.equal(autoGenModule.selectPoseRef(['slow_dance']), 'couple/slow_dance.png');
+    assert.equal(autoGenModule.selectPoseRef(['dancing_slow']), 'couple/slow_dance.png');
+    assert.equal(autoGenModule.selectPoseRef(['forehead_kiss']), 'couple/forehead_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['gentle_forehead_kiss']), 'couple/forehead_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['carrying_bride']), 'couple/carrying_bride.png');
+    assert.equal(autoGenModule.selectPoseRef(['bridal_carry']), 'couple/carrying_bride.png');
+    assert.equal(autoGenModule.selectPoseRef(['wedding_kiss']), 'couple/wedding_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['altar_kiss']), 'couple/wedding_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['first_meet']), 'couple/first_meet.png');
+    assert.equal(autoGenModule.selectPoseRef(['first_encounter']), 'couple/first_meet.png');
+  });
+
+  test('couple intimate 4 yeni poz eşlenir (NSFW trust 5+)', () => {
+    assert.equal(autoGenModule.selectPoseRef(['standing_kiss_wall']), 'couple/standing_kiss_wall.png');
+    assert.equal(autoGenModule.selectPoseRef(['wall_kiss']), 'couple/standing_kiss_wall.png');
+    assert.equal(autoGenModule.selectPoseRef(['lifted_wall_kiss']), 'couple/standing_kiss_wall.png');
+    assert.equal(autoGenModule.selectPoseRef(['lap_makeout']), 'couple/lap_makeout.png');
+    assert.equal(autoGenModule.selectPoseRef(['lap_kiss_couple']), 'couple/lap_makeout.png');
+    assert.equal(autoGenModule.selectPoseRef(['bedside_intimate']), 'couple/bedside_intimate.png');
+    assert.equal(autoGenModule.selectPoseRef(['sitting_bed_edge']), 'couple/bedside_intimate.png');
+    assert.equal(autoGenModule.selectPoseRef(['shower_washing']), 'couple/shower_washing.png');
+    assert.equal(autoGenModule.selectPoseRef(['washing_hair']), 'couple/shower_washing.png');
+  });
+
+  test('couple morning/domestic 4 yeni poz eşlenir (trust 7+)', () => {
+    assert.equal(autoGenModule.selectPoseRef(['cooking_together']), 'couple/cooking_together.png');
+    assert.equal(autoGenModule.selectPoseRef(['kitchen_couple']), 'couple/cooking_together.png');
+    assert.equal(autoGenModule.selectPoseRef(['cooking_back_to_back']), 'couple/cooking_together.png');
+    assert.equal(autoGenModule.selectPoseRef(['brunch_table']), 'couple/brunch_table.png');
+    assert.equal(autoGenModule.selectPoseRef(['brunch_couple']), 'couple/brunch_table.png');
+    assert.equal(autoGenModule.selectPoseRef(['waking_up_couple']), 'couple/waking_up_couple.png');
+    assert.equal(autoGenModule.selectPoseRef(['waking_up_together']), 'couple/waking_up_couple.png');
+    assert.equal(autoGenModule.selectPoseRef(['laundry_together']), 'couple/laundry_together.png');
+    assert.equal(autoGenModule.selectPoseRef(['laundry_play']), 'couple/laundry_together.png');
+  });
+
+  test('couple gece/public 3 yeni poz eşlenir', () => {
+    assert.equal(autoGenModule.selectPoseRef(['rooftop_stars']), 'couple/rooftop_stars.png');
+    assert.equal(autoGenModule.selectPoseRef(['rooftop_couple']), 'couple/rooftop_stars.png');
+    assert.equal(autoGenModule.selectPoseRef(['stargazing']), 'couple/rooftop_stars.png');
+    assert.equal(autoGenModule.selectPoseRef(['taxi_ride']), 'couple/taxi_ride.png');
+    assert.equal(autoGenModule.selectPoseRef(['taxi_couple']), 'couple/taxi_ride.png');
+    assert.equal(autoGenModule.selectPoseRef(['cab_ride_couple']), 'couple/taxi_ride.png');
+    assert.equal(autoGenModule.selectPoseRef(['park_bench']), 'couple/park_bench.png');
+    assert.equal(autoGenModule.selectPoseRef(['park_sunset']), 'couple/park_bench.png');
+  });
+
+  test('couple outdoor 4 yeni poz eşlenir (tatil)', () => {
+    assert.equal(autoGenModule.selectPoseRef(['beach_sunset']), 'couple/beach_sunset.png');
+    assert.equal(autoGenModule.selectPoseRef(['sunset_couple']), 'couple/beach_sunset.png');
+    assert.equal(autoGenModule.selectPoseRef(['picnic_blanket']), 'couple/picnic_blanket.png');
+    assert.equal(autoGenModule.selectPoseRef(['picnic_couple']), 'couple/picnic_blanket.png');
+    assert.equal(autoGenModule.selectPoseRef(['hiking_peak']), 'couple/hiking_peak.png');
+    assert.equal(autoGenModule.selectPoseRef(['mountain_peak_couple']), 'couple/hiking_peak.png');
+    assert.equal(autoGenModule.selectPoseRef(['boat_ride']), 'couple/boat_ride.png');
+    assert.equal(autoGenModule.selectPoseRef(['sailing_couple']), 'couple/boat_ride.png');
+  });
+
+  test('couple parti/kutlama 3 yeni poz eşlenir', () => {
+    assert.equal(autoGenModule.selectPoseRef(['party_grind']), 'couple/party_grind.png');
+    assert.equal(autoGenModule.selectPoseRef(['club_dancing_couple']), 'couple/party_grind.png');
+    assert.equal(autoGenModule.selectPoseRef(['grind_dance']), 'couple/party_grind.png');
+    assert.equal(autoGenModule.selectPoseRef(['new_year_kiss']), 'couple/new_year_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['midnight_kiss']), 'couple/new_year_kiss.png');
+    assert.equal(autoGenModule.selectPoseRef(['anniversary_dance']), 'couple/anniversary_dance.png');
+    assert.equal(autoGenModule.selectPoseRef(['candle_dance']), 'couple/anniversary_dance.png');
+  });
+
+  test('couple spicy 3 yeni poz eşlenir (trust 9+)', () => {
+    assert.equal(autoGenModule.selectPoseRef(['shower_intimate']), 'couple/shower_intimate.png');
+    assert.equal(autoGenModule.selectPoseRef(['shower_embrace']), 'couple/shower_intimate.png');
+    assert.equal(autoGenModule.selectPoseRef(['pool_hot_tub']), 'couple/pool_hot_tub.png');
+    assert.equal(autoGenModule.selectPoseRef(['hot_tub_couple']), 'couple/pool_hot_tub.png');
+    assert.equal(autoGenModule.selectPoseRef(['balcony_night']), 'couple/balcony_night.png');
+    assert.equal(autoGenModule.selectPoseRef(['balcony_couple']), 'couple/balcony_night.png');
+  });
+
+  test('çakışma: ilk eşleşen kazanır (couple batch 3 > batch 1)', () => {
+    // hem kiss (couple batch 1) hem french_kiss yok batch 3'te, ama standing_kiss_wall > wall_kiss ayrı dosya
+    // shower_washing batch 3, shower_together batch 1 — shower_washing daha uzun prefix, eşleşirse o kazanır
+    // shower_together tek başına batch 1 mapping'i kullanır
+    assert.equal(autoGenModule.selectPoseRef(['shower_together']), 'couple/shower_together.png');
+    assert.equal(autoGenModule.selectPoseRef(['shower_washing']), 'couple/shower_washing.png');
+    // Yeni washing_hair tag'i batch 3'te
+    assert.equal(autoGenModule.selectPoseRef(['washing_hair']), 'couple/shower_washing.png');
+  });
+
+  test('mevcut couple batch 1+2 pozlar etkilenmedi (regression)', () => {
+    // Her pose için SCENE_POSE_REFS'teki ilk tag'i kullan (e.g. against_wall değil, pinned_against_wall)
+    const old = {
+      'straddling': 'couple/straddling.png',
+      'pinned_against_wall': 'couple/against_wall.png',
+      'embrace': 'couple/embrace.png',
+      'kiss': 'couple/kiss.png',
+      'lap_sit_legs_over': 'couple/lap_sit_legs_over.png',
+      'facing_window': 'couple/facing_window.png',
+      'dining_table': 'couple/dining_table.png',
+      'shower_together': 'couple/shower_together.png',
+      'bath_together': 'couple/bath_together.png',
+      'couch_makeout': 'couple/couch_makeout.png',
+      'morning_under_covers': 'couple/morning_under_covers.png',
+    };
+    for (const [tag, expected] of Object.entries(old)) {
+      assert.equal(autoGenModule.selectPoseRef([tag]), expected, `${tag} hâlâ aynı dosyaya map olmalı`);
+    }
+  });
 });

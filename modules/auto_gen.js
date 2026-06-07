@@ -208,6 +208,41 @@ const SCENE_POSE_REFS = [
   // ---- public tease ----
   { tags: ['car_backseat', 'backseat_kiss', 'car_intimate'], file: 'public/car_backseat.png' },
   { tags: ['taxi_backseat', 'taxi_pose', 'cab_ride'], file: 'public/taxi_backseat.png' },
+
+  // ---- v0.8.x Batch 3: couple 11 → 37 ----
+  // romantik / samimi
+  { tags: ['slow_dance', 'dancing_slow', 'romantic_dance'], file: 'couple/slow_dance.png' },
+  { tags: ['forehead_kiss', 'forehead_kiss_couple', 'gentle_forehead_kiss'], file: 'couple/forehead_kiss.png' },
+  { tags: ['carrying_bride', 'bridal_carry', 'carrying_couple'], file: 'couple/carrying_bride.png' },
+  { tags: ['wedding_kiss', 'altar_kiss', 'wedding_pose'], file: 'couple/wedding_kiss.png' },
+  { tags: ['first_meet', 'first_encounter', 'meeting_couple'], file: 'couple/first_meet.png' },
+  // intimate / NSFW (trust 5+)
+  { tags: ['standing_kiss_wall', 'wall_kiss', 'lifted_wall_kiss', 'pressed_wall_kiss'], file: 'couple/standing_kiss_wall.png' },
+  { tags: ['lap_makeout', 'lap_kiss_couple', 'sitting_lap_makeout'], file: 'couple/lap_makeout.png' },
+  { tags: ['bedside_intimate', 'bed_edge_intimate', 'sitting_bed_edge'], file: 'couple/bedside_intimate.png' },
+  { tags: ['shower_washing', 'washing_hair', 'shower_wash_couple'], file: 'couple/shower_washing.png' },
+  // morning / domestic (trust 7+)
+  { tags: ['cooking_together', 'kitchen_couple', 'cooking_back_to_back'], file: 'couple/cooking_together.png' },
+  { tags: ['brunch_table', 'brunch_couple', 'breakfast_couple'], file: 'couple/brunch_table.png' },
+  { tags: ['waking_up_couple', 'waking_up_together', 'morning_couple_face_to_face'], file: 'couple/waking_up_couple.png' },
+  { tags: ['laundry_together', 'laundry_play', 'laundry_couple'], file: 'couple/laundry_together.png' },
+  // gece / public
+  { tags: ['rooftop_stars', 'rooftop_couple', 'stargazing'], file: 'couple/rooftop_stars.png' },
+  { tags: ['taxi_ride', 'taxi_couple', 'cab_ride_couple'], file: 'couple/taxi_ride.png' },
+  { tags: ['park_bench', 'bench_couple', 'park_sunset'], file: 'couple/park_bench.png' },
+  // outdoor / tatil
+  { tags: ['beach_sunset', 'sunset_couple', 'beach_embrace'], file: 'couple/beach_sunset.png' },
+  { tags: ['picnic_blanket', 'picnic_couple', 'grass_picnic'], file: 'couple/picnic_blanket.png' },
+  { tags: ['hiking_peak', 'mountain_peak_couple', 'summit_couple'], file: 'couple/hiking_peak.png' },
+  { tags: ['boat_ride', 'boat_couple', 'sailing_couple'], file: 'couple/boat_ride.png' },
+  // parti / kutlama
+  { tags: ['party_grind', 'club_dancing_couple', 'grind_dance'], file: 'couple/party_grind.png' },
+  { tags: ['new_year_kiss', 'midnight_kiss', 'new_year_couple'], file: 'couple/new_year_kiss.png' },
+  { tags: ['anniversary_dance', 'anniversary_couple', 'candle_dance'], file: 'couple/anniversary_dance.png' },
+  // spicy (trust 9+)
+  { tags: ['shower_intimate', 'shower_embrace', 'shower_steam_couple'], file: 'couple/shower_intimate.png' },
+  { tags: ['pool_hot_tub', 'hot_tub_couple', 'pool_embrace'], file: 'couple/pool_hot_tub.png' },
+  { tags: ['balcony_night', 'balcony_couple', 'city_lights_couple'], file: 'couple/balcony_night.png' },
 ];
 
 const ACTION_PATTERNS = [

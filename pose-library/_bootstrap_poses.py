@@ -60,6 +60,41 @@ POSES = [
     ("couple/couch_makeout.png", "couple making out on couch, him lying on top of her, deep kiss, full body 3/4 view"),
     ("couple/morning_under_covers.png", "couple in bed under covers in morning, only their heads and shoulders visible, soft light, intimate, bedhead hair"),
 
+    # ---- v0.8.x Batch 3: couple genişletme (11 → 39) ----
+    # ---- romantik / samimi ----
+    ("couple/slow_dance.png", "couple slow dancing in a living room, him holding her waist, her hand on his shoulder, face to face, romantic lighting, full body"),
+    ("couple/forehead_kiss.png", "couple embracing, man kissing woman on her forehead, her eyes closed, gentle hold, soft lighting, upper body and hands"),
+    ("couple/carrying_bride.png", "man carrying woman in his arms bridal style, her arms around his neck, she laughing, romantic moment, full body"),
+    ("couple/wedding_kiss.png", "couple in wedding attire kissing at altar, bride in white dress, groom in suit, holding hands, full body front view"),
+    ("couple/first_meet.png", "couple meeting for first time at cafe, standing, slightly nervous posture, eye contact, soft daylight, full body 3/4 view"),
+    # ---- intimate / NSFW (trust 5+) ----
+    ("couple/standing_kiss_wall.png", "couple in passionate standing kiss, him lifting her against a wall, her legs wrapped around his waist, full body side view"),
+    ("couple/lap_makeout.png", "couple making out on couch, woman sitting on man's lap facing him, deep kiss, her hands in his hair, full body front view"),
+    ("couple/bedside_intimate.png", "woman sitting on edge of bed, partner standing in front of her between her legs, intimate, full body front view"),
+    ("couple/shower_washing.png", "couple in shower, woman washing man's hair or shoulders, intimate moment, water streaming, full body side view"),
+    # ---- morning / domestic (trust 7+) ----
+    ("couple/cooking_together.png", "couple cooking together in kitchen, back to back, her stirring pot, him chopping vegetables, cozy kitchen light, full body"),
+    ("couple/brunch_table.png", "couple at brunch table, sitting across from each other, eye contact, coffee cups, soft morning light through window, full body"),
+    ("couple/waking_up_couple.png", "couple in bed waking up, lying face to face, soft smile, bedhead hair, morning light, upper body and pillows"),
+    ("couple/laundry_together.png", "couple doing laundry together, throwing clothes at each other playfully, laundry basket, soft indoor light, full body fun pose"),
+    # ---- gece / public ----
+    ("couple/rooftop_stars.png", "couple lying on rooftop under blanket, watching stars, her head on his chest, night sky, full body side view"),
+    ("couple/taxi_ride.png", "couple in backseat of taxi at night, her head on his shoulder, his arm around her, city lights through window, full body"),
+    ("couple/park_bench.png", "couple sitting on park bench at sunset, shoulder to shoulder, her head on his shoulder, golden hour, full body side view"),
+    # ---- outdoor / tatil ----
+    ("couple/beach_sunset.png", "couple on beach at sunset, embracing from behind, watching sun set over ocean, golden light, full body rear view"),
+    ("couple/picnic_blanket.png", "couple on picnic blanket in grass, sitting side by side, sharing food, sunny day, full body 3/4 view"),
+    ("couple/hiking_peak.png", "couple at mountain peak, holding hands, looking at view, hiking gear, blue sky, full body front view"),
+    ("couple/boat_ride.png", "couple on small boat, her sitting between his legs, his arms around her, water around, sunny day, full body rear view"),
+    # ---- parti / kutlama ----
+    ("couple/party_grind.png", "couple dancing close at club, her back against his chest, his hands on her hips, dark club lights, full body"),
+    ("couple/new_year_kiss.png", "couple kissing at midnight new year, fireworks in background, party attire, champagne glass, full body"),
+    ("couple/anniversary_dance.png", "couple slow dancing at anniversary, candle light, formal attire, his hand on her back, full body side view"),
+    # ---- spicy (trust 9+) ----
+    ("couple/shower_intimate.png", "couple in shower in intimate embrace, water streaming, his arms around her from behind, full body side view"),
+    ("couple/pool_hot_tub.png", "couple in hot tub or pool, embracing in water, steam rising, her back against his chest, full body side view"),
+    ("couple/balcony_night.png", "couple on apartment balcony at night, his arms around her from behind, looking at city lights, full body rear view"),
+
     # ---- solo (günlük hayat + fitness) ----
     ("solo/selfie_couch.png", "single woman taking selfie on couch, legs crossed, casual clothes, soft indoor light, full body front view"),
     ("solo/squatting.png", "single woman in deep squat position, fitness pose, gym clothes, full body front view"),
