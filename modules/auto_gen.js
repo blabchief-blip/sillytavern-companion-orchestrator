@@ -1101,20 +1101,28 @@ class AutoGen {
     // ReActor'da: taban görsel orijinal şekilde üretilir (gerçekçi) → son adımda
     // avatar yüzü swap edilir (inswapper_128) + GFPGANv1.4 restore.
     // Avatar yoksa / upload başarısızsa sessizce atla — düz üretim devam eder.
+    console.log('[AutoGen] useFaceId:', this.settings.useFaceId);
     if (this.settings.useFaceId) {
       try {
+        const _ctx2 = this._getCtx();
+        const _charId = _ctx2?.characterId;
+        const _avatar = _ctx2?.characters?.[_charId]?.avatar;
+        console.log('[AutoGen] ReActor: charId=', _charId, 'avatar=', _avatar, 'comfyUrl=', this.settings.comfyuiUrl);
         const refName = await this._uploadAvatarToComfy(this.settings.comfyuiUrl);
         if (refName) {
           this._injectReActor(workflow, refName);
           console.log('[AutoGen] ✅ ReActor inject OK, avatar:', refName);
         } else {
-          console.warn('[AutoGen] ⚠️ ReActor atlandı: avatar upload null döndü (charId:', this._getCtx()?.characterId, '| avatar:', this._getCtx()?.characters?.[this._getCtx()?.characterId]?.avatar, ')');
-          this.toast('⚠️ ReActor: avatar upload başarısız (console\'a bak)', 'warning');
+          console.warn('[AutoGen] ⚠️ ReActor atlandı: avatar upload null (charId:', _charId, '| avatar:', _avatar, ')');
+          this.toast('⚠️ ReActor: avatar null — console\'a bak', 'warning');
         }
       } catch (e) {
         console.warn('[AutoGen] ReActor enjeksiyonu atlandı:', e?.message || e);
         this.toast(`⚠️ ReActor hata: ${e?.message}`, 'warning');
       }
+    } else {
+      console.warn('[AutoGen] ⚠️ useFaceId=false — ReActor devre dışı. Settings\'ten aç.');
+      this.toast('⚠️ Yüz Tutarlılığı (ReActor) kapalı — Companion State Injection\'dan aç', 'warning');
     }
 
     return workflow;
