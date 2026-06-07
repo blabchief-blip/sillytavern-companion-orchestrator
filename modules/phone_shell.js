@@ -116,6 +116,19 @@ let _lastAssistantTextSpan = null; // v0.8.16: çeviri gelince güncellenecek me
 let _lastAssistantBubble = null;   // v0.8.17: görsel eklenecek son assistant baloncuğu
 let _updatedUnsub = null;          // v0.8.17: MESSAGE_UPDATED aboneliği
 
+// v0.8.24: bir mesajın görsel URL'ini çöz — bizim extra.image (ReActor blob)
+// VEYA ST yerleşik SD eklentisinin extra.media[].url'i (/user/images/...).
+function _msgImageUrl(msg) {
+    if (!msg || !msg.extra) return null;
+    if (msg.extra.image) return msg.extra.image;
+    const media = msg.extra.media;
+    if (Array.isArray(media)) {
+        const img = media.find(m => m && (m.type === 'image' || /\.(png|jpe?g|webp|gif)/i.test(m.url || '')));
+        if (img && img.url) return img.url;
+    }
+    return null;
+}
+
 // v0.8.17: baloncuğa görsel ekle (varsa tekrar ekleme — idempotent)
 function _appendImageToBubble(bubble, imageUrl) {
     if (!bubble || !imageUrl) return;
@@ -279,7 +292,7 @@ const phoneShellModule = {
                         const text = _displayText(msg);
                         if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.innerHTML = _sanitizeHtml(text);
                         // çeviri render'ı sırasında görsel de hazırsa ekle
-                        const url = msg.extra && msg.extra.image;
+                        const url = _msgImageUrl(msg);
                         if (url && _lastAssistantBubble) _appendImageToBubble(_lastAssistantBubble, url);
                     } catch (_) { /* best-effort */ }
                 };
@@ -298,7 +311,7 @@ const phoneShellModule = {
                     try {
                         if (!_active || !Array.isArray(ctx.chat)) return;
                         const msg = ctx.chat[messageId];
-                        const url = msg && msg.extra && msg.extra.image;
+                        const url = _msgImageUrl(msg);
                         if (!url) return;
                         // Görseli üretilen mesajın baloncuğuna ekle (genelde son assistant)
                         if (String(messageId) === String(_lastAssistantMsgId) && _lastAssistantBubble) {
@@ -498,7 +511,7 @@ const phoneShellModule = {
         if (_lastAssistantMsgId === String(messageId)) return;
         _lastAssistantMsgId = String(messageId);
         console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
-        phoneShellModule.appendMessage('assistant', text, { image: msg.extra && msg.extra.image });
+        phoneShellModule.appendMessage('assistant', text, { image: _msgImageUrl(msg) });
         // Auto-mark previous self messages as seen (chronological sequence)
         _markAllSeen();
     },
@@ -635,8 +648,8 @@ const phoneShellModule = {
             // (name === 'You' ST'nin user ismi, ama is_user daha güvenilir)
             const isUser = (m.is_user === true) || (m.role === 'user');
             const role = isUser ? 'user' : 'assistant';
-            // v0.8.16: çeviriyi tercih et, v0.8.17: görseli de aktar
-            phoneShellModule.appendMessage(role, _displayText(m), { image: m.extra && m.extra.image });
+            // v0.8.16: çeviriyi tercih et, v0.8.17/24: görseli de aktar (extra.image|media)
+            phoneShellModule.appendMessage(role, _displayText(m), { image: _msgImageUrl(m) });
             imported++;
         }
         return { ok: true, imported, total: chat.length };
