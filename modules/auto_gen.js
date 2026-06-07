@@ -476,17 +476,21 @@ class AutoGen {
   // -----------------------------------------------------------
   // Subscribe / Unsubscribe to MESSAGE_RECEIVED
   // -----------------------------------------------------------
-  _subscribe() {
+  _subscribe(retryCount = 0) {
     if (this._unsub) return;
     const ctx = this._getCtx();
     if (!ctx?.eventSource || !ctx?.eventTypes) {
-      console.warn('[Companion AutoGen] eventSource not available yet');
+      if (retryCount < 10) {
+        // ST henüz hazır değil — 500ms sonra tekrar dene (max 5s)
+        setTimeout(() => this._subscribe(retryCount + 1), 500);
+        if (retryCount === 0) console.warn('[Companion AutoGen] eventSource hazır değil, retry bekleniyor...');
+      } else {
+        console.error('[Companion AutoGen] eventSource 5s içinde hazır olmadı, subscription başarısız.');
+      }
       return;
     }
     const et = ctx.eventTypes;
-    // v0.7.0: CHARACTER_MESSAGE_RENDERED (ST render tamamlandıktan SONRA)
-    // Magic Translation'ın updateMessageBlock'ı MESSAGE_RECEIVED sonrası çalışıyor,
-    // render tamamlanınca CHARACTER_MESSAGE_RENDERED tetiklenir — conflict yok
+    // CHARACTER_MESSAGE_RENDERED: render tamamlandıktan SONRA tetiklenir
     const eventName = et.CHARACTER_MESSAGE_RENDERED || et.MESSAGE_RECEIVED;
 
     const handler = async (data) => {
@@ -496,7 +500,7 @@ class AutoGen {
 
     ctx.eventSource.on(eventName, handler);
     this._unsub = () => ctx.eventSource.removeListener(eventName, handler);
-    console.log(`[Companion AutoGen] ✅ Subscribed to ${eventName}`);
+    console.log(`[Companion AutoGen] ✅ Subscribed to ${eventName} (retry ${retryCount})`);
   }
 
   _unsubscribe() {
