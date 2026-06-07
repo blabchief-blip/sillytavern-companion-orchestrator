@@ -645,6 +645,24 @@ describe('v0.8.17 font tag temizleme + görsel', () => {
         assert.match(img.getAttribute('src'), /a\.png/);
     });
 
+    test('addImageToLastAssistant: son assistant baloncuğuna görsel basar', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', 'işte selfie');
+        const r = phoneShellModule.addImageToLastAssistant('http://x/selfie.png');
+        assert.equal(r.ok, true);
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        const img = shell.querySelector('img[data-co-img]');
+        assert.ok(img);
+        assert.match(img.getAttribute('src'), /selfie\.png/);
+    });
+
+    test('addImageToLastAssistant: assistant baloncuk yoksa hata döner', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('user', 'sadece ben');
+        const r = phoneShellModule.addImageToLastAssistant('http://x/y.png');
+        assert.equal(r.ok, false);
+    });
+
     test('aynı görsel iki kez eklenmez (idempotent)', () => {
         phoneShellModule.mount();
         const stCtx = globalThis.SillyTavern.getContext();

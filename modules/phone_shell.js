@@ -519,6 +519,28 @@ const phoneShellModule = {
         phoneShellModule.appendMessage('user', text);
     },
 
+    /**
+     * v0.8.19: Son assistant baloncuğuna görsel ekle (event'e bağımlı değil).
+     * tinder auto-selfie gibi async üretimler doğrudan çağırır — MESSAGE_UPDATED
+     * payload şekli ne olursa olsun UI güncellenir.
+     */
+    addImageToLastAssistant(imageUrl) {
+        if (!_active || !imageUrl) return { ok: false, error: 'inactive or no url' };
+        let bubble = _lastAssistantBubble;
+        // Referans yoksa DOM'dan son 'other' baloncuğu bul
+        if (!bubble && _messageContainer) {
+            const bubbles = _messageContainer.children;
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                // self değil (sola hizalı) baloncuk
+                if (bubbles[i].style.alignSelf !== 'flex-end') { bubble = bubbles[i]; break; }
+            }
+        }
+        if (!bubble) return { ok: false, error: 'no assistant bubble' };
+        _appendImageToBubble(bubble, imageUrl);
+        _scrollToBottom();
+        return { ok: true };
+    },
+
     clearMessages() {
         _messages = [];
         if (_messageContainer) {

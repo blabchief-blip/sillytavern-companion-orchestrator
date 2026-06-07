@@ -1805,7 +1805,7 @@ function _spiceToSelfieTier(orch) {
 // v0.8.18: Selfie üret + verilen mesaja (karakterin cevabı) iliştir.
 // imageUrl mesajın extra.image'ına yazılır, MESSAGE_UPDATED emit edilir →
 // phone_shell baloncuğa görseli ekler. Hata olursa sessizce geç.
-tinderModule._autoGenerateSelfie = async function (orch, targetMsg, targetId) {
+tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId */) {
     try {
         const tier = _spiceToSelfieTier(orch);
         let res = await tinderModule.generateSelfie(tier > 0 ? { tier } : {});
@@ -1815,16 +1815,35 @@ tinderModule._autoGenerateSelfie = async function (orch, targetMsg, targetId) {
             console.warn('[tinder] auto-selfie üretilemedi:', res?.error);
             return;
         }
+        const url = res.imageUrl;
         const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
-        if (targetMsg) {
-            if (!targetMsg.extra) targetMsg.extra = {};
-            targetMsg.extra.image = res.imageUrl;
-            targetMsg.extra.inline_image = true;
-            if (ctx?.saveChat) { try { await ctx.saveChat(); } catch (_) {} }
-            const ev = ctx?.eventSource, et = ctx?.eventTypes;
-            if (ev?.emit && et?.MESSAGE_UPDATED) ev.emit(et.MESSAGE_UPDATED, targetId);
+
+        // 1) Kalıcılık + normal ST chat için: son assistant mesajına iliştir.
+        //    (event payload şekline GÜVENME — hedefi chat'ten kendimiz bul.)
+        let targetIdx = -1;
+        if (ctx && Array.isArray(ctx.chat)) {
+            for (let i = ctx.chat.length - 1; i >= 0; i--) {
+                const m = ctx.chat[i];
+                if (m && m.is_user !== true && m.role !== 'user' && m.role !== 'system') { targetIdx = i; break; }
+            }
+            if (targetIdx >= 0) {
+                const tm = ctx.chat[targetIdx];
+                if (!tm.extra) tm.extra = {};
+                tm.extra.image = url;
+                tm.extra.inline_image = true;
+                if (ctx.saveChat) { try { await ctx.saveChat(); } catch (_) {} }
+                const ev = ctx.eventSource, et = ctx.eventTypes;
+                if (ev?.emit && et?.MESSAGE_UPDATED) { try { ev.emit(et.MESSAGE_UPDATED, targetIdx); } catch (_) {} }
+            }
         }
-        console.log('[tinder] ✅ auto-selfie iliştirildi (tier ' + tier + ')');
+
+        // 2) Phone shell'e DOĞRUDAN bas (event'e bağımlı olmadan garanti UI güncelle).
+        try {
+            const psMod = (await import('./phone_shell.js')).phoneShellModule;
+            if (psMod?.addImageToLastAssistant) psMod.addImageToLastAssistant(url);
+        } catch (_) { /* shell yoksa sorun değil */ }
+
+        console.log('[tinder] ✅ auto-selfie iliştirildi (tier ' + tier + ', idx ' + targetIdx + ')');
     } catch (e) {
         console.warn('[tinder] auto-selfie hata:', e?.message || e);
     }
@@ -2097,17 +2116,18 @@ tinderModule.onMessageSent = function (orch, data) {
 tinderModule.onMessageReceived = function (orch, data) {
     const matchId = orch?.settings?.tinder?.activeMatchId;
     if (!matchId) return;
-    // data ST 1.18'de messageId (string) → chat'ten mesaj objesini çöz
-    let msgObj = data?.message || null;
-    let msgId = (data && data.message) ? (data.messageId ?? null) : data;
+    // data ST 1.18'de messageId (string), {message}, veya doğrudan mesaj objesi
+    // olabilir → metni esnek çöz.
+    let msgObj = data?.message || (data && data.mes ? data : null);
     if (!msgObj && (typeof data === 'string' || typeof data === 'number')) {
         try { msgObj = SillyTavern.getContext()?.chat?.[data] || null; } catch (_) {}
     }
     const text = String(msgObj?.mes || data?.message?.mes || '').trim();
-    // v0.8.18: bekleyen selfie isteği varsa karakterin bu cevabına selfie iliştir
+    // v0.8.18: bekleyen selfie isteği varsa karakterin cevabına selfie iliştir.
+    // _autoGenerateSelfie hedefi chat'ten kendisi bulur (payload şekline güvenmez).
     if (tinderModule._pendingSelfie) {
         tinderModule._pendingSelfie = false;
-        tinderModule._autoGenerateSelfie(orch, msgObj, msgId);
+        tinderModule._autoGenerateSelfie(orch);
     }
     if (!text) return;
     // Karakterin cevabında numara paylaşımı var mı? Otomatik exchange tetikle.
