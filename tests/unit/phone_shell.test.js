@@ -662,6 +662,19 @@ describe('v0.8.17 font tag temizleme + görsel', () => {
         assert.equal(shell.querySelector('.co-action'), null);
     });
 
+    test('mesaj satırında avatar elementi var (kullanıcı + karakter)', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', 'merhaba');
+        phoneShellModule.appendMessage('user', 'selam');
+        const container = dom.window.document.querySelector('#co-phone-shell > div:nth-child(2)');
+        // her mesaj satırı: [avatar, bubble] → satırda en az 2 child
+        const rows = container.children;
+        assert.ok(rows.length >= 2, 'iki mesaj satırı olmalı');
+        for (const row of rows) {
+            assert.ok(row.children.length >= 2, 'satırda avatar + bubble olmalı');
+        }
+    });
+
     test('requestSelfie: ok döner (tinder import async)', () => {
         phoneShellModule.mount();
         const r = phoneShellModule.requestSelfie({ tier: 2 });

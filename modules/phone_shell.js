@@ -147,6 +147,44 @@ function _msgImageUrl(msg) {
     return null;
 }
 
+// v0.8.27: aktif sohbet kimliği — karakter adı/avatarı + kullanıcı avatarı.
+function _getChatIdentity() {
+    try {
+        const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        if (!ctx) return {};
+        const char = ctx.characters && ctx.characters[ctx.characterId];
+        const charName = (char && char.name) || null;
+        const charAvatar = (char && char.avatar && char.avatar !== 'none.png')
+            ? `/characters/${encodeURIComponent(char.avatar)}` : null;
+        const ua = ctx.userAvatar;
+        const userAvatar = ua ? `/User Avatars/${encodeURIComponent(ua)}` : null;
+        const userName = ctx.name1 || 'Sen';
+        return { charName, charAvatar, userAvatar, userName };
+    } catch (_) { return {}; }
+}
+
+// v0.8.27: yuvarlak avatar elementi (görsel yüklenemezse baş harf rozeti).
+function _makeAvatarEl(url, name) {
+    const el = document.createElement('div');
+    Object.assign(el.style, {
+        width: '30px', height: '30px', borderRadius: '50%', flexShrink: '0',
+        backgroundColor: 'rgba(0,0,0,0.25)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', fontSize: '0.8em',
+        color: '#fff', fontWeight: '600', overflow: 'hidden',
+    });
+    const initial = String(name || '?').trim().charAt(0).toUpperCase() || '?';
+    if (url) {
+        const img = document.createElement('img');
+        img.src = url;
+        Object.assign(img.style, { width: '100%', height: '100%', objectFit: 'cover' });
+        img.addEventListener('error', () => { try { img.remove(); } catch (_) {} el.textContent = initial; });
+        el.appendChild(img);
+    } else {
+        el.textContent = initial;
+    }
+    return el;
+}
+
 // v0.8.17: baloncuğa görsel ekle (varsa tekrar ekleme — idempotent)
 function _appendImageToBubble(bubble, imageUrl) {
     if (!bubble || !imageUrl) return;
@@ -872,14 +910,19 @@ function _renderHeader(theme) {
     });
     onlineDot.title = 'online';
 
+    // v0.8.27: header'da karakter adı + avatarı (kiminle konuşulduğu net olsun)
+    const id = _getChatIdentity();
+    const headerAvatar = _makeAvatarEl(id.charAvatar, id.charName || theme.name);
+    Object.assign(headerAvatar.style, { width: '34px', height: '34px' });
+
     const title = document.createElement('strong');
     title.style.fontSize = '1.1em';
-    title.textContent = `${theme.emoji} ${theme.name}`;
+    title.textContent = id.charName ? id.charName : `${theme.emoji} ${theme.name}`;
 
     const subtitle = document.createElement('span');
     subtitle.style.fontSize = '0.8em';
     subtitle.style.opacity = '0.85';
-    subtitle.textContent = 'online';
+    subtitle.textContent = id.charName ? `${theme.emoji} ${theme.name} · online` : 'online';
 
     const spacer = document.createElement('div');
     spacer.style.flex = '1';
@@ -929,11 +972,16 @@ function _renderHeader(theme) {
     close.addEventListener('click', () => phoneShellModule.unmount());
     header.appendChild(close);
 
-    // Layout
-    header.insertBefore(onlineDot, header.firstChild);
-    header.appendChild(title);
-    header.appendChild(subtitle);
-    header.appendChild(spacer);
+    // v0.8.27: Layout — ✕ | avatar | (isim / durum) | spacer | [video/voice]
+    const nameCol = document.createElement('div');
+    Object.assign(nameCol.style, { display: 'flex', flexDirection: 'column', lineHeight: '1.2' });
+    nameCol.appendChild(title);
+    nameCol.appendChild(subtitle);
+    // mevcut çocuklar: [video?, voice?, close] — öne ekleyerek istenen sıraya getir
+    header.insertBefore(spacer, header.firstChild);
+    header.insertBefore(nameCol, header.firstChild);
+    header.insertBefore(headerAvatar, header.firstChild);
+    header.insertBefore(close, header.firstChild); // ✕ en solda
     return header;
 }
 
@@ -1078,8 +1126,7 @@ function _renderMessage(entry) {
     const isSelf = entry.role === 'self';
     const bubble = document.createElement('div');
     Object.assign(bubble.style, {
-        alignSelf: isSelf ? 'flex-end' : 'flex-start',
-        maxWidth: '75%',
+        maxWidth: '100%',
         background: isSelf ? theme.bubbleSelf : theme.bubbleOther,
         color: theme.textColor,
         padding: '8px 12px',
@@ -1122,7 +1169,25 @@ function _renderMessage(entry) {
         meta.textContent += ' ✓✓';
     }
     bubble.appendChild(meta);
-    _messageContainer.appendChild(bubble);
+
+    // v0.8.27: baloncuğu avatar ile bir satıra koy (kimle konuşulduğu belli olsun).
+    const id = _getChatIdentity();
+    const avatarUrl = isSelf ? id.userAvatar : id.charAvatar;
+    const avatarName = isSelf ? (id.userName || 'Sen') : (id.charName || theme.name);
+    const avatarEl = _makeAvatarEl(avatarUrl, avatarName);
+
+    const row = document.createElement('div');
+    Object.assign(row.style, {
+        alignSelf: isSelf ? 'flex-end' : 'flex-start',
+        display: 'flex',
+        flexDirection: isSelf ? 'row-reverse' : 'row',
+        alignItems: 'flex-end',
+        gap: '6px',
+        maxWidth: '82%',
+    });
+    row.appendChild(avatarEl);
+    row.appendChild(bubble);
+    _messageContainer.appendChild(row);
 }
 
 function _scrollToBottom() {
