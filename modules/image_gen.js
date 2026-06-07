@@ -37,7 +37,7 @@ const DEFAULT_LORAWTS = [0.8, 0.8, 0.8, 0.8];
 function getStore() {
     if (!_orch.settings.image_gen) {
         _orch.settings.image_gen = {
-            comfyuiUrl: 'http://192.168.68.67:8001',
+            comfyuiUrl: 'http://192.168.68.66:8001',
             workflow: null,  // UI'dan yüklenecek
             enabled: false,
             throttleMs: 30000,
@@ -60,9 +60,9 @@ function getStore() {
         };
     }
     const s = _orch.settings.image_gen;
-    if (s.comfyuiUrl == null) s.comfyuiUrl = 'http://192.168.68.67:8001';
-    // v0.8.14: DHCP ile ComfyUI .66→.67'ye taşındı; eski kayıtlı URL'i göç ettir
-    if (s.comfyuiUrl === 'http://192.168.68.66:8001') s.comfyuiUrl = 'http://192.168.68.67:8001';
+    if (s.comfyuiUrl == null) s.comfyuiUrl = 'http://192.168.68.66:8001';
+    // v0.8.22: ComfyUI kalıcı statik IP = .66. Yanlış .67 göçünü geri al.
+    if (s.comfyuiUrl === 'http://192.168.68.67:8001') s.comfyuiUrl = 'http://192.168.68.66:8001';
     if (s.enabled == null) s.enabled = false;
     if (s.throttleMs == null) s.throttleMs = 30000;
     if (s.width == null) s.width = 832;

@@ -337,7 +337,7 @@ class AutoGen {
         throttleMs: 8000,                     // min ms between gens
         microsleepMs: 100,                    // v0.7.0: wait for other render listeners (Magic Translation)
         lastGenTs: 0,
-        comfyuiUrl: orch.settings.image_gen?.comfyuiUrl || 'http://192.168.68.67:8001',
+        comfyuiUrl: orch.settings.image_gen?.comfyuiUrl || 'http://192.168.68.66:8001',
         workflowFile: '6Lora-CyberReal.json', // file adı string olmalı!
         // v0.8.13: 3 seviyeli dinamik LoRA stack — spice'a göre otomatik seçilir
         // SFW (spice 0-2): realism/aydınlatma odaklı
@@ -442,9 +442,11 @@ class AutoGen {
       if (s.cfg < 6) { s.cfg = 6; }
       if (s.steps < 28) { s.steps = 28; }
       // v0.8.14: DHCP ile ComfyUI .66→.67'ye taşındı; eski kayıtlı URL'i göç ettir
-      if (s.comfyuiUrl === 'http://192.168.68.66:8001') {
-        s.comfyuiUrl = 'http://192.168.68.67:8001';
-        console.log('[Companion AutoGen] v0.8.14 migration: ComfyUI URL .66→.67');
+      // v0.8.22: ComfyUI kalıcı olarak .66'da (statik IP). Yanlışlıkla .67'ye
+      // göç etmiş kurulumları geri .66'ya çevir.
+      if (s.comfyuiUrl === 'http://192.168.68.67:8001') {
+        s.comfyuiUrl = 'http://192.168.68.66:8001';
+        console.log('[Companion AutoGen] v0.8.22 migration: ComfyUI URL .67→.66');
       }
       // v0.8.15: ControlNet poz ayarları (eski kurulumda yoksa ekle)
       if (s.useControlNet === undefined) s.useControlNet = true;
