@@ -1094,8 +1094,13 @@ class AutoGen {
     const avatarFile = char?.avatar;
     if (!avatarFile || avatarFile === 'none.png') return null;
     // ST karakter görselini /characters/<avatar>'dan çek
-    const imgResp = await fetch(`/characters/${encodeURIComponent(avatarFile)}`, { credentials: 'include' });
-    if (!imgResp.ok) return null;
+    // Subdirectory path'leri (tinder-batch/...) için her segmenti ayrı encode et.
+    const encodedPath = avatarFile.split('/').map(encodeURIComponent).join('/');
+    const imgResp = await fetch(`/characters/${encodedPath}`, { credentials: 'include' });
+    if (!imgResp.ok) {
+      console.error('[AutoGen] Avatar fetch failed:', imgResp.status, encodedPath);
+      return null;
+    }
     // Yüz bölgesine kırp (selfie ile aynı): kare-değil avatar'da ComfyUI
     // merkezden kırpıp gövdeyi alıyordu → FaceID kimliği zayıf.
     const blob = await this._cropToFaceRegion(await imgResp.blob());
