@@ -123,6 +123,9 @@ let _updatedUnsub = null;          // v0.8.17: MESSAGE_UPDATED aboneliği
 // Önce sanitize (LLM font tag'leri + güvenlik), sonra kendi etiketlerimizi ekle.
 function _formatMessageHtml(text) {
     let html = _sanitizeHtml(text);
+    // LLM bazen "#RRGGBB">"metin" formatında renk tag'i üretiyor (geçersiz HTML);
+    // sanitize sonrası ham metin olarak kalır → strip et. (?<!=) → HTML attribute değeri değil.
+    html = html.replace(/(?<!=)"#[0-9A-Fa-f]{6}">\s*/g, '');
     // Konuşma vurgusunu ÖNCE uygula (sonraki enjekte edilen attribute tırnaklarını
     // yememesi için). Enjekte edilen class'lar tek tırnak (speech regex çift tırnak arar).
     html = html.replace(/"([^"\n]+?)"/g, "<span class='co-speech'>\"$1\"</span>");
