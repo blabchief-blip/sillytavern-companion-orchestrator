@@ -268,3 +268,47 @@ describe('v0.8.31 — countPeopleInGroupPose (group kişi sayısı)', () => {
     assert.equal(autoGenModule.countPeopleInGroupPose('mystery', ['group/mystery_pose']), 4);
   });
 });
+
+describe('v0.8.31 — buildPrompt sceneTags scope fix (regression)', () => {
+  // ÖNCEKİ BUG: sceneTags 'if (this.settings.useSceneIntimate !== false)' block'u
+  // içinde const ile tanımlanmıştı → block-scoped, _resolveSceneCount çağrısında
+  // undefined oluyordu → ReferenceError: sceneTags is not defined.
+  // DÜZELTME: sceneTags fonksiyon başında 'let sceneTags = []' ile tanımlanmalı,
+  // if bloğunda sadece atanmalı.
+  beforeEach(() => {
+    resetStMocks();
+    installStMocks();
+    const orch = buildOrchestrator();
+    autoGenModule.init(orch);
+  });
+
+  test('buildPrompt() sahne intikate OFF iken crash etmez, fallback count döner', () => {
+    autoGenModule.settings.useSceneIntimate = false;
+    const message = { mes: 'kissed her softly in bed' };
+    // ÖNCE: ReferenceError fırlatırdı (sceneTags undefined)
+    // SONRA: boş sceneTags ile fallback (her → couple, 1girl/1boy)
+    const result = autoGenModule.buildPrompt(message, null);
+    assert.ok(typeof result === 'string', 'string dönmeli');
+    assert.ok(result.includes('1girl'), 'count 1girl içermeli');
+    assert.ok(result.includes('1boy'), 'count 1boy içermeli');
+  });
+
+  test('buildPrompt() sahne intikate ON iken count doğru çıkar', () => {
+    autoGenModule.settings.useSceneIntimate = true;
+    const message = { mes: 'threesome with another girl, kissing' };
+    const result = autoGenModule.buildPrompt(message, null);
+    // threesome → 3 kişi → MFF default → 2girls, 1boy
+    assert.ok(typeof result === 'string');
+    assert.ok(result.includes('2girls'), 'MFF threesome → 2girls');
+    assert.ok(result.includes('1boy'), 'MFF threesome → 1boy');
+  });
+
+  test('buildPrompt() boş message crash etmez', () => {
+    autoGenModule.settings.useSceneIntimate = true;
+    const message = { mes: '' };
+    // ÖNCEKİ KOD: if (!text) return this.settings.prefix → crash yoktu
+    // ama sceneTags scope fix de bu path için OK olmalı
+    const result = autoGenModule.buildPrompt(message, null);
+    assert.equal(result, autoGenModule.settings.prefix);
+  });
+});

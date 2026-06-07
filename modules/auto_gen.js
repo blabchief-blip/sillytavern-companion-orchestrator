@@ -847,10 +847,13 @@ class AutoGen {
       spiceTags.forEach(t => tags.add(t));
     }
 
-    // v0.6.3: SCENE-INTIMATE patterns (sahne metnindeki gerçek aksiyon/beden kelimeleri)
-    // LLM Tagger fail olduğunda bile doğru tag'ler üretir
+    // v0.6.3 + v0.8.31: SCENE-INTIMATE patterns (sahne metnindeki gerçek
+    // aksiyon/beden kelimeleri). LLM Tagger fail olduğunda bile doğru
+    // tag'ler üretir. v0.8.31: sceneTags function scope'ta tutulmalı —
+    // count resolution (line 943) ve face mode (line 1343) burada okur.
+    let sceneTags = [];
     if (this.settings.useSceneIntimate !== false) {
-      const sceneTags = this._extractSceneIntimateTags(text);
+      sceneTags = this._extractSceneIntimateTags(text);
       sceneTags.forEach(t => tags.add(t));
       if (this.settings.debug && sceneTags.length) {
         console.log('[Companion AutoGen] 🔥 Scene intimate tags:', sceneTags);
