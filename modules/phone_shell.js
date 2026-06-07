@@ -110,6 +110,17 @@ let _shellEl = null;
 let _messageContainer = null;
 let _inputEl = null;
 let _typingTimer = null;
+let _renderUnsub = null;          // v0.8.16: CHARACTER_MESSAGE_RENDERED aboneliği
+let _lastAssistantMsgId = null;   // v0.8.16: dedupe için son eklenen assistant mesaj id'si
+let _lastAssistantTextSpan = null; // v0.8.16: çeviri gelince güncellenecek metin span'i
+
+// v0.8.16: Magic Translation çevirisini tercih et. ST translate extension
+// çeviri metnini msg.extra.display_text'e yazar; orijinal msg.mes değişmez.
+function _displayText(msg) {
+    if (!msg) return '';
+    const dt = msg.extra && msg.extra.display_text;
+    return String((dt && dt.trim()) ? dt : (msg.mes || '')).trim();
+}
 
 // Public API
 const phoneShellModule = {
@@ -150,6 +161,8 @@ const phoneShellModule = {
             return { ok: false, error: 'document.body unavailable' };
         }
         _active = true;
+        _lastAssistantMsgId = null;       // v0.8.16: yeni oturum — dedupe sıfırla
+        _lastAssistantTextSpan = null;
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = true;
         }
@@ -177,6 +190,31 @@ const phoneShellModule = {
             console.error('[phone_shell] _renderShell failed:', e);
             return { ok: false, error: 'renderShell: ' + (e?.message || e) };
         }
+        // v0.8.16: Çeviri (Magic Translation) MESSAGE_RECEIVED sonrası async gelir
+        // ve CHARACTER_MESSAGE_RENDERED'da display_text hazır olur. Son assistant
+        // baloncuğunun metnini çeviriyle güncelle.
+        try {
+            const ctx = _ctx || (typeof SillyTavern !== 'undefined' && SillyTavern.getContext ? SillyTavern.getContext() : null);
+            const ev = ctx?.eventSource, et = ctx?.eventTypes;
+            if (ev && et && et.CHARACTER_MESSAGE_RENDERED && !_renderUnsub) {
+                const onRendered = (messageId) => {
+                    try {
+                        if (!_active || !Array.isArray(ctx.chat)) return;
+                        const msg = ctx.chat[messageId];
+                        if (!msg || msg.is_user === true || msg.role === 'user' || msg.role === 'system') return;
+                        const text = _displayText(msg);
+                        if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.textContent = text;
+                    } catch (_) { /* best-effort */ }
+                };
+                ev.on(et.CHARACTER_MESSAGE_RENDERED, onRendered);
+                _renderUnsub = () => {
+                    try {
+                        if (typeof ev.removeListener === 'function') ev.removeListener(et.CHARACTER_MESSAGE_RENDERED, onRendered);
+                        else if (typeof ev.off === 'function') ev.off(et.CHARACTER_MESSAGE_RENDERED, onRendered);
+                    } catch (_) {}
+                };
+            }
+        } catch (_) { /* event subscription best-effort */ }
         return { ok: true, platform: _currentPlatform };
     },
 
@@ -191,7 +229,11 @@ const phoneShellModule = {
         _shellEl = null;
         _messageContainer = null;
         _inputEl = null;
+        _lastAssistantTextSpan = null;
+        _lastAssistantMsgId = null;
         _active = false;
+        // v0.8.16: render event aboneliğini çöz
+        if (_renderUnsub) { try { _renderUnsub(); } catch (_) {} _renderUnsub = null; }
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = false;
         }
@@ -280,28 +322,41 @@ const phoneShellModule = {
         const ctx = _ctx || (typeof SillyTavern !== 'undefined' && SillyTavern.getContext
             ? SillyTavern.getContext() : null);
         if (!ctx) return { ok: false, error: 'ST context unavailable' };
-        // Mirror the user's text into shell + ST textarea
         try {
-            // ST 1.18: set textarea value + dispatch input event, then trigger Generate
+            // YOL 1 (v0.8.16, en güvenilir): ST slash-command pipeline.
+            // `/send {text}` kullanıcı mesajını ekler, `/trigger` üretimi başlatır.
+            // textarea+buton yolu bazı ST 1.18 build'lerinde generation tetiklemiyordu.
+            // Magic Translation `/send` çıktısını da çevirir (normal kullanıcı turu).
+            const runSlash = ctx.executeSlashCommandsWithOptions || ctx.executeSlashCommands;
+            if (typeof runSlash === 'function') {
+                // Pipe ve süslü parantez slash parser'ı bozar → kaçışla
+                const safe = trimmed.replace(/\|/g, '\\|').replace(/{{/g, '\\{\\{').replace(/}}/g, '\\}\\}');
+                Promise.resolve(runSlash.call(ctx, `/send ${safe} | /trigger`))
+                    .catch(e => console.warn('[phone_shell] slash send failed:', e?.message || e));
+                return { ok: true, sent: trimmed, method: 'slash' };
+            }
+            // YOL 2: textarea value + native input event + send butonu
             const $ = (typeof window !== 'undefined' ? window.jQuery : null);
             const ta = (typeof document !== 'undefined' ? document.querySelector('#send_textarea') : null);
-            if ($ && ta) {
-                // jQuery setters (ST uses jQuery)
-                $('#send_textarea').val(trimmed);
-                $('#send_textarea').trigger('input');
-                // Click send button (most reliable across ST versions)
+            if (ta) {
+                // Native setter + InputEvent (jQuery .val() bazı build'lerde ST'nin
+                // internal state'ini güncellemiyordu)
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+                if (setter) setter.call(ta, trimmed); else ta.value = trimmed;
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                if ($) { $('#send_textarea').val(trimmed).trigger('input'); }
                 const sendBtn = document.querySelector('#send_but');
                 if (sendBtn) {
                     sendBtn.click();
-                    return { ok: true, sent: trimmed };
+                    return { ok: true, sent: trimmed, method: 'textarea' };
                 }
             }
-            // Fallback: ctx.generate({ user_input: trimmed })
+            // YOL 3: ctx.generate (eski API)
             if (typeof ctx.generate === 'function') {
                 ctx.generate({ user_input: trimmed, should_stream: false });
                 return { ok: true, sent: trimmed, method: 'ctx.generate' };
             }
-            return { ok: false, error: 'No way to send message (no textarea, no generate)' };
+            return { ok: false, error: 'No way to send message (no slash, no textarea, no generate)' };
         } catch (e) {
             return { ok: false, error: String(e.message || e) };
         }
@@ -326,8 +381,15 @@ const phoneShellModule = {
         if (!msg) return;
         if (msg.is_user === true || msg.role === 'user') return;
         if (msg.role === 'system') return;
-        const text = String(msg.mes || '').trim();
+        // v0.8.16: Magic Translation çeviriyi msg.extra.display_text'e koyar.
+        // Çeviri varsa onu göster (yoksa orijinal mes). Çeviri MESSAGE_RECEIVED
+        // sonrası async geldiği için CHARACTER_MESSAGE_RENDERED'da güncellenir.
+        const text = _displayText(msg);
         if (!text) return;
+        // Dedupe: aynı mesaj zaten eklenmişse tekrar ekleme (render event'i de
+        // tetiklenebilir). _lastAssistantMsgId ile eşle.
+        if (_lastAssistantMsgId === String(messageId)) return;
+        _lastAssistantMsgId = String(messageId);
         console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
         phoneShellModule.appendMessage('assistant', text);
         // Auto-mark previous self messages as seen (chronological sequence)
@@ -394,6 +456,15 @@ const phoneShellModule = {
         // Mevcut shell mesajlarını temizle (tarihçe import ediyoruz)
         _messages = [];
         if (_messageContainer) _messageContainer.innerHTML = '';
+        // v0.8.16: son assistant mesajının chat index'ini dedupe için işaretle
+        // (import sonrası aynı mesaj için MESSAGE_RECEIVED gelirse tekrar eklenmesin)
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const m = chat[i];
+            if (m && m.is_user !== true && m.role !== 'user' && m.role !== 'system' && (m.mes || '').trim()) {
+                _lastAssistantMsgId = String(i);
+                break;
+            }
+        }
         let imported = 0;
         for (const m of recent) {
             // ST 1.18'de m.role undefined olabilir. Fallback sırası:
@@ -404,7 +475,7 @@ const phoneShellModule = {
             // (name === 'You' ST'nin user ismi, ama is_user daha güvenilir)
             const isUser = (m.is_user === true) || (m.role === 'user');
             const role = isUser ? 'user' : 'assistant';
-            phoneShellModule.appendMessage(role, m.mes);
+            phoneShellModule.appendMessage(role, _displayText(m)); // v0.8.16: çeviriyi tercih et
             imported++;
         }
         return { ok: true, imported, total: chat.length };
@@ -745,7 +816,11 @@ function _renderMessage(entry) {
         boxShadow: '0 1px 1px rgba(0,0,0,0.18)',
         position: 'relative',
     });
-    bubble.textContent = entry.text;
+    // v0.8.16: metni ayrı span'e koy ki çeviri gelince meta'yı bozmadan güncellenebilsin
+    const textSpan = document.createElement('span');
+    textSpan.textContent = entry.text;
+    bubble.appendChild(textSpan);
+    if (!isSelf) _lastAssistantTextSpan = textSpan; // çeviri güncellemesi için referans
 
     // Timestamp + seen
     const meta = document.createElement('div');

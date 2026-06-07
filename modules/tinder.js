@@ -1919,6 +1919,12 @@ tinderModule._onMatchOpen = async function (matchId) {
             const r = psMod.mount();
             results.phoneShell = r.ok ? 'mounted' : (r.error || 'failed');
             if (r.ok && psMod.setPlatform) psMod.setPlatform('tinder_chat');
+            // v0.8.16: mount sonrası mevcut chat mesajlarını (opener dahil) import et.
+            // Önceden opener sadece yarış koşulu MESSAGE_RECEIVED ile düşüyordu;
+            // ST chat zaten yüklü olduğu için doğrudan import güvenilir.
+            if (r.ok && psMod.importChatHistory) {
+                try { results.historyImport = psMod.importChatHistory(20); } catch (_) {}
+            }
         }
     } catch (e) {
         console.warn('[tinder] phone_shell (match open) import failed:', e?.message || e);

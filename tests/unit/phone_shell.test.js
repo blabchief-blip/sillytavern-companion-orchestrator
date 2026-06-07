@@ -547,3 +547,61 @@ describe('onMessageSent — ST\'den gönderilen user mesajı shell\'e düşer', 
         assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
     });
 });
+
+// =========================================================================
+// v0.8.16: Çeviri (Magic Translation) + sendToST sağlamlık
+// =========================================================================
+describe('v0.8.16 çeviri + sendToST', () => {
+    test('onMessageReceived: extra.display_text varsa çeviriyi gösterir', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push({ role: 'assistant', mes: 'Hello there', extra: { display_text: 'Merhaba oradaki' } });
+        const id = stCtx.chat.length - 1;
+        phoneShellModule.onMessageReceived(orch, id);
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.match(shell.textContent, /Merhaba oradaki/);
+        assert.doesNotMatch(shell.textContent, /Hello there/);
+    });
+
+    test('onMessageReceived: display_text yoksa orijinal mes gösterilir', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push({ role: 'assistant', mes: 'sadece orijinal' });
+        phoneShellModule.onMessageReceived(orch, stCtx.chat.length - 1);
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.match(shell.textContent, /sadece orijinal/);
+    });
+
+    test('onMessageReceived: aynı messageId iki kez → tek ekleme (dedupe)', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push({ role: 'assistant', mes: 'tek olsun' });
+        const id = stCtx.chat.length - 1;
+        const before = phoneShellModule.getInfo().messageCount;
+        phoneShellModule.onMessageReceived(orch, id);
+        phoneShellModule.onMessageReceived(orch, id);
+        assert.equal(phoneShellModule.getInfo().messageCount, before + 1);
+    });
+
+    test('sendToST: executeSlashCommandsWithOptions varsa slash yolu kullanılır', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        let captured = null;
+        stCtx.executeSlashCommandsWithOptions = (cmd) => { captured = cmd; return Promise.resolve(); };
+        const r = phoneShellModule.sendToST('selam');
+        assert.equal(r.ok, true);
+        assert.equal(r.method, 'slash');
+        assert.match(captured, /\/send selam/);
+        assert.match(captured, /\/trigger/);
+    });
+
+    test('sendToST: pipe ve süslü parantez kaçışlanır', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        let captured = null;
+        stCtx.executeSlashCommandsWithOptions = (cmd) => { captured = cmd; return Promise.resolve(); };
+        phoneShellModule.sendToST('a|b {{x}}');
+        assert.match(captured, /a\\\|b/);
+        assert.match(captured, /\\\{\\\{x\\\}\\\}/);
+    });
+});
