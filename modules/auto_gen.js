@@ -1372,7 +1372,9 @@ class AutoGen {
   }
 
   // -----------------------------------------------------------
-  // Inject to ST chat
+  // Inject to ST chat — Kazuma pattern: ComfyUI blob → base64 → ST upload → extra.media
+  // extra.image = direkt ComfyUI URL ST tarafından render edilmiyor (Kazuma'nın
+  // appendMediaToMessage + saved path yaklaşımı gerekiyor).
   // -----------------------------------------------------------
   async injectToChat(filename, prompt, targetMessage = null) {
     const ctx = this._getCtx() || this.ctx;
@@ -1397,24 +1399,64 @@ class AutoGen {
       return;
     }
 
+    // 1) ComfyUI'dan blob olarak çek
     const imageUrl = `${this.settings.comfyuiUrl}/view?filename=${filename}&type=output`;
+    const imgResp = await fetch(imageUrl);
+    if (!imgResp.ok) {
+      console.error('[AutoGen] ComfyUI görsel çekme başarısız:', imgResp.status, filename);
+      return;
+    }
+    const blob = await imgResp.blob();
 
+    // 2) base64'e çevir
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // 3) ST'ye yükle (Kazuma'nın saveBase64AsFile pattern'i: /api/images/upload)
+    const charName = (() => {
+      try {
+        const char = ctx.characters?.[ctx.characterId];
+        return (char?.name || 'AutoGen').replace(/[^\w]/g, '_');
+      } catch (_) { return 'AutoGen'; }
+    })();
+    const ts = Date.now();
+    const uploadResp = await fetch('/api/images/upload', {
+      method: 'POST',
+      headers: ctx.getRequestHeaders ? ctx.getRequestHeaders() : { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64, format: 'png', ch_name: charName, filename: `autogen_${ts}` }),
+    });
+    if (!uploadResp.ok) {
+      console.error('[AutoGen] ST image upload başarısız:', uploadResp.status);
+      return;
+    }
+    const { path: savedPath } = await uploadResp.json();
+
+    // 4) extra.media'ya ekle (Kazuma'nın appendMediaToMessage pattern'i)
     if (!target.extra) target.extra = {};
-    target.extra.image = imageUrl;
-    if (!target.extra.title) target.extra.title = '🎨 Companion AutoGen';
-    target.extra.inline_image = true;
+    if (!target.extra.media) target.extra.media = [];
+    target.extra.media_display = 'gallery';
+    target.extra.media.push({ url: savedPath, type: 'image', source: 'generated', title: '🎨 Companion AutoGen' });
+    target.extra.media_index = target.extra.media.length - 1;
 
-    // Save chat (persist)
+    // 5) DOM'a ekle — appendMediaToMessage global'sa kullan, yoksa MESSAGE_UPDATED
+    const msgIdx = ctx.chat.indexOf(target);
+    if (typeof appendMediaToMessage === 'function') {
+      const msgEl = document.querySelector(`[mesid="${msgIdx}"]`);
+      appendMediaToMessage(target, msgEl);
+    } else if (ctx.eventSource && ctx.eventTypes?.MESSAGE_UPDATED) {
+      ctx.eventSource.emit && ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, target.messageId ?? msgIdx);
+    }
+
+    // 6) Kaydet
     if (ctx.saveChat) {
       try { await ctx.saveChat(); } catch (e) { console.warn('saveChat failed:', e); }
     }
 
-    // Trigger render
-    if (ctx.eventSource && ctx.eventTypes?.MESSAGE_UPDATED) {
-      ctx.eventSource.emit && ctx.eventSource.emit(ctx.eventTypes.MESSAGE_UPDATED, target.messageId ?? ctx.chat.indexOf(target));
-    }
-
-    console.log('[Companion AutoGen] ✅ Injected image to chat:', filename, '→ msg idx', ctx.chat.indexOf(target));
+    console.log('[Companion AutoGen] ✅ Görsel chat\'e eklendi:', savedPath, '→ msg idx', msgIdx);
   }
 
   // -----------------------------------------------------------
