@@ -30,6 +30,19 @@
 'use strict';
 
 const VOICE_STYLES = ['flirty-direct', 'teasing-slow', 'submissive-whisper', 'dominant-command', 'playful'];
+
+// v0.8.16: Voice stilinin default vulgarity eşleşmesi.
+// Dominant/submissive karakterler doğal olarak daha açık konuşur,
+// flirty/teasing daha çok ima eder.
+const VOICE_VULGARITY_DEFAULT = {
+    'flirty-direct': 1,      // orta — direkt ama edebî sınırda
+    'teasing-slow': 1,        // orta — yavaş yavaş, ima ağırlıklı
+    'submissive-whisper': 2,  // argo — yalvaran, "aman Tanrım, lütfen"
+    'dominant-command': 2,    // argo — emreden, "kıpırdayanı boğarım"
+    'playful': 1,             // orta — şakacı, hafif
+};
+
+const VULGARITY_LEVELS = [0, 1, 2, 3];  // temiz, orta, argo, azgın
 const KINKS = [
     'voice-notes', 'selfies', 'intimate-texting', 'roleplay', 'pet-play', 'switch-dynamic',
     // v0.8.8.6: Daha geniş kink listesi (Melisa kartı ve sonrası için)
@@ -52,6 +65,17 @@ function defaultProfile() {
         platformPrefs: 'whatsapp_style',
         voiceNoteEnabled: true,
         selfiePermission: false,
+        // v0.8.16: Vulgarity baseline (0-3) — karakterin doğal dil seviyesi.
+        // 0 = temiz/edebi ("aşkım, yaklaş"), 1 = orta ("yatakta devam ederiz"),
+        // 2 = argo ("sik beni becer"), 3 = azgın ham ("amına koyayım salak").
+        // Voice stilinden türetilir ama override edilebilir.
+        // Default profile'da undefined — getVulgarityBaseline() voice'dan
+        // türetir. Explicit set edilirse o kullanılır.
+        vulgarityBaseline: null,
+        // v0.8.16: Heat arttıkça otomatik vulgarity escalation (bool).
+        // true ise spice heat 3+ → vulgarity 2, heat 4 → vulgarity 3.
+        // false ise sadece baseline kullanılır.
+        vulgarityEscalation: true,
         customDirective: '',
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -182,6 +206,12 @@ function validateProfile(profile) {
     }
     if (profile.platformPrefs && !PLATFORM_PREFS.includes(profile.platformPrefs)) {
         errors.push('Invalid platformPrefs: ' + profile.platformPrefs);
+    }
+    if (profile.vulgarityBaseline != null && !VULGARITY_LEVELS.includes(profile.vulgarityBaseline)) {
+        errors.push('Invalid vulgarityBaseline: ' + profile.vulgarityBaseline + ' (must be 0-3)');
+    }
+    if (profile.vulgarityEscalation != null && typeof profile.vulgarityEscalation !== 'boolean') {
+        errors.push('Invalid vulgarityEscalation: must be boolean');
     }
     if (profile.intimacyMarkers) {
         if (!Array.isArray(profile.intimacyMarkers)) {
@@ -327,10 +357,19 @@ export const characterProfileModule = {
                 const custom = $('#co_char_custom').val();
                 const selfie = $('#co_char_selfie').is(':checked');
                 const voiceNote = $('#co_char_voicenote').is(':checked');
+                // v0.8.16: Vulgarity UI
+                const vulgRaw = $('#co_char_vulgarity').val();
+                const vulgEsc = $('#co_char_vulgarity_esc').is(':checked');
+                // -1 = "voice'dan türet" seçildi → null set et
+                const vulgBaseline = (vulgRaw === '-1' || vulgRaw === '' || vulgRaw == null)
+                    ? null
+                    : Number(vulgRaw);
                 const r = self.set(charId, {
                     customDirective: custom,
                     selfiePermission: selfie,
                     voiceNoteEnabled: voiceNote,
+                    vulgarityBaseline: vulgBaseline,
+                    vulgarityEscalation: vulgEsc,
                 });
                 if (!r.ok) {
                     console.warn('[character_profile] save failed:', r.error);
@@ -364,6 +403,18 @@ export const characterProfileModule = {
             });
             $('#co_char_voicenote').on('change', function () {
                 self.set(charId, { voiceNoteEnabled: this.checked });
+            });
+
+            // v0.8.16: Vulgarity change handlers (live update)
+            $('#co_char_vulgarity').on('change', function () {
+                const v = $(this).val();
+                const baseline = (v === '-1' || v === '' || v == null) ? null : Number(v);
+                self.set(charId, { vulgarityBaseline: baseline });
+                self.ui.refresh(orch);
+            });
+            $('#co_char_vulgarity_esc').on('change', function () {
+                self.set(charId, { vulgarityEscalation: this.checked });
+                self.ui.refresh(orch);
             });
 
             // v0.8.8.6: Quick-init button + banner dismiss
@@ -429,6 +480,18 @@ export const characterProfileModule = {
             if ($selfie.length && $selfie.is(':checked') !== p.selfiePermission) $selfie.prop('checked', p.selfiePermission);
             const $vn = $('#co_char_voicenote');
             if ($vn.length && $vn.is(':checked') !== p.voiceNoteEnabled) $vn.prop('checked', p.voiceNoteEnabled);
+
+            // v0.8.16: Vulgarity UI sync
+            const $vulg = $('#co_char_vulgarity');
+            if ($vulg.length) {
+                const v = p.vulgarityBaseline == null ? '-1' : String(p.vulgarityBaseline);
+                if ($vulg.val() !== v) $vulg.val(v);
+            }
+            const $vulgEsc = $('#co_char_vulgarity_esc');
+            if ($vulgEsc.length) {
+                const esc = p.vulgarityEscalation !== false;  // default true
+                if ($vulgEsc.is(':checked') !== esc) $vulgEsc.prop('checked', esc);
+            }
 
             // v0.8.8.6: Recommended profile banner — karakter için persona var mı?
             try {
@@ -631,7 +694,57 @@ export const characterProfileModule = {
             platform: p.platformPrefs,
             voiceNoteEnabled: !!p.voiceNoteEnabled,
             selfiePermission: !!p.selfiePermission,
+            // v0.8.16: vulgarity summary
+            vulgarityBaseline: p.vulgarityBaseline,
+            vulgarityEscalation: p.vulgarityEscalation,
         };
+    },
+
+    /**
+     * v0.8.16: Karakterin temel vulgarity seviyesini al.
+     * Eğer set edilmemişse voice stilinden türetilir.
+     * @param {string} charId
+     * @returns {0|1|2|3}
+     */
+    getVulgarityBaseline(charId) {
+        const p = this.get(charId);
+        // Explicit set edilmişse onu kullan (0 dahil geçerli)
+        if (p.vulgarityBaseline != null) {
+            // Validation: range kontrolü — set() zaten validate ediyor ama
+            // eski profillerde undefined olabilir
+            if (VULGARITY_LEVELS.includes(p.vulgarityBaseline)) {
+                return p.vulgarityBaseline;
+            }
+        }
+        // Voice'dan türet
+        return VOICE_VULGARITY_DEFAULT[p.voice] ?? 1;
+    },
+
+    /**
+     * v0.8.16: Sahne bağlamında karakterin o anki effective vulgarity seviyesi.
+     * - baseline 0-3
+     * - vulgarityEscalation=true VE heat >= 3 → +1
+     * - vulgarityEscalation=true VE heat >= 4 → +1 daha (max 3)
+     * - Hard limit'lerden biri 'degradation' ise escalation cap'lenir (1)
+     *
+     * @param {string} charId
+     * @param {number} heatScore - spice heat (0-4), opsiyonel
+     * @returns {0|1|2|3}
+     */
+    effectiveVulgarity(charId, heatScore = 0) {
+        const baseline = this.getVulgarityBaseline(charId);
+        const p = this.get(charId);
+        if (!p.vulgarityEscalation) return baseline;
+
+        let esc = baseline;
+        if (heatScore >= 4 && baseline < 3) esc = Math.min(3, baseline + 1);
+        if (heatScore >= 3 && baseline < 2) esc = Math.max(esc, 2);
+
+        // Hard limit gate: degradation hard limit → max 1 (argo yok, sadece ima)
+        if ((p.hardLimits || []).includes('degradation') && esc > 1) {
+            esc = 1;
+        }
+        return esc;
     },
 
     getTrust(charId) {
@@ -765,6 +878,27 @@ export const characterProfileModule = {
             'dominant-command': 'emir verir, kontrol eder, yönlendirir',
         };
         lines.push(`[Ses üslubu: ${voiceDesc[p.voice] || p.voice}.]`);
+
+        // v0.8.16: Vulgarity level — sahne ateşine göre dil seviyesi.
+        // Spice heat'i varsa effective vulgarity'yi hesapla, yoksa baseline.
+        let heatScore = 0;
+        try {
+            const spice = (typeof globalThis !== 'undefined' && globalThis.__co_spice);
+            if (spice && typeof spice.currentHeat === 'function') {
+                const h = spice.currentHeat();
+                if (h && typeof h.score === 'number') heatScore = h.score;
+            }
+        } catch (_) { /* best-effort */ }
+        const vulgarity = this.effectiveVulgarity(charId, heatScore);
+        const vulgarityDesc = {
+            0: 'temiz, edebî — ima ve metafor kullan, açık ifadeden kaçın',
+            1: 'orta — fiziksel yakınlık, arzu, sıcaklık serbest, hafif argo',
+            2: 'argo — cinsel eylem ve beden açıkça, kaba saba olmadan',
+            3: 'azgın — ham küfür, hayvanî dürtü, kısa çığlık cümleler, ritmik tekrar',
+        };
+        if (vulgarity > 0) {
+            lines.push(`[Dil seviyesi ${vulgarity}/3 (${vulgarityDesc[vulgarity]}).${p.vulgarityEscalation && heatScore >= 3 ? ' Sahne ateşi yüksek, otomatik escalation aktif.' : ''}]`);
+        }
 
         // Kinks — sadece escalation aktifse
         if (escalate && p.kinks && p.kinks.length) {

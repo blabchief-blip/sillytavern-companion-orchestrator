@@ -133,6 +133,9 @@ export const spiceModule = {
         _orch = orch;
         _ctx = SillyTavern.getContext();
         getStore();
+        // v0.8.16: Namespace pattern — character_profile buildSystemDirective
+        // heat'i okur, prompts.suggestVulgarPreset heat'i kullanır.
+        try { globalThis.__co_spice = this; } catch (_) {}
     },
 
     /**
@@ -185,7 +188,13 @@ export const spiceModule = {
         }
 
         save();
-        return bucket;
+        // v0.8.16: Otomatik vulgarity escalation hook.
+        // spice.record() her çağrıldığında heat'e göre vulgar preset öner.
+        // prompts.suggestVulgarPreset() eğer karar verirse otomatik apply eder.
+        // Bu sayede kullanıcı hiçbir şey yapmadan heat yükselince dil
+        // seviyesi "sik beni becer" tonuna geçer.
+        const tuneResult = this._autoTuneVulgarity();
+        return { ...bucket, _autoTune: tuneResult };
     },
 
     /**
@@ -208,6 +217,22 @@ export const spiceModule = {
         if (bucket.arc.length > 50) bucket.arc = bucket.arc.slice(-50);
         save();
         return bucket;
+    },
+
+    /**
+     * v0.8.16: Otomatik vulgarity escalation hook.
+     * spice.record() her çağrıldığında heat'e göre vulgar preset öner.
+     * prompts.suggestVulgarPreset() eğer karar verirse otomatik apply eder.
+     */
+    _autoTuneVulgarity() {
+        try {
+            const p = (typeof globalThis !== 'undefined' && globalThis.__co_prompts);
+            if (p && typeof p.suggestVulgarPreset === 'function') {
+                const heat = this.currentHeat();
+                return p.suggestVulgarPreset(heat?.score || 0);
+            }
+        } catch (_) { /* best-effort */ }
+        return { preset: null, applied: false, reason: 'prompts not bound' };
     },
 
     /**
