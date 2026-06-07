@@ -541,6 +541,18 @@ const phoneShellModule = {
         return { ok: true };
     },
 
+    /**
+     * v0.8.19: Kullanıcı shell'den mesaj gönderdiğinde tinder'a haber ver.
+     * /send slash'i MESSAGE_SENT emit etmeyebildiği için selfie isteği
+     * algılaması burada GARANTİ tetiklenir (event'e bağımlı değil).
+     */
+    _notifyUserMessage(text) {
+        if (!text) return;
+        import('./tinder.js').then(m => {
+            try { m.tinderModule?.flagSelfieIfRequested?.(text); } catch (_) {}
+        }).catch(() => {});
+    },
+
     clearMessages() {
         _messages = [];
         if (_messageContainer) {
@@ -894,6 +906,7 @@ function _renderInput(theme) {
             const text = _inputEl.value.trim();
             _inputEl.value = '';
             phoneShellModule.appendMessage('user', text);
+            phoneShellModule._notifyUserMessage(text); // v0.8.19: selfie isteği vb.
             const r = phoneShellModule.sendToST(text);
             if (!r.ok) console.warn('[phone_shell] sendToST:', r.error);
         }
@@ -919,6 +932,7 @@ function _renderInput(theme) {
             const text = _inputEl.value.trim();
             _inputEl.value = '';
             phoneShellModule.appendMessage('user', text);
+            phoneShellModule._notifyUserMessage(text); // v0.8.19: selfie isteği vb.
             const r = phoneShellModule.sendToST(text);
             if (!r.ok) console.warn('[phone_shell] sendToST:', r.error);
         }

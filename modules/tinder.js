@@ -1806,13 +1806,21 @@ function _spiceToSelfieTier(orch) {
 // imageUrl mesajın extra.image'ına yazılır, MESSAGE_UPDATED emit edilir →
 // phone_shell baloncuğa görseli ekler. Hata olursa sessizce geç.
 tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId */) {
+    const _toast = (msg, type) => {
+        try {
+            const t = (typeof toastr !== 'undefined' && toastr) || (typeof window !== 'undefined' && window.toastr);
+            if (t && t[type]) t[type](msg, 'Selfie'); else console.log('[tinder]', msg);
+        } catch (_) {}
+    };
     try {
+        _toast('📸 Selfie üretiliyor…', 'info');
         const tier = _spiceToSelfieTier(orch);
         let res = await tinderModule.generateSelfie(tier > 0 ? { tier } : {});
         // NSFW guard/hatada SFW'ye düş
         if (!res?.ok && tier > 0) res = await tinderModule.generateSelfie({});
         if (!res?.ok || !res.imageUrl) {
             console.warn('[tinder] auto-selfie üretilemedi:', res?.error);
+            _toast('❌ Selfie üretilemedi: ' + (res?.error || 'bilinmeyen'), 'error');
             return;
         }
         const url = res.imageUrl;
@@ -1844,8 +1852,10 @@ tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId 
         } catch (_) { /* shell yoksa sorun değil */ }
 
         console.log('[tinder] ✅ auto-selfie iliştirildi (tier ' + tier + ', idx ' + targetIdx + ')');
+        _toast('✅ Selfie geldi', 'success');
     } catch (e) {
         console.warn('[tinder] auto-selfie hata:', e?.message || e);
+        _toast('❌ Selfie hata: ' + (e?.message || e), 'error');
     }
 };
 
@@ -2089,10 +2099,18 @@ tinderModule.handleExchangeAttemptAsync = async function (matchId, userMessage, 
 //   trigger, çünkü karakter genelde kendi paylaşır.
 //
 // Public API:
+// v0.8.19: Selfie isteğini işaretle (event'e bağımsız — phone shell input'tan
+// doğrudan da çağrılır, çünkü /send slash'i MESSAGE_SENT emit etmeyebiliyor).
+tinderModule.flagSelfieIfRequested = function (text) {
+    if (tinderModule.detectSelfieRequest(text)) {
+        tinderModule._pendingSelfie = true;
+        console.log('[tinder] 📸 selfie isteği algılandı (pending)');
+        return true;
+    }
+    return false;
+};
+
 tinderModule.onMessageSent = function (orch, data) {
-    // Aktif matchId yoksa no-op. Active match tracking settings.tinder.activeMatchId.
-    const matchId = orch?.settings?.tinder?.activeMatchId;
-    if (!matchId) return;
     // data ST 1.18'de messageId (string) olabilir → chat'ten metni çöz
     let text = String(data?.message?.mes || '').trim();
     if (!text && data != null && (typeof data === 'string' || typeof data === 'number')) {
@@ -2101,19 +2119,25 @@ tinderModule.onMessageSent = function (orch, data) {
             text = String(ctx?.chat?.[data]?.mes || '').trim();
         } catch (_) {}
     }
-    if (!text) return;
-    // v0.8.18: kullanıcı selfie/fotoğraf istedi mi? Bir sonraki karakter
-    // cevabında gerçek selfie üretilip iliştirilsin diye işaretle.
-    if (tinderModule.detectSelfieRequest(text)) {
-        tinderModule._pendingSelfie = true;
-        console.log('[tinder] 📸 selfie isteği algılandı (pending)');
-    }
+    // v0.8.18/19: selfie isteği — matchId guard'ından ÖNCE (selfie match
+    // tracking'e bağlı değil; aktif karakter tinder ise generateSelfie çalışır).
+    if (text) tinderModule.flagSelfieIfRequested(text);
+    // Aktif matchId yoksa msgCount artırma kısmı no-op.
+    const matchId = orch?.settings?.tinder?.activeMatchId;
+    if (!matchId || !text) return;
     tinderModule.incrementMessageCount(matchId);
     // Stage güncellendi, persist et
     if (orch?.save) orch.save();
 };
 
 tinderModule.onMessageReceived = function (orch, data) {
+    // v0.8.19: bekleyen selfie isteği — matchId guard'ından ÖNCE işle (selfie
+    // match tracking'e bağlı değil). _autoGenerateSelfie hedefi chat'ten kendisi
+    // bulur (payload şekline güvenmez).
+    if (tinderModule._pendingSelfie) {
+        tinderModule._pendingSelfie = false;
+        tinderModule._autoGenerateSelfie(orch);
+    }
     const matchId = orch?.settings?.tinder?.activeMatchId;
     if (!matchId) return;
     // data ST 1.18'de messageId (string), {message}, veya doğrudan mesaj objesi
@@ -2123,12 +2147,6 @@ tinderModule.onMessageReceived = function (orch, data) {
         try { msgObj = SillyTavern.getContext()?.chat?.[data] || null; } catch (_) {}
     }
     const text = String(msgObj?.mes || data?.message?.mes || '').trim();
-    // v0.8.18: bekleyen selfie isteği varsa karakterin cevabına selfie iliştir.
-    // _autoGenerateSelfie hedefi chat'ten kendisi bulur (payload şekline güvenmez).
-    if (tinderModule._pendingSelfie) {
-        tinderModule._pendingSelfie = false;
-        tinderModule._autoGenerateSelfie(orch);
-    }
     if (!text) return;
     // Karakterin cevabında numara paylaşımı var mı? Otomatik exchange tetikle.
     // detectExchangeRequest() keyword heuristic kullanıyor.
