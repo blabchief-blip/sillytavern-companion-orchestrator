@@ -1806,11 +1806,15 @@ function _spiceToSelfieTier(orch) {
 // imageUrl mesajın extra.image'ına yazılır, MESSAGE_UPDATED emit edilir →
 // phone_shell baloncuğa görseli ekler. Hata olursa sessizce geç.
 tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId */) {
+    let _psMod = null;
+    try { _psMod = (await import('./phone_shell.js')).phoneShellModule; } catch (_) {}
+    const _note = (msg) => { try { _psMod?.addSystemNote?.(msg); } catch (_) {} };
     const _toast = (msg, type) => {
         try {
             const t = (typeof toastr !== 'undefined' && toastr) || (typeof window !== 'undefined' && window.toastr);
             if (t && t[type]) t[type](msg, 'Selfie'); else console.log('[tinder]', msg);
         } catch (_) {}
+        _note(msg); // v0.8.21: arayüze de bas (teşhis)
     };
     try {
         _toast('📸 Selfie üretiliyor…', 'info');

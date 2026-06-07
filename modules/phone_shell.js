@@ -553,6 +553,25 @@ const phoneShellModule = {
         }).catch(() => {});
     },
 
+    /**
+     * v0.8.21: Sistem notu baloncuğu (ortalı, soluk) — selfie üretim durumu
+     * gibi teşhis/bilgi mesajları için. Event'e bağımlı değil.
+     */
+    addSystemNote(text) {
+        if (!_active || !_messageContainer || !text) return { ok: false };
+        const note = document.createElement('div');
+        Object.assign(note.style, {
+            alignSelf: 'center', maxWidth: '85%', margin: '4px auto',
+            padding: '4px 10px', borderRadius: '10px', fontSize: '0.78em',
+            opacity: '0.75', background: 'rgba(0,0,0,0.12)', textAlign: 'center',
+        });
+        note.textContent = text;
+        note.setAttribute('data-co-note', '1');
+        _messageContainer.appendChild(note);
+        _scrollToBottom();
+        return { ok: true, el: note };
+    },
+
     clearMessages() {
         _messages = [];
         if (_messageContainer) {
