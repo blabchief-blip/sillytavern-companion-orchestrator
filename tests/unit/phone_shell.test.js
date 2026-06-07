@@ -605,3 +605,53 @@ describe('v0.8.16 çeviri + sendToST', () => {
         assert.match(captured, /\\\{\\\{x\\\}\\\}/);
     });
 });
+
+// =========================================================================
+// v0.8.17: HTML sanitize (font tag) + görsel render
+// =========================================================================
+describe('v0.8.17 font tag temizleme + görsel', () => {
+    test('font tag ham metin olarak görünmez (sanitize)', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', '<font color="#80CBC4">Merhaba dünya</font>');
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        // İç metin görünür ama ham "<font" / "color=" tag string'i görünmez
+        assert.match(shell.textContent, /Merhaba dünya/);
+        assert.doesNotMatch(shell.textContent, /font color/);
+        assert.doesNotMatch(shell.textContent, /<font/);
+    });
+
+    test('font tag renk attribute olarak korunur (HTML)', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', '<font color="#80CBC4">renkli</font>');
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        // sanitize edilmiş HTML font elementini korur
+        assert.ok(shell.querySelector('font'), 'font elementi render edilmeli');
+    });
+
+    test('izinsiz tag (script) sökülür', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', 'önce<script>alert(1)</script>sonra');
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.equal(shell.querySelector('script'), null, 'script kaldırılmalı');
+        assert.match(shell.textContent, /öncesonra/);
+    });
+
+    test('görsel (image opt) baloncuğa img olarak eklenir', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', 'işte fotoğraf', { image: 'http://x/view?filename=a.png&type=output' });
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        const img = shell.querySelector('img[data-co-img]');
+        assert.ok(img, 'img eklenmeli');
+        assert.match(img.getAttribute('src'), /a\.png/);
+    });
+
+    test('aynı görsel iki kez eklenmez (idempotent)', () => {
+        phoneShellModule.mount();
+        const stCtx = globalThis.SillyTavern.getContext();
+        stCtx.chat.push({ role: 'assistant', mes: 'foto', extra: { image: 'http://x/v?f=1.png' } });
+        const id = stCtx.chat.length - 1;
+        phoneShellModule.onMessageReceived(orch, id);
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.equal(shell.querySelectorAll('img[data-co-img]').length, 1);
+    });
+});

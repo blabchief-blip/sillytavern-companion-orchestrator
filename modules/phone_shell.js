@@ -113,6 +113,25 @@ let _typingTimer = null;
 let _renderUnsub = null;          // v0.8.16: CHARACTER_MESSAGE_RENDERED aboneliği
 let _lastAssistantMsgId = null;   // v0.8.16: dedupe için son eklenen assistant mesaj id'si
 let _lastAssistantTextSpan = null; // v0.8.16: çeviri gelince güncellenecek metin span'i
+let _lastAssistantBubble = null;   // v0.8.17: görsel eklenecek son assistant baloncuğu
+let _updatedUnsub = null;          // v0.8.17: MESSAGE_UPDATED aboneliği
+
+// v0.8.17: baloncuğa görsel ekle (varsa tekrar ekleme — idempotent)
+function _appendImageToBubble(bubble, imageUrl) {
+    if (!bubble || !imageUrl) return;
+    if (bubble.querySelector('img[data-co-img]')) return; // zaten var
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.setAttribute('data-co-img', '1');
+    Object.assign(img.style, {
+        display: 'block', maxWidth: '100%', borderRadius: '10px',
+        marginTop: '6px', cursor: 'pointer',
+    });
+    img.addEventListener('click', () => { try { window.open(imageUrl, '_blank'); } catch (_) {} });
+    // meta varsa onun ÜSTÜNE ekle (görsel → zaman damgası sırası)
+    const meta = bubble.querySelector('div');
+    if (meta) bubble.insertBefore(img, meta); else bubble.appendChild(img);
+}
 
 // v0.8.16: Magic Translation çevirisini tercih et. ST translate extension
 // çeviri metnini msg.extra.display_text'e yazar; orijinal msg.mes değişmez.
@@ -120,6 +139,56 @@ function _displayText(msg) {
     if (!msg) return '';
     const dt = msg.extra && msg.extra.display_text;
     return String((dt && dt.trim()) ? dt : (msg.mes || '')).trim();
+}
+
+// v0.8.17: LLM cevapları <font color=...> gibi HTML markup içerebiliyor;
+// shell baloncuğunda ham tag yerine renkleri koruyan sanitize edilmiş HTML
+// göster. Sadece güvenli tag/attribute whitelist'i geçer (XSS önleme).
+const _ALLOWED_TAGS = new Set(['FONT', 'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'SPAN', 'P', 'Q']);
+const _ALLOWED_ATTRS = new Set(['color']);
+const _DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']); // içerikle birlikte sil
+function _sanitizeHtml(html) {
+    const text = String(html || '');
+    if (typeof document === 'undefined' || !document.createElement) {
+        // DOM yoksa (test) düz metne indir
+        return text.replace(/<[^>]*>/g, '');
+    }
+    const tpl = document.createElement('template');
+    tpl.innerHTML = text;
+    const walk = (node) => {
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+            if (child.nodeType === 1) { // element
+                if (_DROP_TAGS.has(child.tagName)) {
+                    node.removeChild(child); // tehlikeli tag → içeriğiyle birlikte sil
+                    continue;
+                }
+                if (!_ALLOWED_TAGS.has(child.tagName)) {
+                    // izinsiz tag → içeriğini koru, etiketi kaldır (unwrap)
+                    while (child.firstChild) node.insertBefore(child.firstChild, child);
+                    node.removeChild(child);
+                    continue;
+                }
+                // izinsiz attribute'ları sök (color stil hariç)
+                for (const attr of Array.from(child.attributes)) {
+                    const name = attr.name.toLowerCase();
+                    if (name === 'style') {
+                        // sadece color: ... bırak
+                        const m = /color\s*:\s*[^;]+/i.exec(child.getAttribute('style') || '');
+                        child.removeAttribute('style');
+                        if (m) child.setAttribute('style', m[0]);
+                    } else if (!_ALLOWED_ATTRS.has(name)) {
+                        child.removeAttribute(attr.name);
+                    }
+                }
+                walk(child);
+            } else if (child.nodeType !== 3) {
+                node.removeChild(child); // comment vb. kaldır
+            }
+        }
+    };
+    walk(tpl.content);
+    return tpl.innerHTML;
 }
 
 // Public API
@@ -163,6 +232,7 @@ const phoneShellModule = {
         _active = true;
         _lastAssistantMsgId = null;       // v0.8.16: yeni oturum — dedupe sıfırla
         _lastAssistantTextSpan = null;
+        _lastAssistantBubble = null;
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = true;
         }
@@ -203,7 +273,10 @@ const phoneShellModule = {
                         const msg = ctx.chat[messageId];
                         if (!msg || msg.is_user === true || msg.role === 'user' || msg.role === 'system') return;
                         const text = _displayText(msg);
-                        if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.textContent = text;
+                        if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.innerHTML = _sanitizeHtml(text);
+                        // çeviri render'ı sırasında görsel de hazırsa ekle
+                        const url = msg.extra && msg.extra.image;
+                        if (url && _lastAssistantBubble) _appendImageToBubble(_lastAssistantBubble, url);
                     } catch (_) { /* best-effort */ }
                 };
                 ev.on(et.CHARACTER_MESSAGE_RENDERED, onRendered);
@@ -211,6 +284,33 @@ const phoneShellModule = {
                     try {
                         if (typeof ev.removeListener === 'function') ev.removeListener(et.CHARACTER_MESSAGE_RENDERED, onRendered);
                         else if (typeof ev.off === 'function') ev.off(et.CHARACTER_MESSAGE_RENDERED, onRendered);
+                    } catch (_) {}
+                };
+            }
+            // v0.8.17: auto_gen görseli mesaja SONRADAN inject edip MESSAGE_UPDATED
+            // emit ediyor (extra.image). Son assistant baloncuğuna görseli ekle.
+            if (ev && et && et.MESSAGE_UPDATED && !_updatedUnsub) {
+                const onUpdated = (messageId) => {
+                    try {
+                        if (!_active || !Array.isArray(ctx.chat)) return;
+                        const msg = ctx.chat[messageId];
+                        const url = msg && msg.extra && msg.extra.image;
+                        if (!url) return;
+                        // Görseli üretilen mesajın baloncuğuna ekle (genelde son assistant)
+                        if (String(messageId) === String(_lastAssistantMsgId) && _lastAssistantBubble) {
+                            _appendImageToBubble(_lastAssistantBubble, url);
+                            _scrollToBottom();
+                        } else if (_lastAssistantBubble) {
+                            _appendImageToBubble(_lastAssistantBubble, url);
+                            _scrollToBottom();
+                        }
+                    } catch (_) { /* best-effort */ }
+                };
+                ev.on(et.MESSAGE_UPDATED, onUpdated);
+                _updatedUnsub = () => {
+                    try {
+                        if (typeof ev.removeListener === 'function') ev.removeListener(et.MESSAGE_UPDATED, onUpdated);
+                        else if (typeof ev.off === 'function') ev.off(et.MESSAGE_UPDATED, onUpdated);
                     } catch (_) {}
                 };
             }
@@ -230,10 +330,12 @@ const phoneShellModule = {
         _messageContainer = null;
         _inputEl = null;
         _lastAssistantTextSpan = null;
+        _lastAssistantBubble = null;
         _lastAssistantMsgId = null;
         _active = false;
-        // v0.8.16: render event aboneliğini çöz
+        // v0.8.16/17: event aboneliklerini çöz
         if (_renderUnsub) { try { _renderUnsub(); } catch (_) {} _renderUnsub = null; }
+        if (_updatedUnsub) { try { _updatedUnsub(); } catch (_) {} _updatedUnsub = null; }
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = false;
         }
@@ -281,10 +383,11 @@ const phoneShellModule = {
      * v0.8.6: Her assistant mesajında character_profile.incrementTrust(charId, 0.1)
      * — uzun konuşma doğal trust birikimi sağlar. maxTrust cap'ine takılır.
      */
-    appendMessage(role, text) {
+    appendMessage(role, text, opts = {}) {
         const entry = {
             role: role === 'user' ? 'self' : 'other',
             text: String(text || '').trim(),
+            image: opts.image || null,   // v0.8.17: görsel (auto_gen üretimi)
             timestamp: Date.now(),
             seen: false,
         };
@@ -391,7 +494,7 @@ const phoneShellModule = {
         if (_lastAssistantMsgId === String(messageId)) return;
         _lastAssistantMsgId = String(messageId);
         console.log('[phone_shell] onMessageReceived APPEND: ' + text.slice(0, 60));
-        phoneShellModule.appendMessage('assistant', text);
+        phoneShellModule.appendMessage('assistant', text, { image: msg.extra && msg.extra.image });
         // Auto-mark previous self messages as seen (chronological sequence)
         _markAllSeen();
     },
@@ -475,7 +578,8 @@ const phoneShellModule = {
             // (name === 'You' ST'nin user ismi, ama is_user daha güvenilir)
             const isUser = (m.is_user === true) || (m.role === 'user');
             const role = isUser ? 'user' : 'assistant';
-            phoneShellModule.appendMessage(role, _displayText(m)); // v0.8.16: çeviriyi tercih et
+            // v0.8.16: çeviriyi tercih et, v0.8.17: görseli de aktar
+            phoneShellModule.appendMessage(role, _displayText(m), { image: m.extra && m.extra.image });
             imported++;
         }
         return { ok: true, imported, total: chat.length };
@@ -515,6 +619,11 @@ const phoneShellModule = {
         _shellEl = null;
         _messageContainer = null;
         _inputEl = null;
+        _lastAssistantTextSpan = null;
+        _lastAssistantBubble = null;
+        _lastAssistantMsgId = null;
+        if (_renderUnsub) { try { _renderUnsub(); } catch (_) {} _renderUnsub = null; }
+        if (_updatedUnsub) { try { _updatedUnsub(); } catch (_) {} _updatedUnsub = null; }
     },
 };
 
@@ -816,11 +925,18 @@ function _renderMessage(entry) {
         boxShadow: '0 1px 1px rgba(0,0,0,0.18)',
         position: 'relative',
     });
-    // v0.8.16: metni ayrı span'e koy ki çeviri gelince meta'yı bozmadan güncellenebilsin
+    // v0.8.16/17: metni ayrı span'e koy ki çeviri gelince meta'yı bozmadan
+    // güncellenebilsin. LLM markup'ını (font color) sanitize edip render et.
     const textSpan = document.createElement('span');
-    textSpan.textContent = entry.text;
+    textSpan.innerHTML = _sanitizeHtml(entry.text);
     bubble.appendChild(textSpan);
-    if (!isSelf) _lastAssistantTextSpan = textSpan; // çeviri güncellemesi için referans
+    if (!isSelf) {
+        _lastAssistantTextSpan = textSpan; // çeviri güncellemesi için referans
+        _lastAssistantBubble = bubble;     // v0.8.17: görsel ekleme için referans
+    }
+
+    // v0.8.17: görsel varsa baloncuğa ekle (auto_gen üretimi)
+    if (entry.image) _appendImageToBubble(bubble, entry.image);
 
     // Timestamp + seen
     const meta = document.createElement('div');
