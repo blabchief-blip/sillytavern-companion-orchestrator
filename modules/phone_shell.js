@@ -1088,7 +1088,7 @@ async function _showUserPhotoPicker() {
         const empty = document.createElement('div');
         empty.style.padding = '12px';
         empty.style.fontSize = '0.9em';
-        empty.textContent = 'Fotoğraf yok. user-photos/ klasörüne ekleyip index.json\'a yaz.';
+        empty.textContent = 'Fotoğraf yok. Bir persona seç veya user-photos/ klasörüne ekle.';
         panel.appendChild(empty);
     } else {
         const grid = document.createElement('div');
@@ -1100,7 +1100,7 @@ async function _showUserPhotoPicker() {
                 overflow: 'hidden', cursor: 'pointer', background: 'rgba(0,0,0,0.1)',
             });
             const img = document.createElement('img');
-            img.src = base + encodeURIComponent(p.file);
+            img.src = p.url || (base + encodeURIComponent(p.file)); // v0.8.31: persona url'i
             Object.assign(img.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover' });
             cell.appendChild(img);
             cell.title = p.label || p.file;

@@ -2226,28 +2226,87 @@ tinderModule.onMessageReceived = function (orch, data) {
 const _USER_PHOTO_BASE = '/scripts/extensions/third-party/companion-orchestrator/user-photos/';
 const _CAPTION_WF_URL = '/scripts/extensions/third-party/companion-orchestrator/user-photo-caption.json';
 
-// Kullanıcı foto kütüphanesini (index.json) oku → [{file,label}]
+// v0.8.31: Kullanıcı persona (profil) avatar(lar)ını foto olarak getir.
+// ST power_user.personas { "dosya.png": "İsim" } → her biri bir foto.
+// Yoksa aktif persona (ctx.userAvatar). URL: /User Avatars/<dosya>.
+function _personaPhotos() {
+    try {
+        const ctx = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        if (!ctx) return [];
+        const out = [];
+        const seen = new Set();
+        const add = (file, label) => {
+            if (!file || file === 'none.png' || seen.has(file)) return;
+            seen.add(file);
+            out.push({ file, label: label || 'Profil fotoğrafım', url: `/User Avatars/${encodeURIComponent(file)}` });
+        };
+        // Tüm persona'lar (varsa)
+        const pu = ctx.powerUserSettings || (typeof power_user !== 'undefined' ? power_user : null);
+        const personas = pu && pu.personas;
+        if (personas && typeof personas === 'object') {
+            for (const f of Object.keys(personas)) add(f, personas[f]);
+        }
+        // Aktif persona avatarı
+        if (ctx.userAvatar) add(ctx.userAvatar, ctx.name1 || 'Profil fotoğrafım');
+        return out;
+    } catch (_) { return []; }
+}
+
+// Kullanıcı foto kütüphanesi: önce persona avatar(lar)ı (Part 1), sonra
+// user-photos/index.json'daki ek fotoğraflar. Her entry: {file, label, url?}.
 tinderModule.loadUserPhotos = async function () {
+    const photos = [..._personaPhotos()];
     try {
         const r = await fetch(_USER_PHOTO_BASE + 'index.json', { credentials: 'include', cache: 'no-cache' });
-        if (!r.ok) return [];
-        const arr = await r.json();
-        if (!Array.isArray(arr)) return [];
-        return arr.map(x => (typeof x === 'string' ? { file: x, label: null } : x)).filter(x => x && x.file);
-    } catch (_) { return []; }
+        if (r.ok) {
+            const arr = await r.json();
+            if (Array.isArray(arr)) {
+                for (const x of arr) {
+                    const e = (typeof x === 'string') ? { file: x, label: null } : x;
+                    if (e && e.file) photos.push(e);
+                }
+            }
+        }
+    } catch (_) {}
+    return photos;
 };
 
-// Bir fotoğrafı ComfyUI JoyCaption ile analiz et → caption metni (yoksa null).
+// ComfyUI workflow çalıştır + showAnything metnini history'den oku (yoksa null).
+async function _runCaptionWorkflow(comfyUrl, wf) {
+    const pr = await fetch(`${comfyUrl}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: wf }) });
+    if (!pr.ok) return null;
+    const pid = (await pr.json()).prompt_id;
+    for (let i = 0; i < 120; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const hr = await fetch(`${comfyUrl}/history/${pid}`);
+        if (!hr.ok) continue;
+        const entry = (await hr.json())[pid];
+        if (!entry) continue;
+        if (entry.status?.status_str === 'error') return null;
+        const outs = entry.outputs || {};
+        for (const nid in outs) {
+            const o = outs[nid];
+            const t = (Array.isArray(o.text) ? o.text.join(' ') : o.text)
+                || (o.ui && (Array.isArray(o.ui.text) ? o.ui.text.join(' ') : o.ui.text));
+            if (t && String(t).trim()) return String(t).trim();
+        }
+        if (Object.keys(outs).length) return null; // bitti ama metin yok
+    }
+    return null;
+}
+
+// Bir fotoğrafı ComfyUI ile analiz et → caption metni (yoksa null).
+// v0.8.31: çift yol — önce JoyCaption (en iyi, NSFW; config gerekir),
+// başarısızsa CLIP imageInterrogator (kurulumsuz çalışır, daha genel).
 tinderModule._captionPhoto = async function (imageUrl, orch) {
     const comfyUrl = orch?.settings?.image_gen?.comfyuiUrl
         || (typeof window !== 'undefined' && window.CO_COMFYUI_URL)
         || 'http://192.168.68.66:8001';
-    // 1) Görseli indir
+    // 1) Görseli indir + ComfyUI input'a yükle
     const ir = await fetch(imageUrl, { credentials: 'include' });
     if (!ir.ok) return null;
     const blob = await ir.blob();
-    // 2) ComfyUI input'a yükle
-    const safe = 'userphoto_' + String(imageUrl).split('/').pop().replace(/[^\w.-]/g, '_');
+    const safe = 'userphoto_' + String(imageUrl).split('/').pop().replace(/[^\w.-]/g, '_').slice(-60);
     const form = new FormData();
     form.append('image', new File([blob], safe, { type: blob.type || 'image/png' }));
     form.append('overwrite', 'true');
@@ -2255,36 +2314,23 @@ tinderModule._captionPhoto = async function (imageUrl, orch) {
     const up = await fetch(`${comfyUrl}/upload/image`, { method: 'POST', body: form });
     if (!up.ok) return null;
     const upName = (await up.json().catch(() => ({}))).name || safe;
-    // 3) Caption workflow yükle + *image* yerleştir
-    const wfResp = await fetch(_CAPTION_WF_URL, { credentials: 'include', cache: 'no-cache' });
-    if (!wfResp.ok) return null;
-    let wf = JSON.parse(await wfResp.text());
-    for (const id in wf) {
-        const node = wf[id];
-        if (node?.inputs) for (const k in node.inputs) if (node.inputs[k] === '*image*') node.inputs[k] = upName;
-    }
-    // 4) Çalıştır + poll
-    const pr = await fetch(`${comfyUrl}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: wf }) });
-    if (!pr.ok) return null;
-    const pid = (await pr.json()).prompt_id;
-    for (let i = 0; i < 90; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const hr = await fetch(`${comfyUrl}/history/${pid}`);
-        if (!hr.ok) continue;
-        const h = await hr.json();
-        const entry = h[pid];
-        if (!entry) continue;
-        if (entry.status?.status_str === 'error') return null;
-        const outs = entry.outputs || {};
-        for (const nid in outs) {
-            const o = outs[nid];
-            // easy showAnything: text bir array veya ui.text olabilir
-            const t = (Array.isArray(o.text) ? o.text.join(' ') : o.text)
-                || (o.ui && (Array.isArray(o.ui.text) ? o.ui.text.join(' ') : o.ui.text));
-            if (t && String(t).trim()) return String(t).trim();
-        }
-        if (Object.keys(outs).length) return null; // bitti ama metin yok
-    }
+
+    // 2a) JoyCaption (NSFW, config gerekir) — başarısızsa sessizce geç
+    const joyWf = {
+        '1': { inputs: { image: upName }, class_type: 'LoadImage' },
+        '2': { inputs: { image: ['1', 0], do_sample: true, temperature: 0.4, max_tokens: 256, caption_type: 'Descriptive', caption_length: 'medium-length', extra_options: '', name_input: '', custom_prompt: '' }, class_type: 'easy joyCaption2API' },
+        '3': { inputs: { anything: ['2', 0] }, class_type: 'easy showAnything' },
+    };
+    try { const c = await _runCaptionWorkflow(comfyUrl, joyWf); if (c) return c; } catch (_) {}
+
+    // 2b) CLIP interrogator (kurulumsuz, genel açıklama) — fallback
+    const clipWf = {
+        '1': { inputs: { image: upName }, class_type: 'LoadImage' },
+        '2': { inputs: { image: ['1', 0], mode: 'fast', use_lowvram: true }, class_type: 'easy imageInterrogator' },
+        '3': { inputs: { anything: ['2', 0] }, class_type: 'easy showAnything' },
+    };
+    try { const c = await _runCaptionWorkflow(comfyUrl, clipWf); if (c) return c; } catch (_) {}
+
     return null;
 };
 
@@ -2293,7 +2339,8 @@ tinderModule.sendUserPhoto = async function (photo, orch) {
     const psMod = (await import('./phone_shell.js')).phoneShellModule;
     const file = typeof photo === 'string' ? photo : photo.file;
     const label = (typeof photo === 'object' && photo.label) ? photo.label : null;
-    const url = _USER_PHOTO_BASE + encodeURIComponent(file);
+    // v0.8.31: persona avatarı kendi url'ini taşır; yoksa user-photos/ klasörü
+    const url = (typeof photo === 'object' && photo.url) ? photo.url : (_USER_PHOTO_BASE + encodeURIComponent(file));
     // 1) kullanıcı balonunda göster
     try { psMod?.appendMessage?.('user', label ? `📷 ${label}` : '📷', { image: url }); } catch (_) {}
     try { psMod?.addSystemNote?.('📷 fotoğraf analiz ediliyor…'); } catch (_) {}
