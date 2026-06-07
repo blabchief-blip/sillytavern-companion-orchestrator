@@ -1645,6 +1645,28 @@ const orchestrator = {
             `Trigger: <strong>${sum.trigger}</strong> · Workflow: <strong>${sum.workflow}</strong> · LoRA: <strong>${sum.loraCount}</strong> · Son üretim: <strong>${sum.lastGen}</strong>`
         );
 
+        // Kazuma çakışma durumu göstergesi
+        const $kazumaStatus = $('#co_autogen_kazuma_status');
+        if ($kazumaStatus.length) {
+            try {
+                const kazuma = ctx?.extensionSettings?.['Image-gen-kazuma'];
+                const autoGenOn = cfg.enabled !== false;
+                if (kazuma) {
+                    if (autoGenOn && kazuma.autoGenEnabled) {
+                        $kazumaStatus.show().css({ background: 'rgba(255,100,0,0.15)', color: '#f80' })
+                            .html('⚠️ <strong>Kazuma auto-generate DE AÇIK</strong> — çift üretim oluyor! Kazuma\'yı kapat veya Companion auto-gen\'i toggle\'la.');
+                    } else if (autoGenOn && !kazuma.autoGenEnabled) {
+                        $kazumaStatus.show().css({ background: 'rgba(0,200,100,0.1)', color: '#4c4' })
+                            .html('✅ <strong>Kazuma auto-generate kapalı</strong> — Companion auto-gen tek kaynak olarak çalışıyor.');
+                    } else {
+                        $kazumaStatus.hide();
+                    }
+                } else {
+                    $kazumaStatus.hide();
+                }
+            } catch (_) { $kazumaStatus.hide(); }
+        }
+
         // History
         const history = ag.getHistory();
         const $box = $('#co_autogen_history');

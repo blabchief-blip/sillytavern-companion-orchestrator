@@ -466,6 +466,8 @@ class AutoGen {
     // Hook MESSAGE_RECEIVED (eğer enabled)
     if (this.settings.enabled) {
       this._subscribe();
+      // Kazuma auto-gen ile çakışmayı önle: biz açıkken Kazuma kapalı olmalı
+      setTimeout(() => this._setKazumaAutoGen(false), 2000); // ST hazır olana kadar bekle
     }
 
     console.log('[Companion AutoGen] Initialized v' + (orch.VERSION || '?'), this.settings.enabled ? '(ENABLED)' : '(disabled)');
@@ -504,13 +506,50 @@ class AutoGen {
     }
   }
 
+  // -----------------------------------------------------------
+  // Kazuma çakışma yönetimi: auto_gen açıkken Kazuma'nın kendi
+  // auto-generate'ini kapat (ikisi aynı anda ComfyUI'a üretim
+  // gönderirse kuyruk taşıyor, "Failed to fetch" oluyor).
+  // -----------------------------------------------------------
+  _setKazumaAutoGen(enabled) {
+    try {
+      const ctx = this._getCtx();
+      const kazuma = ctx?.extensionSettings?.['Image-gen-kazuma'];
+      if (!kazuma) return;
+      if (!enabled) {
+        // Mevcut değeri yedekle, sadece true ise (yoksa gereksiz müdahale)
+        if (kazuma.autoGenEnabled) {
+          kazuma._autoGenBackup = true;
+          kazuma.autoGenEnabled = false;
+          // Kazuma UI checkbox'ını da güncelle
+          if (typeof $ !== 'undefined') $('#kazuma_auto_enable').prop('checked', false);
+          ctx.saveSettingsDebounced?.();
+          console.log('[AutoGen] Kazuma autoGenEnabled kapatıldı (çakışma önleme)');
+        }
+      } else {
+        // Yedeklenen değeri geri yükle
+        if (kazuma._autoGenBackup) {
+          kazuma.autoGenEnabled = true;
+          delete kazuma._autoGenBackup;
+          if (typeof $ !== 'undefined') $('#kazuma_auto_enable').prop('checked', true);
+          ctx.saveSettingsDebounced?.();
+          console.log('[AutoGen] Kazuma autoGenEnabled geri açıldı');
+        }
+      }
+    } catch (e) {
+      console.warn('[AutoGen] Kazuma auto-gen koordinasyonu başarısız:', e.message);
+    }
+  }
+
   setEnabled(enabled) {
     this.settings.enabled = enabled;
     if (enabled) {
       this._subscribe();
-      this.toast('🎬 Otomatik üretici AÇIK', 'success');
+      this._setKazumaAutoGen(false); // Kazuma'yı kapat — çakışma önle
+      this.toast('🎬 Otomatik üretici AÇIK (Kazuma auto-gen durduruldu)', 'success');
     } else {
       this._unsubscribe();
+      this._setKazumaAutoGen(true); // Kazuma'yı geri aç
       this.toast('🎬 Otomatik üretici KAPALI', 'info');
     }
   }
