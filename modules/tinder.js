@@ -1805,7 +1805,7 @@ function _spiceToSelfieTier(orch) {
 // v0.8.18: Selfie üret + verilen mesaja (karakterin cevabı) iliştir.
 // imageUrl mesajın extra.image'ına yazılır, MESSAGE_UPDATED emit edilir →
 // phone_shell baloncuğa görseli ekler. Hata olursa sessizce geç.
-tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId */) {
+tinderModule._autoGenerateSelfie = async function (orch, opts = {}) {
     let _psMod = null;
     try { _psMod = (await import('./phone_shell.js')).phoneShellModule; } catch (_) {}
     const _note = (msg) => { try { _psMod?.addSystemNote?.(msg); } catch (_) {} };
@@ -1818,7 +1818,8 @@ tinderModule._autoGenerateSelfie = async function (orch /*, targetMsg, targetId 
     };
     try {
         _toast('📸 Selfie üretiliyor…', 'info');
-        const tier = _spiceToSelfieTier(orch);
+        // v0.8.25: opts.tier verilirse onu kullan (kamera menüsü), yoksa spice'tan türet
+        const tier = (typeof opts.tier === 'number') ? opts.tier : _spiceToSelfieTier(orch);
         let res = await tinderModule.generateSelfie(tier > 0 ? { tier } : {});
         // NSFW guard/hatada SFW'ye düş
         if (!res?.ok && tier > 0) res = await tinderModule.generateSelfie({});

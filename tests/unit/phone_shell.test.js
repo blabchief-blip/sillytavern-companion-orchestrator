@@ -645,6 +645,29 @@ describe('v0.8.17 font tag temizleme + görsel', () => {
         assert.match(img.getAttribute('src'), /a\.png/);
     });
 
+    test('mesaj formatı: status header [..] co-status span olur', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('assistant', '[ 23:15 | Toronto ] *gülümsüyor* "selam"');
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        assert.ok(shell.querySelector('.co-status'), 'status span yok');
+        assert.ok(shell.querySelector('.co-action'), 'action italic yok');
+        assert.ok(shell.querySelector('.co-speech'), 'speech span yok');
+    });
+
+    test('mesaj formatı: kullanıcı (self) mesajı formatlanmaz', () => {
+        phoneShellModule.mount();
+        phoneShellModule.appendMessage('user', '*bu* "düz" kalsın');
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        // self mesajda co-action uygulanmaz
+        assert.equal(shell.querySelector('.co-action'), null);
+    });
+
+    test('requestSelfie: ok döner (tinder import async)', () => {
+        phoneShellModule.mount();
+        const r = phoneShellModule.requestSelfie({ tier: 2 });
+        assert.equal(r.ok, true);
+    });
+
     test('addImageToLastAssistant: son assistant baloncuğuna görsel basar', () => {
         phoneShellModule.mount();
         phoneShellModule.appendMessage('assistant', 'işte selfie');

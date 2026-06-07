@@ -116,6 +116,24 @@ let _lastAssistantTextSpan = null; // v0.8.16: çeviri gelince güncellenecek me
 let _lastAssistantBubble = null;   // v0.8.17: görsel eklenecek son assistant baloncuğu
 let _updatedUnsub = null;          // v0.8.17: MESSAGE_UPDATED aboneliği
 
+// v0.8.25: mesaj metnini daha okunur HTML'e çevir.
+//  - baştaki [ 🕐 saat | 📅 tarih | 📍 yer | 🌙 hava ] status bloğu → soluk kutu
+//  - *aksiyon* → italik soluk
+//  - "konuşma" / “konuşma” → vurgulu (kalın)
+// Önce sanitize (LLM font tag'leri + güvenlik), sonra kendi etiketlerimizi ekle.
+function _formatMessageHtml(text) {
+    let html = _sanitizeHtml(text);
+    // Konuşma vurgusunu ÖNCE uygula (sonraki enjekte edilen attribute tırnaklarını
+    // yememesi için). Enjekte edilen class'lar tek tırnak (speech regex çift tırnak arar).
+    html = html.replace(/"([^"\n]+?)"/g, "<span class='co-speech'>\"$1\"</span>");
+    html = html.replace(/“([^”\n]+?)”/g, "<span class='co-speech'>“$1”</span>");
+    // *aksiyon* → italik
+    html = html.replace(/\*([^*\n]+?)\*/g, "<i class='co-action'>$1</i>");
+    // Status header: metnin başındaki ilk [ ... ] grubu
+    html = html.replace(/^\s*\[\s*([^\]]+?)\s*\]\s*/, "<span class='co-status'>$1</span>");
+    return html;
+}
+
 // v0.8.24: bir mesajın görsel URL'ini çöz — bizim extra.image (ReActor blob)
 // VEYA ST yerleşik SD eklentisinin extra.media[].url'i (/user/images/...).
 function _msgImageUrl(msg) {
@@ -290,7 +308,7 @@ const phoneShellModule = {
                         const msg = ctx.chat[messageId];
                         if (!msg || msg.is_user === true || msg.role === 'user' || msg.role === 'system') return;
                         const text = _displayText(msg);
-                        if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.innerHTML = _sanitizeHtml(text);
+                        if (text && _lastAssistantTextSpan) _lastAssistantTextSpan.innerHTML = _formatMessageHtml(text);
                         // çeviri render'ı sırasında görsel de hazırsa ekle
                         const url = _msgImageUrl(msg);
                         if (url && _lastAssistantBubble) _appendImageToBubble(_lastAssistantBubble, url);
@@ -589,6 +607,17 @@ const phoneShellModule = {
         return { ok: true, el: note };
     },
 
+    /**
+     * v0.8.25: Kamera menüsünden selfie iste. tinder companion ReActor selfie'sini
+     * verilen tier ile üretir ve baloncuğa basar.
+     */
+    requestSelfie(opts = {}) {
+        import('./tinder.js').then(m => {
+            try { m.tinderModule?._autoGenerateSelfie?.(_orch, opts); } catch (e) { console.warn('[phone_shell] requestSelfie:', e); }
+        }).catch(() => {});
+        return { ok: true };
+    },
+
     clearMessages() {
         _messages = [];
         if (_messageContainer) {
@@ -739,6 +768,21 @@ function _renderShell() {
     ss.setProperty('color', theme.textColor);
     ss.setProperty('font-family', theme.fontFamily);
     ss.setProperty('overflow', 'hidden');
+
+    // v0.8.25: mesaj formatlama stilleri (head'e tek sefer; _shellEl child
+    // sırasını bozmamak için body/shell içine değil head'e eklenir).
+    if (!document.getElementById('co-phone-shell-style')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'co-phone-shell-style';
+        styleEl.textContent = `
+          #co-phone-shell .co-status { display:block; font-size:0.72em; opacity:0.6;
+            margin-bottom:5px; padding:3px 7px; border-radius:6px;
+            background:rgba(0,0,0,0.10); line-height:1.3; }
+          #co-phone-shell .co-action { font-style:italic; opacity:0.72; }
+          #co-phone-shell .co-speech { font-weight:600; }
+        `;
+        (document.head || document.documentElement).appendChild(styleEl);
+    }
 
     // Header
     const header = _renderHeader(theme);
@@ -893,6 +937,51 @@ function _renderHeader(theme) {
     return header;
 }
 
+// v0.8.25: kamera butonuna tıklayınca selfie tier menüsü aç.
+// Seçenekler companion ReActor selfie tier'larına karşılık gelir.
+const _SELFIE_MENU = [
+    { label: '📸 Normal selfie', tier: 0 },
+    { label: '😏 Cesur (suggestive)', tier: 1 },
+    { label: '👙 İç çamaşırı', tier: 2 },
+    { label: '🔥 Çıplak', tier: 3 },
+    { label: '💋 Explicit', tier: 4 },
+];
+let _selfieMenuEl = null;
+function _closeSelfieMenu() {
+    if (_selfieMenuEl && _selfieMenuEl.parentNode) _selfieMenuEl.parentNode.removeChild(_selfieMenuEl);
+    _selfieMenuEl = null;
+    if (typeof document !== 'undefined') document.removeEventListener('click', _closeSelfieMenu);
+}
+function _showSelfieMenu(anchor, theme) {
+    if (_selfieMenuEl) { _closeSelfieMenu(); return; }
+    const menu = document.createElement('div');
+    Object.assign(menu.style, {
+        position: 'fixed', zIndex: '100000', background: '#fff', color: '#111',
+        borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.3)',
+        padding: '6px', minWidth: '180px', fontSize: '0.95em',
+    });
+    const rect = anchor.getBoundingClientRect();
+    menu.style.left = Math.round(rect.left) + 'px';
+    menu.style.bottom = Math.round(window.innerHeight - rect.top + 6) + 'px';
+    for (const opt of _SELFIE_MENU) {
+        const item = document.createElement('div');
+        item.textContent = opt.label;
+        Object.assign(item.style, { padding: '9px 12px', borderRadius: '8px', cursor: 'pointer' });
+        item.addEventListener('mouseenter', () => { item.style.background = 'rgba(0,0,0,0.07)'; });
+        item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _closeSelfieMenu();
+            phoneShellModule.requestSelfie({ tier: opt.tier });
+        });
+        menu.appendChild(item);
+    }
+    document.documentElement.appendChild(menu);
+    _selfieMenuEl = menu;
+    // dışarı tıklayınca kapat (bir sonraki tick'te bağla ki bu tık kapatmasın)
+    setTimeout(() => document.addEventListener('click', _closeSelfieMenu), 0);
+}
+
 function _renderInput(theme) {
     const wrap = document.createElement('div');
     Object.assign(wrap.style, {
@@ -920,7 +1009,11 @@ function _renderInput(theme) {
         return b;
     };
     wrap.appendChild(iconBtn('😊', 'Emoji'));
-    if (theme.showCamera) wrap.appendChild(iconBtn('📷', 'Camera'));
+    if (theme.showCamera) {
+        const cam = iconBtn('📷', 'Selfie iste');
+        cam.addEventListener('click', (e) => { e.stopPropagation(); _showSelfieMenu(cam, theme); });
+        wrap.appendChild(cam);
+    }
     if (theme.showVoice) wrap.appendChild(iconBtn('🎙', 'Voice note'));
 
     // Text input
@@ -1000,7 +1093,8 @@ function _renderMessage(entry) {
     // v0.8.16/17: metni ayrı span'e koy ki çeviri gelince meta'yı bozmadan
     // güncellenebilsin. LLM markup'ını (font color) sanitize edip render et.
     const textSpan = document.createElement('span');
-    textSpan.innerHTML = _sanitizeHtml(entry.text);
+    // v0.8.25: self (kullanıcı) mesajları düz; assistant mesajları formatlı
+    textSpan.innerHTML = isSelf ? _sanitizeHtml(entry.text) : _formatMessageHtml(entry.text);
     bubble.appendChild(textSpan);
     if (!isSelf) {
         _lastAssistantTextSpan = textSpan; // çeviri güncellemesi için referans
