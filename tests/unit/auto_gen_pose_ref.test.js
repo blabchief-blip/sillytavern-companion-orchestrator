@@ -30,10 +30,10 @@ describe('auto_gen poz referans seçimi', () => {
     assert.equal(autoGenModule.selectPoseRef(['sitting', 'missionary']), 'explicit/missionary.png');
   });
 
-  test('eşleşme yoksa null döner (ControlNet atlanır)', () => {
-    assert.equal(autoGenModule.selectPoseRef(['coffee_shop', 'happy']), null);
-    assert.equal(autoGenModule.selectPoseRef([]), null);
-    assert.equal(autoGenModule.selectPoseRef(null), null);
+  test('eşleşme yoksa default solo/standing.png döner', () => {
+    assert.equal(autoGenModule.selectPoseRef(['coffee_shop', 'happy']), 'solo/standing.png');
+    assert.equal(autoGenModule.selectPoseRef([]), 'solo/standing.png');
+    assert.equal(autoGenModule.selectPoseRef(null), 'solo/standing.png');
   });
 
   test('büyük/küçük harf duyarsız', () => {

@@ -341,32 +341,30 @@ class AutoGen {
         workflowFile: '6Lora-CyberReal.json', // file adı string olmalı!
         // v0.8.13: 3 seviyeli dinamik LoRA stack — spice'a göre otomatik seçilir
         // SFW (spice 0-2): realism/aydınlatma odaklı
+        // Pony realism stack (realismByStableYogi_ponyV65 checkpoint'e uyumlu)
         lorasSfw: [
-          'RealSkin_xxXL_v1.safetensors',
-          'Realism_Engine_Klein_V2.safetensors',
-          'add-detail-xl.safetensors',
-          'S1_Dramatic_Lighting_v3.safetensors',
+          'AmateurStyle_v1_PONY_REALISM.safetensors',
+          'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
+          'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
+          'Realism Lora By Stable Yogi_V3_Lite.safetensors',
         ],
-        lorasSwfWts: [0.4, 0.5, 0.5, 0.4],
-        // NSFW (spice 3): explicit enabler + anatomi kalitesi
+        lorasSwfWts: [0.4, 1.5, 0.5, 1.0],
         lorasNsfw: [
-          'RealSkin_xxXL_v1.safetensors',
-          'ZITnsfwLoRAv2.safetensors',
-          'PerfectBreastsPonyV2.safetensors',
-          'mature_female_slider_pony_v2.safetensors',
+          'AmateurStyle_v1_PONY_REALISM.safetensors',
+          'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
+          'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
+          'Realism Lora By Stable Yogi_V3_Lite.safetensors',
         ],
-        lorasNsfwWts: [0.4, 0.7, 0.5, 0.5],
-        // Explicit (spice 4): sert explicit + poz odaklı LoRA'lar
+        lorasNsfwWts: [0.4, 1.5, 0.5, 1.0],
         lorasExplicit: [
-          'RealSkin_xxXL_v1.safetensors',
-          'Mystic-XXX-ZIT-V7.safetensors',
-          'groping_poses-000009.safetensors',
-          'mature_female_slider_pony_v2.safetensors',
+          'AmateurStyle_v1_PONY_REALISM.safetensors',
+          'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
+          'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
+          'Realism Lora By Stable Yogi_V3_Lite.safetensors',
         ],
-        lorasExplicitWts: [0.35, 0.65, 0.45, 0.5],
-        // Legacy fallback (UI'dan manuel set edilirse kullanılır)
-        loras: ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'],
-        lorawts: [0.4, 0.7, 0.5, 0.5],
+        lorasExplicitWts: [0.4, 1.5, 0.5, 1.0],
+        loras: ['AmateurStyle_v1_PONY_REALISM.safetensors', 'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors', 'Body Type_alpha1.0_rank4_noxattn_last.safetensors', 'Realism Lora By Stable Yogi_V3_Lite.safetensors'],
+        lorawts: [0.4, 1.5, 0.5, 1.0],
         // v0.8.13: sansür + anatomik hata negatifleri
         negativeOverride: 'lowres, bad anatomy, bad hands, blurry, watermark, text, censored, mosaic, blur, covered, clothed, clothes, underwear, bad_pussy, malformed_genitals, fused_genitalia, extra_limbs, missing_limbs, mutation, deformed',
         width: 832,
@@ -375,7 +373,7 @@ class AutoGen {
         cfg: 6,
         sampler: 'euler_ancestral',
         scheduler: 'karras',
-        model: 'cyberrealisticPony_v170.safetensors',
+        model: 'realismByStableYogi_ponyV65.safetensors',
         // v0.8.13: Pony scoring sistemi — cyberrealisticPony bu tag'lere tepki verir
         prefix: 'score_9, score_8_up, score_7_up, rating_explicit, masterpiece, best quality, highly detailed, photorealistic',
         qualityTags: [
@@ -413,21 +411,29 @@ class AutoGen {
     // v0.8.12–v0.8.13: NSFW migration — eski kurulumları güncelle
     {
       const s = this.settings;
-      const NSFW_LORAS     = ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'PerfectBreastsPonyV2.safetensors', 'mature_female_slider_pony_v2.safetensors'];
-      const NSFW_WTS       = [0.4, 0.7, 0.5, 0.5];
-      const SFW_LORAS      = ['RealSkin_xxXL_v1.safetensors', 'Realism_Engine_Klein_V2.safetensors', 'add-detail-xl.safetensors', 'S1_Dramatic_Lighting_v3.safetensors'];
-      const SFW_WTS        = [0.4, 0.5, 0.5, 0.4];
-      const EXPLICIT_LORAS = ['RealSkin_xxXL_v1.safetensors', 'Mystic-XXX-ZIT-V7.safetensors', 'groping_poses-000009.safetensors', 'mature_female_slider_pony_v2.safetensors'];
-      const EXPLICIT_WTS   = [0.35, 0.65, 0.45, 0.5];
-      // LoRA stack: incase_style (anime) → yeni yapı
-      if (Array.isArray(s.loras) && s.loras.includes('incase_style_v3-1_ponyxl_ilff.safetensors')) {
-        s.loras = NSFW_LORAS; s.lorawts = NSFW_WTS;
-        console.log('[Companion AutoGen] v0.8.13 migration: NSFW LoRA stack güncellendi');
+      // v0.8.32: Pony realism stack — realismByStableYogi_ponyV65 checkpoint'e uyumlu
+      const PONY_LORAS = [
+        'AmateurStyle_v1_PONY_REALISM.safetensors',
+        'Breast Slider - Pony_alpha1.0_rank4_noxattn_last.safetensors',
+        'Body Type_alpha1.0_rank4_noxattn_last.safetensors',
+        'Realism Lora By Stable Yogi_V3_Lite.safetensors',
+      ];
+      const PONY_WTS = [0.4, 1.5, 0.5, 1.0];
+      // Eski non-Pony LoRA stack'lerini Pony ile değiştir (cyberrealisticPony → realismByStableYogi)
+      const OLD_LORAS = ['RealSkin_xxXL_v1.safetensors', 'ZITnsfwLoRAv2.safetensors', 'incase_style_v3-1_ponyxl_ilff.safetensors',
+                         'Realism_Engine_Klein_V2.safetensors', 'add-detail-xl.safetensors', 'Mystic-XXX-ZIT-V7.safetensors'];
+      const needsMigration = (arr) => Array.isArray(arr) && arr.some(l => OLD_LORAS.includes(l));
+      if (needsMigration(s.loras))        { s.loras = PONY_LORAS; s.lorawts = PONY_WTS; }
+      if (needsMigration(s.lorasSfw))     { s.lorasSfw = PONY_LORAS; s.lorasSwfWts = PONY_WTS; }
+      if (needsMigration(s.lorasNsfw))    { s.lorasNsfw = PONY_LORAS; s.lorasNsfwWts = PONY_WTS; }
+      if (needsMigration(s.lorasExplicit)){ s.lorasExplicit = PONY_LORAS; s.lorasExplicitWts = PONY_WTS; }
+      if (!s.lorasSfw)      { s.lorasSfw = PONY_LORAS; s.lorasSwfWts = PONY_WTS; }
+      if (!s.lorasNsfw)     { s.lorasNsfw = PONY_LORAS; s.lorasNsfwWts = PONY_WTS; }
+      if (!s.lorasExplicit) { s.lorasExplicit = PONY_LORAS; s.lorasExplicitWts = PONY_WTS; }
+      // Checkpoint migration: cyberrealisticPony → realismByStableYogi
+      if (!s.model || s.model === 'cyberrealisticPony_v170.safetensors') {
+        s.model = 'realismByStableYogi_ponyV65.safetensors';
       }
-      // Dinamik 3-stack kurulumu
-      if (!s.lorasSfw)      { s.lorasSfw = SFW_LORAS; s.lorasSwfWts = SFW_WTS; }
-      if (!s.lorasNsfw)     { s.lorasNsfw = NSFW_LORAS; s.lorasNsfwWts = NSFW_WTS; }
-      if (!s.lorasExplicit) { s.lorasExplicit = EXPLICIT_LORAS; s.lorasExplicitWts = EXPLICIT_WTS; }
       // Prefix: Pony scoring tag'leri ekle
       if (s.prefix && !s.prefix.includes('score_9')) {
         s.prefix = 'score_9, score_8_up, score_7_up, rating_explicit, ' + s.prefix;
@@ -1187,12 +1193,12 @@ class AutoGen {
   // Eşleşme yoksa null → ControlNet atlanır.
   // -----------------------------------------------------------
   _selectPoseRef(tags) {
-    if (!Array.isArray(tags) || !tags.length) return null;
-    const tagSet = new Set(tags.map(t => String(t).toLowerCase()));
+    const tagSet = new Set((Array.isArray(tags) ? tags : []).map(t => String(t).toLowerCase()));
     for (const entry of SCENE_POSE_REFS) {
       if (entry.tags.some(t => tagSet.has(t.toLowerCase()))) return entry.file;
     }
-    return null;
+    // Eşleşme yoksa default: dik duran solo poz
+    return 'solo/standing.png';
   }
 
   // Poz referans görselini extension klasöründen çekip ComfyUI input'a yükle.
