@@ -57,6 +57,13 @@ function getStore() {
                 negative: DEFAULT_NEGATIVE,
                 prefix: DEFAULT_PREFIX,
             },
+            // v0.8.30: Z-Image Turbo + ReActor selfie workflow
+            zImageReactorEnabled: false,
+            zImageReactorWorkflow: null,  // z_image_reactor_selfie.json içeriği
+            zImageReactorRefFace: '',    // 'use character avatar' / explicit filename
+            zImageReactorSteps: 12,
+            zImageReactorCfg: 1.2,
+            zImageReactorShift: 3.0,
         };
     }
     const s = _orch.settings.image_gen;
@@ -78,6 +85,12 @@ function getStore() {
     if (s.defaults.negative == null) s.defaults.negative = DEFAULT_NEGATIVE;
     if (s.defaults.prefix == null) s.defaults.prefix = DEFAULT_PREFIX;
     if (s.nsfw == null) s.nsfw = false;  // v0.8.1: NSFW toggle migrate
+    if (s.zImageReactorEnabled == null) s.zImageReactorEnabled = false;
+    if (s.zImageReactorWorkflow == null) s.zImageReactorWorkflow = null;
+    if (s.zImageReactorRefFace == null) s.zImageReactorRefFace = '';
+    if (s.zImageReactorSteps == null) s.zImageReactorSteps = 12;
+    if (s.zImageReactorCfg == null) s.zImageReactorCfg = 1.2;
+    if (s.zImageReactorShift == null) s.zImageReactorShift = 3.0;
     return s;
 }
 
@@ -280,9 +293,19 @@ export const imageGenModule = {
      *   - characterId: sahip log için
      *   - characterName: log için
      *   - skipThrottle: true → throttle bypass
+     *   - zImageReactor: true → Z-Image Turbo + ReActor workflow kullan
+     *   - refFace: ReActor reference face filename (örn: 'Soo.png'). Boşsa ST character avatar'ı kullanılır.
+     *   - zImageShift: Z-Image ModelSamplingAuraFlow shift (default 3.0)
      */
     async generate(opts = {}) {
         const cfg = getStore();
+
+        // v0.8.30: Z-Image Turbo + ReActor branch
+        const useZImage = !!(opts.zImageReactor ?? cfg.zImageReactorEnabled);
+        if (useZImage) {
+            return this.generateZImageReactor(opts);
+        }
+
         if (!cfg.workflow) {
             return { ok: false, error: 'Workflow yüklenmemiş. Ayarlardan JSON dosyasını yükle.' };
         }
@@ -366,6 +389,193 @@ export const imageGenModule = {
             save();
             return { ok: false, error: err.message };
         }
+    },
+
+    /**
+     * Z-Image Turbo + ReActor selfie workflow (v0.8.30).
+     * Character avatar dosyasını reference face olarak yükler,
+     * Z-Image ile yeni sahne üretir, ReActor ile yüzü değiştirir.
+     *
+     * @param {Object} opts
+     *   - prompt: positive prompt
+     *   - negativeOverride: negative (varsayılan ConditioningZeroOut kullanılır, override gereksiz)
+     *   - refFace: explicit reference face filename (örn: 'Soo.png').
+     *              Boşsa ST character avatar'ı kullanılır (characterName/characterId üzerinden).
+     *   - characterId, characterName: ST context'ten avatar çekmek için
+     *   - zImageShift: ModelSamplingAuraFlow shift (default 3.0)
+     *   - zImageSteps: steps override (default cfg.zImageReactorSteps = 12)
+     *   - zImageCfg: cfg override (default cfg.zImageReactorCfg = 1.2)
+     *   - skipThrottle: bypass throttle
+     */
+    async generateZImageReactor(opts = {}) {
+        const cfg = getStore();
+        if (!cfg.comfyuiUrl) {
+            return { ok: false, error: 'ComfyUI URL ayarlanmamış' };
+        }
+        if (!cfg.zImageReactorWorkflow) {
+            return { ok: false, error: 'Z-Image ReActor workflow yüklenmemiş. Ayarlardan z_image_reactor_selfie.json yükle.' };
+        }
+
+        // Throttle
+        if (!opts.skipThrottle && Date.now() - cfg.lastGenTs < cfg.throttleMs) {
+            return { ok: false, error: 'Throttle: bekle ' + Math.ceil((cfg.throttleMs - (Date.now() - cfg.lastGenTs)) / 1000) + 'sn' };
+        }
+
+        // Reference face çöz:
+        //   1) opts.refFace (explicit)
+        //   2) ST character avatar'ı (characterName/characterId üzerinden)
+        let refFace = opts.refFace || cfg.zImageReactorRefFace;
+        if (!refFace) {
+            try {
+                const ctx = _ctx || (SillyTavern?.getContext?.() || {});
+                const chars = ctx.characters || [];
+                const ch = chars.find(c =>
+                    c.avatar === opts.characterId
+                    || c.name === opts.characterName
+                    || c.avatar === opts.characterName
+                );
+                if (ch?.avatar) refFace = ch.avatar;
+            } catch (e) {
+                // ST context yok, devam et
+            }
+        }
+        if (!refFace) {
+            return { ok: false, error: 'Reference face bulunamadı. opts.refFace ver veya character avatar\'ı yüklü olmalı.' };
+        }
+
+        // Reference face'i ComfyUI'ye upload et (eğer henüz yoksa)
+        // Eğer yerel bir path ise (örn: /Users/.../foo.png) ComfyUI'ye yükle, basename kullan
+        let refFaceUploadName = refFace;
+        if (refFace.includes('/') || refFace.includes('\\')) {
+            try {
+                const uploadResult = await this.uploadImage(refFace, 'input');
+                if (!uploadResult?.ok) return { ok: false, error: 'Reference face upload başarısız: ' + (uploadResult?.error || '?') };
+                refFaceUploadName = uploadResult.name;
+            } catch (e) {
+                return { ok: false, error: 'Reference face upload hata: ' + e.message };
+            }
+        }
+
+        // Prompt
+        let positive, negative;
+        const allowNsfw = !!(opts.allowNsfw ?? cfg.nsfw ?? cfg.allowNsfw ?? false);
+        if (opts.prompt) {
+            positive = booruPromptModule.format(opts.prompt, {
+                prefixTags: ['masterpiece', 'best_quality', 'amazing_quality'],
+                allowNsfw,
+            });
+        } else {
+            positive = buildPrompt({ ...opts, allowNsfw });
+        }
+        negative = opts.negativeOverride || cfg.defaults.negative;
+
+        // Override'lar
+        const seed = Math.floor(Math.random() * 1e15);
+        const overrides = {
+            input: positive,
+            ninput: negative,
+            ref_face: refFaceUploadName,
+            seed,
+            steps: opts.zImageSteps ?? cfg.zImageReactorSteps,
+            cfg: opts.zImageCfg ?? cfg.zImageReactorCfg,
+            zimage_shift: opts.zImageShift ?? cfg.zImageReactorShift,
+        };
+        const finalWorkflow = applyOverrides(cfg.zImageReactorWorkflow, overrides);
+
+        // Z-Image ReActor workflow'da zimage_shift placeholder ModelSamplingAuraFlow.shift'i set etmesi gerekir.
+        // Eğer workflow'da bu placeholder yoksa sessizce skip et (default 3.0 zaten).
+
+        try {
+            const promptId = await queuePrompt(finalWorkflow);
+            const result = await waitForCompletion(promptId);
+            cfg.lastGenTs = Date.now();
+            cfg.history.unshift({
+                ts: cfg.lastGenTs,
+                promptId,
+                positive: positive.slice(0, 200),
+                negative: negative.slice(0, 100),
+                seed,
+                characterId: opts.characterId,
+                characterName: opts.characterName,
+                imagePath: result.imagePath,
+                status: result.status,
+                workflowType: 'z_image_reactor',
+                refFace: refFaceUploadName,
+            });
+            if (cfg.history.length > 20) cfg.history = cfg.history.slice(0, 20);
+            save();
+            return { ok: true, ...result, promptId, seed, workflowType: 'z_image_reactor' };
+        } catch (err) {
+            cfg.history.unshift({
+                ts: Date.now(),
+                error: err.message,
+                characterName: opts.characterName,
+                workflowType: 'z_image_reactor',
+            });
+            if (cfg.history.length > 20) cfg.history = cfg.history.slice(0, 20);
+            save();
+            return { ok: false, error: err.message };
+        }
+    },
+
+    /**
+     * ComfyUI'ye görsel yükle. Local path veya HTTP(S) URL kabul eder.
+     * @param {string} source - local path veya URL
+     * @param {string} type - 'input' | 'output' | 'temp'
+     * @returns {Promise<{ok:boolean, name?:string, error?:string}>}
+     */
+    async uploadImage(source, type = 'input') {
+        if (!source) return { ok: false, error: 'source boş' };
+        try {
+            let blob;
+            if (/^https?:\/\//i.test(source)) {
+                const r = await fetch(source);
+                if (!r.ok) return { ok: false, error: `fetch ${r.status}` };
+                blob = await r.blob();
+                const form = new FormData();
+                form.append('image', blob, source.split('/').pop() || 'upload.png');
+                form.append('type', type);
+                form.append('overwrite', 'true');
+                const res = await fetch(`${this.getUrl()}/upload/image`, { method: 'POST', body: form });
+                if (!res.ok) return { ok: false, error: `upload ${res.status}` };
+                const data = await res.json();
+                return { ok: true, name: data.name };
+            } else {
+                // local file — node fs ile oku
+                const fs = await import('node:fs/promises');
+                const path = await import('node:path');
+                const buf = await fs.readFile(source);
+                const filename = path.basename(source);
+                const form = new FormData();
+                form.append('image', new Blob([buf]), filename);
+                form.append('type', type);
+                form.append('overwrite', 'true');
+                const res = await fetch(`${this.getUrl()}/upload/image`, { method: 'POST', body: form });
+                if (!res.ok) return { ok: false, error: `upload ${res.status}` };
+                const data = await res.json();
+                return { ok: true, name: data.name };
+            }
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    },
+
+    getUrl() {
+        return getStore().comfyuiUrl || 'http://127.0.0.1:8188';
+    },
+
+    /**
+     * Z-Image ReActor workflow'unu yükle (UI file input veya auto-load için).
+     */
+    setZImageReactorWorkflow(workflowJson) {
+        const cfg = getStore();
+        if (typeof workflowJson === 'string') {
+            cfg.zImageReactorWorkflow = JSON.parse(workflowJson);
+        } else {
+            cfg.zImageReactorWorkflow = workflowJson;
+        }
+        save();
+        return { ok: true, nodeCount: Object.keys(cfg.zImageReactorWorkflow).length };
     },
 
     /**
