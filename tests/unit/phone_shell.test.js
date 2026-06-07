@@ -675,6 +675,21 @@ describe('v0.8.17 font tag temizleme + görsel', () => {
         }
     });
 
+    test('emoji butonu input alanına emoji ekler', () => {
+        phoneShellModule.mount();
+        const shell = dom.window.document.querySelector('#co-phone-shell');
+        // emoji butonu: input wrap'taki ilk button (😊)
+        const emojiBtn = Array.from(shell.querySelectorAll('button')).find(b => b.textContent === '😊');
+        assert.ok(emojiBtn, 'emoji butonu yok');
+        emojiBtn.click();
+        const cell = Array.from(shell.querySelectorAll('button')).find(b => b.textContent === '🔥');
+        assert.ok(cell, 'emoji hücresi yok (picker açılmadı)');
+        const input = shell.querySelector('input');
+        const before = input.value;
+        cell.click();
+        assert.equal(input.value, before + '🔥');
+    });
+
     test('requestSelfie: ok döner (tinder import async)', () => {
         phoneShellModule.mount();
         const r = phoneShellModule.requestSelfie({ tier: 2 });

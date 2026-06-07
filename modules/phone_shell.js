@@ -409,6 +409,9 @@ const phoneShellModule = {
         // v0.8.16/17: event aboneliklerini çöz
         if (_renderUnsub) { try { _renderUnsub(); } catch (_) {} _renderUnsub = null; }
         if (_updatedUnsub) { try { _updatedUnsub(); } catch (_) {} _updatedUnsub = null; }
+        // v0.8.25/28: açık menüleri kapat
+        try { _closeSelfieMenu(); } catch (_) {}
+        try { _closeEmojiPicker(); } catch (_) {}
         if (_orch?.settings?.phone_shell) {
             _orch.settings.phone_shell.active = false;
         }
@@ -1029,7 +1032,55 @@ function _showSelfieMenu(anchor, theme) {
     host.appendChild(menu);
     _selfieMenuEl = menu;
     // dışarı tıklayınca kapat (bir sonraki tick'te bağla ki bu tık kapatmasın)
-    setTimeout(() => document.addEventListener('click', _closeSelfieMenu), 0);
+    setTimeout(() => { if (typeof document !== 'undefined') document.addEventListener('click', _closeSelfieMenu); }, 0);
+}
+
+// v0.8.28: emoji seçici — tıklanan emoji input'a eklenir.
+const _EMOJI_SET = [
+    '😊','😄','😉','😍','🥰','😘','😏','😅','😂','🤣',
+    '🙃','😌','😎','🤗','🤭','😋','😜','😇','🥺','😳',
+    '❤️','🔥','✨','💋','😈','👀','🙈','💦','🍑','🍆',
+    '👍','🙏','🎉','💯','😴','🤔','😬','😢','😭','🥵',
+];
+let _emojiMenuEl = null;
+function _closeEmojiPicker() {
+    if (_emojiMenuEl && _emojiMenuEl.parentNode) _emojiMenuEl.parentNode.removeChild(_emojiMenuEl);
+    _emojiMenuEl = null;
+    if (typeof document !== 'undefined') document.removeEventListener('click', _closeEmojiPicker);
+}
+function _showEmojiPicker(anchor) {
+    if (_emojiMenuEl) { _closeEmojiPicker(); return; }
+    const host = _shellEl || (typeof document !== 'undefined' ? document.body : null);
+    if (!host) return;
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+        position: 'absolute', zIndex: '100001', background: '#fff',
+        borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+        padding: '8px', left: '8px', bottom: '64px', width: '260px',
+        display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '2px',
+    });
+    for (const emo of _EMOJI_SET) {
+        const cell = document.createElement('button');
+        cell.textContent = emo;
+        Object.assign(cell.style, {
+            background: 'transparent', border: 'none', fontSize: '1.25em',
+            cursor: 'pointer', padding: '4px', borderRadius: '6px',
+        });
+        cell.addEventListener('mouseenter', () => { cell.style.background = 'rgba(0,0,0,0.08)'; });
+        cell.addEventListener('mouseleave', () => { cell.style.background = 'transparent'; });
+        cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (_inputEl) {
+                _inputEl.value = (_inputEl.value || '') + emo;
+                _inputEl.focus();
+            }
+            // picker açık kalsın (birden çok emoji eklenebilsin)
+        });
+        panel.appendChild(cell);
+    }
+    host.appendChild(panel);
+    _emojiMenuEl = panel;
+    setTimeout(() => { if (typeof document !== 'undefined') document.addEventListener('click', _closeEmojiPicker); }, 0);
 }
 
 function _renderInput(theme) {
@@ -1058,7 +1109,9 @@ function _renderInput(theme) {
         });
         return b;
     };
-    wrap.appendChild(iconBtn('😊', 'Emoji'));
+    const emojiBtn = iconBtn('😊', 'Emoji');
+    emojiBtn.addEventListener('click', (e) => { e.stopPropagation(); _showEmojiPicker(emojiBtn); });
+    wrap.appendChild(emojiBtn);
     if (theme.showCamera) {
         const cam = iconBtn('📷', 'Selfie iste');
         cam.addEventListener('click', (e) => { e.stopPropagation(); _showSelfieMenu(cam, theme); });
