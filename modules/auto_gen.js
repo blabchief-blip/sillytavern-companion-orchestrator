@@ -975,7 +975,13 @@ class AutoGen {
     // Önce: 1girl, solo her zaman ekleniyordu → couple/group sahnelerde
     // ComfyUI "tek kişi" üretiyordu. Şimdi: poz referansı + sahne tag'lerine
     // göre dinamik count (1girl/1boy, 2girls/1boy, 2girls/2boys, ...).
-    const sceneCounts = this._resolveSceneCount(text, sceneTags);
+    // v0.8.32: LLM tags de sceneTags'e katılır — LLM "2girls, lesbian" 
+    // tespit ettiyse sayımı override eder.
+    const combinedTags = [
+      ...(Array.isArray(llmTags) ? llmTags : []),
+      ...sceneTags,
+    ];
+    const sceneCounts = this._resolveSceneCount(text, combinedTags);
     sceneCounts.forEach(t => tags.add(t));
 
     return Array.from(tags).join(', ');
@@ -991,7 +997,9 @@ class AutoGen {
     const t = String(text || '').toLowerCase();
     const tagsLower = new Set((sceneTags || []).map(x => String(x).toLowerCase()));
 
-    // 1) Poz kategorisini belirle (sceneTags'ten klasör prefix'i)
+    // 1) Poz kategorisini belirle — hem sceneTags'ten hem text'ten.
+    // Bazı sahnelerde sadece text keyword (örn. "foursome orgy") var ama
+    // sceneTags boş (LLM tagsiz). Bu durumda text fallback çalışmalı.
     let category = null;
     for (const tag of tagsLower) {
       if (tag.startsWith('explicit/') || tag.startsWith('oral_variants/') || tag.startsWith('combo/')) {
@@ -1006,9 +1014,26 @@ class AutoGen {
         category = 'group';
         break;
       }
-      if (tag.startsWith('solo/') || tag.startsWith('oral') || tag.startsWith('selfie') || tag === 'lying' || tag === 'sitting' || tag === 'standing') {
+      if (tag.startsWith('solo/') || tag.startsWith('selfie') || tag === 'lying' || tag === 'sitting' || tag === 'standing') {
         category = 'solo';
         break;
+      }
+      // LLM priority: lesbian/gay/2girls/2boys tag'leri varsa couple
+      if (tag === 'lesbian' || tag === 'gay' || tag === 'trib' || tag === 'tribbing' ||
+          tag === '2girls' || tag === '2boys' || tag === 'yuri' || tag === 'yaoi') {
+        category = 'couple';
+        break;
+      }
+    }
+    // Text fallback: keyword match (sceneTags yoksa)
+    if (!category) {
+      if (/\b(threesome|foursome|orgy|gangbang|three\s*way)\b/.test(t)) {
+        category = 'group';
+      } else if (/\b(missionary|doggystyle|reverse\s*cowgirl|cowgirl|anal|blowjob|fellatio|cunnilingus|facial|deepthroat|sixty\s*nine|prone\s*bone|spooning|standing\s*doggy)\b/.test(t)) {
+        category = 'explicit';
+      } else if (/\b(kiss|kissing|straddling|forehead\s*kiss|makeout|embrace|cuddling|trib)\b/.test(t) ||
+                 /\b(her|him|he|she|they|them|partner|woman|guy|girl|boy)\b/.test(t)) {
+        category = 'couple';
       }
     }
 
@@ -1045,10 +1070,10 @@ class AutoGen {
     } else if (category === 'group') {
       // group klasöründeki pozlardan kişi sayısı
       const peopleCount = this._countPeopleInGroupPose(text, sceneTags);
-      // MFF vs FMF ayrımı: tag isminden veya path'ten çıkar
-      // (group/threeway_mff → MFF, group/threeway_fmf → FMF)
+      // MFF vs FMF ayrımı: tag isminden, path'ten veya text'ten çıkar
+      // (group/threeway_mff → MFF, group/threeway_fmf → FMF, "FMF" text → FMF)
       // NOT: substring match ('fmf' veya 'fmm') güvenli değil çünkü path'lerde çakışıyor.
-      // Bunun yerine tag/path birebir karşılaştırma:
+      // Bunun yerine tag/path birebir karşılaştırma + text keyword:
       const mffTags = new Set(['threeway_mff', 'threesome_mff', 'mff_threesome', 'mff_kiss', 'group/threeway_mff', 'group/mff_kiss', 'group/group_intimate_kiss']);
       const fmfTags = new Set(['threeway_fmf', 'threesome_fmf', 'fmf_threesome', 'threesome_fmm_oral', 'fmm_double_blowjob', 'double_blowjob', 'group/threeway_fmf', 'group/threesome_fmm_oral']);
       let isMff = false;
@@ -1056,6 +1081,11 @@ class AutoGen {
       for (const tag of tagsLower) {
         if (mffTags.has(tag)) isMff = true;
         if (fmfTags.has(tag)) isFmf = true;
+      }
+      // Text fallback: "MFF", "FMF", "2F1M", "2M1F", "1F2M" gibi
+      if (!isMff && !isFmf) {
+        if (/\b(mff|2f1m|2f\s*1m|1m\s*2f)\b/.test(t)) isMff = true;
+        else if (/\b(fmf|2m1f|2m\s*1f|1f\s*2m)\b/.test(t)) isFmf = true;
       }
       if (peopleCount === 3) {
         if (isMff && !isFmf) {
@@ -1096,6 +1126,7 @@ class AutoGen {
   // ----------------------------------------------------------------
   _countPeopleInGroupPose(text, sceneTags) {
     const tagsLower = new Set((sceneTags || []).map(x => String(x).toLowerCase()));
+    const t = String(text || '').toLowerCase();
     // threesome → 3, foursome → 4, gangbang → 5
     // Hem tag alias'larını hem de tam path'leri (group/threeway_mff) kabul et
     const threewayAliases = ['threeway', 'threesome', 'double_penetration', 'double_blowjob', 'triple_oral', 'oral_threesome'];
@@ -1107,6 +1138,12 @@ class AutoGen {
     for (const tag of tagsLower) {
       if (tag.startsWith('group/')) { categoryMatch = 'group'; break; }
     }
+    // Text fallback: text'te "threesome" / "foursome" / "gangbang" var mı?
+    let textCategory = null;
+    if (/\b(threesome|three\s*way|double\s*penetration|double\s*blowjob)\b/.test(t)) textCategory = 3;
+    else if (/\b(foursome|orgy)\b/.test(t)) textCategory = 4;
+    else if (/\b(gang\s*bang|gangbang|multiple\s*men)\b/.test(t)) textCategory = 5;
+
     // Sonra alias eşleşmesi
     for (const tag of tagsLower) {
       const lower = tag.toLowerCase();
@@ -1132,6 +1169,7 @@ class AutoGen {
         return 5;
       }
     }
+    if (textCategory) return textCategory;
     return 4; // safe default
   }
 
@@ -1936,10 +1974,10 @@ class AutoGen {
   // -----------------------------------------------------------
   // Wait for completion (polling ComfyUI history)
   // -----------------------------------------------------------
-  async waitForCompletion(promptId, timeoutMs = 90000) {
+  async waitForCompletion(promptId, timeoutMs = 90000, pollMs = 1000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, pollMs));
       const resp = await fetch(`${this.settings.comfyuiUrl}/history/${promptId}`);
       if (!resp.ok) continue;
       const data = await resp.json();
@@ -2110,9 +2148,9 @@ class AutoGen {
   // -----------------------------------------------------------
   toast(msg, type = 'info') {
     const ctx = this.ctx;
-    if (ctx.toastr) {
+    if (ctx?.toastr) {
       ctx.toastr[type]?.(msg) || ctx.toastr.info?.(msg);
-    } else if (window.toastr) {
+    } else if (typeof window !== 'undefined' && window.toastr) {
       window.toastr[type]?.(msg) || window.toastr.info?.(msg);
     } else {
       console.log(`[Companion AutoGen ${type}]:`, msg);
@@ -2161,7 +2199,8 @@ export const autoGenModule = {
   setEnabled: (enabled) => autoGenInstance.setEnabled(enabled),
   generateNow: () => autoGenInstance.generateNow(),
   getHistory: () => autoGenInstance.getHistory(),
-  buildPrompt: (msg) => autoGenInstance.buildPrompt(msg),
+  buildPrompt: (msg, llmTags) => autoGenInstance.buildPrompt(msg, llmTags),
+  waitForCompletion: (promptId, timeoutMs) => autoGenInstance.waitForCompletion(promptId, timeoutMs),
   extractSceneTags: (text) => autoGenInstance._extractSceneIntimateTags(text),
   selectPoseRef: (tags) => autoGenInstance._selectPoseRef(tags),
   resolveSceneCount: (text, sceneTags) => autoGenInstance._resolveSceneCount(text, sceneTags),
